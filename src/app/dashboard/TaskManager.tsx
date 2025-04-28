@@ -32,6 +32,7 @@ export default function TaskManager({ user }: { user: User }) {
   const [isTagModalOpen, setIsTagModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [hideCompleted, setHideCompleted] = useState(false)
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -289,6 +290,11 @@ export default function TaskManager({ user }: { user: User }) {
       )
     : tasks
 
+  // Apply hide completed filter
+  const visibleTasks = hideCompleted
+    ? filteredTasks.filter(task => task.status !== 'completed')
+    : filteredTasks
+
   const handleEditTask = async () => {
     if (!editingTask) return;
     
@@ -369,6 +375,18 @@ export default function TaskManager({ user }: { user: User }) {
         <div className="mb-8 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900">Your Tasks</h2>
           <div className="flex space-x-2">
+            <div className="flex items-center mr-4">
+              <input
+                type="checkbox"
+                id="hideCompleted"
+                checked={hideCompleted}
+                onChange={(e) => setHideCompleted(e.target.checked)}
+                className="mr-2 h-4 w-4 text-blue-600 rounded border-gray-300"
+              />
+              <label htmlFor="hideCompleted" className="text-sm text-gray-700">
+                Hide Completed
+              </label>
+            </div>
             <button
               onClick={() => setIsTagModalOpen(true)}
               className="rounded-lg bg-gray-600 px-4 py-2 text-white hover:bg-gray-700"
@@ -417,18 +435,31 @@ export default function TaskManager({ user }: { user: User }) {
 
         {/* Tasks List */}
         <div className="space-y-4">
-          {filteredTasks.length === 0 ? (
+          {visibleTasks.length === 0 ? (
             <div className="bg-white p-6 rounded-lg shadow text-center">
               <p className="text-gray-500">No tasks found. Create a new task to get started.</p>
             </div>
           ) : (
-            filteredTasks.map((task) => (
-              <div key={task.id} className="bg-white p-4 rounded-lg shadow">
+            visibleTasks.map((task) => (
+              <div 
+                key={task.id} 
+                className={`bg-white p-4 rounded-lg shadow ${
+                  task.status === 'completed' ? 'bg-gray-50' : ''
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h3 className="text-xl font-semibold">{task.title}</h3>
+                    <h3 className={`text-xl font-semibold ${
+                      task.status === 'completed' ? 'line-through text-gray-500' : ''
+                    }`}>
+                      {task.title}
+                    </h3>
                     {task.description && (
-                      <p className="text-gray-600 mt-1">{task.description}</p>
+                      <p className={`text-gray-600 mt-1 ${
+                        task.status === 'completed' ? 'line-through text-gray-400' : ''
+                      }`}>
+                        {task.description}
+                      </p>
                     )}
                     <div className="mt-2 flex items-center space-x-4">
                       <span className={`px-2 py-1 rounded text-sm ${
@@ -441,7 +472,9 @@ export default function TaskManager({ user }: { user: User }) {
                         Priority {task.priority}
                       </span>
                       {task.due_date && (
-                        <span className="text-sm text-gray-500">
+                        <span className={`text-sm ${
+                          task.status === 'completed' ? 'text-gray-400' : 'text-gray-500'
+                        }`}>
                           Due: {new Date(task.due_date).toLocaleDateString()}
                         </span>
                       )}
@@ -453,7 +486,9 @@ export default function TaskManager({ user }: { user: User }) {
                         {task.tags.map(tag => (
                           <span 
                             key={tag.id}
-                            className="px-2 py-1 rounded text-xs"
+                            className={`px-2 py-1 rounded text-xs ${
+                              task.status === 'completed' ? 'opacity-50' : ''
+                            }`}
                             style={{ 
                               backgroundColor: `${tag.color}20`,
                               color: tag.color,
@@ -470,7 +505,9 @@ export default function TaskManager({ user }: { user: User }) {
                     <select
                       value={task.status}
                       onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value as Task['status'])}
-                      className="rounded border-gray-300 text-sm"
+                      className={`rounded border-gray-300 text-sm ${
+                        task.status === 'completed' ? 'text-gray-500' : ''
+                      }`}
                     >
                       <option value="pending">Pending</option>
                       <option value="in_progress">In Progress</option>

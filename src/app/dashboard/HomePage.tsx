@@ -3,19 +3,11 @@
 import { User } from '@supabase/supabase-js'
 import { useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import SignOutButton from '@/components/SignOutButton'
 
 export default function HomePage({ user }: { user: User }) {
-  const router = useRouter()
-  const supabase = createClient()
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
   const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false)
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
 
   const getAiSuggestion = async () => {
     setIsLoadingSuggestion(true)
@@ -32,12 +24,7 @@ export default function HomePage({ user }: { user: User }) {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-4xl font-bold text-gray-900">Guardian Angel</h1>
-          <button
-            onClick={handleSignOut}
-            className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
-          >
-            Sign Out
-          </button>
+          <SignOutButton />
         </div>
 
         {/* App Description */}

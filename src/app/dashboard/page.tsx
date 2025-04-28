@@ -13,12 +13,10 @@ export default async function Dashboard() {
         get(name: string) {
           return cookieStore.get(name)?.value
         },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: '', ...options })
-        },
+        // Server components can't modify cookies directly
+        // This is handled by the middleware
+        set() {},
+        remove() {},
       },
     }
   )
