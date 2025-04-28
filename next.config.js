@@ -6,7 +6,7 @@ const nextConfig = {
     domains: ['localhost'],
   },
   experimental: {
-    turbo: false
+    serverActions: true
   }
 }
 

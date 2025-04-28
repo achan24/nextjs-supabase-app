@@ -10,9 +10,20 @@ export default function Home() {
         <p className="mb-8 text-xl text-gray-600 md:text-2xl">
           A simple, fast, and beautiful way to keep your notes organized and accessible anywhere.
         </p>
-        <button className="rounded-full bg-blue-600 px-8 py-3 text-lg font-semibold text-white shadow-lg hover:bg-blue-700 transition-colors">
-          Get Started - It's Free
-        </button>
+        <div className="space-x-4">
+          <a
+            href="/login"
+            className="rounded-full bg-blue-600 px-8 py-3 text-lg font-semibold text-white shadow-lg hover:bg-blue-700 transition-colors"
+          >
+            Get Started - It's Free
+          </a>
+          <a
+            href="/login"
+            className="rounded-full bg-gray-100 px-8 py-3 text-lg font-semibold text-gray-900 shadow-lg hover:bg-gray-200 transition-colors"
+          >
+            Sign In
+          </a>
+        </div>
       </section>
 
       {/* Features Section */}
