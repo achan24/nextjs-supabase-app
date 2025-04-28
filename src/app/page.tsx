@@ -1,14 +1,78 @@
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-8">
-          Welcome to Next.js with Supabase
+    <main className="min-h-screen bg-gradient-to-b from-white to-gray-50">
+      {/* Hero Section */}
+      <section className="container mx-auto px-6 py-16 text-center md:py-24">
+        <h1 className="mb-6 text-5xl font-bold tracking-tight text-gray-900 md:text-6xl">
+          Capture your thoughts,{' '}
+          <span className="text-blue-600">organize your life</span>
         </h1>
-        <p className="text-center">
-          Get started by editing src/app/page.tsx
+        <p className="mb-8 text-xl text-gray-600 md:text-2xl">
+          A simple, fast, and beautiful way to keep your notes organized and accessible anywhere.
         </p>
-      </div>
+        <button className="rounded-full bg-blue-600 px-8 py-3 text-lg font-semibold text-white shadow-lg hover:bg-blue-700 transition-colors">
+          Get Started - It's Free
+        </button>
+      </section>
+
+      {/* Features Section */}
+      <section className="bg-white py-16">
+        <div className="container mx-auto px-6">
+          <h2 className="mb-12 text-center text-3xl font-bold text-gray-900 md:text-4xl">
+            Everything you need in a note app
+          </h2>
+          <div className="grid gap-8 md:grid-cols-3">
+            {/* Feature 1 */}
+            <div className="rounded-lg bg-white p-6 shadow-md">
+              <div className="mb-4 text-2xl">✨</div>
+              <h3 className="mb-2 text-xl font-semibold">Simple & Intuitive</h3>
+              <p className="text-gray-600">
+                Clean interface that lets you focus on your notes, not the app.
+              </p>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="rounded-lg bg-white p-6 shadow-md">
+              <div className="mb-4 text-2xl">🔄</div>
+              <h3 className="mb-2 text-xl font-semibold">Sync Everywhere</h3>
+              <p className="text-gray-600">
+                Access your notes from any device, always in sync.
+              </p>
+            </div>
+
+            {/* Feature 3 */}
+            <div className="rounded-lg bg-white p-6 shadow-md">
+              <div className="mb-4 text-2xl">🔒</div>
+              <h3 className="mb-2 text-xl font-semibold">Secure & Private</h3>
+              <p className="text-gray-600">
+                Your notes are encrypted and only accessible by you.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="bg-blue-50 py-16">
+        <div className="container mx-auto px-6 text-center">
+          <h2 className="mb-4 text-3xl font-bold text-gray-900">
+            Ready to start taking better notes?
+          </h2>
+          <p className="mb-8 text-xl text-gray-600">
+            Join thousands of users who have already improved their note-taking experience.
+          </p>
+          <button className="rounded-full bg-blue-600 px-8 py-3 text-lg font-semibold text-white shadow-lg hover:bg-blue-700 transition-colors">
+            Start Taking Notes
+          </button>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-white py-8">
+        <div className="container mx-auto px-6 text-center text-gray-600">
+          <p>© 2024 NotesApp. All rights reserved.</p>
+        </div>
+      </footer>
     </main>
   )
 } 
