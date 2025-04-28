@@ -1,9 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import HomePage from './HomePage'
+import TaskManager from '../TaskManager'
 
-export default async function Dashboard() {
+export default async function TasksPage() {
   const cookieStore = cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,5 +29,5 @@ export default async function Dashboard() {
     redirect('/login')
   }
 
-  return <HomePage user={user} />
+  return <TaskManager user={user} />
 } 

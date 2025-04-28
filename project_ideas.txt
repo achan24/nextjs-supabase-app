@@ -1,0 +1,86 @@
+ADHD Task Management System
+==================================
+
+Core Concept:
+A minimalist task management system designed for ADHD users, featuring AI assistance that understands ADHD patterns and adapts to user behavior.
+
+Key Features:
+
+1. Project & Priority Management
+   - Simple list of projects with dynamic priorities (1-5)
+   - Weekly priority check-ins ("What's your focus this week?")
+   - AI monitoring and suggestions for priority adjustments
+   - Maximum of 3 high-priority projects at a time
+
+2. Habit Building
+   - Track daily working time
+   - Progressive goals (start small, increment gradually)
+   - AI-assisted streak tracking and motivation
+   - Pattern recognition for optimal work times
+
+3. AI Assistant Capabilities
+   - Access to project data, habits, and working patterns
+   - Can create/edit projects and tasks with user confirmation
+   - Monitors working time and suggests breaks
+   - Provides ADHD-specific coping strategies
+   - Weekly reviews and priority suggestions
+   - Learns from user behavior and success patterns
+
+4. Time Management
+   - Daily working time targets
+   - AI-adjusted goals based on energy levels
+   - Automatic tracking of actual vs. target time
+   - Gradual increase in daily targets
+
+Data Structure:
+```typescript
+interface Project {
+  id: string;
+  title: string;
+  priority: number;
+  timeSpent: number;
+  lastWorkedOn: Date;
+  aiNotes: string[]; // AI observations and suggestions
+}
+
+interface WorkSession {
+  id: string;
+  projectId: string;
+  startTime: Date;
+  endTime: Date;
+  energyLevel: number;
+  focusRating: number;
+  aiAnalysis: {
+    patterns: string[];
+    suggestions: string[];
+  };
+}
+
+interface AIAssistant {
+  createProject(project: Project): Promise<boolean>;
+  editProject(id: string, changes: Partial<Project>): Promise<boolean>;
+  analyzePriorities(): Promise<PriorityRecommendation[]>;
+  suggestNextTask(): Promise<TaskSuggestion>;
+  reviewProgress(): Promise<ProgressReport>;
+}
+```
+
+Progressive Implementation:
+1. Week 1-2: Basic time tracking + AI observation
+2. Week 3-4: Project management + AI suggestions
+3. Week 5-6: Habit tracking + AI pattern recognition
+4. Week 7+: Full AI assistance and adaptations
+
+AI Learning Focus:
+- User's peak productivity times
+- Project success patterns
+- Common obstacles and effective solutions
+- Individual ADHD manifestation patterns
+- Effective motivation strategies
+
+Future Enhancements:
+- Integration with calendar
+- Voice interface for AI interaction
+- Mood and energy tracking
+- Medication reminder system (if applicable)
+- Export of AI insights for healthcare providers 

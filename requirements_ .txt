@@ -1,0 +1,40 @@
+Guardian Angel - ADHD Time‑Management Companion (Version 0.2, April 28 2025)
+
+Guardian Angel is a mobile and web‑based digital therapeutic designed as a 24‑hour cognitive prosthetic for adults living with ADHD. It tackles the two moments that derail productivity most—starting and stopping—by externalising time, scaffolding executive‑function skills and coaching the user through warm, conversational guidance that reflects the latest UC Berkeley research and other evidence‑based, non‑pharmacological strategies.
+
+From the first interaction the app behaves like an encouraging personal assistant. After a short onboarding it builds a living calendar that fuses the user’s recurring habits and routines with multi‑step projects and the inevitable odd jobs that pop up during the week. Each item receives explicit Start and Stop windows. If a task is still unfinished when its stop window closes, Guardian Angel automatically searches the calendar for the next sensible slot, weighing the user’s reported energy level, existing commitments and historic focus patterns before proposing a reschedule. In this way the plan breathes with real life rather than collapsing at the first slip. Native push notifications and gentle audio chimes cue the user whenever a Start or Stop window arrives, even if the app is in the background or the phone is locked. A persistent navigation bar lets the user jump between five core views—Calendar, Task List, Project Overview, Habit Tracker, and Insights—each presenting a clear, searchable list that can be edited or reordered with simple gestures.
+
+When it is time to begin, Guardian Angel runs a Start Assist ritual. A five‑second commitment prompt, inspired by behavioural‑activation research, segues into a countdown while the user records a ten‑second “commitment clip”. This brief selfie‑video doubles as accountability: the clip can be replayed later to reignite momentum or compared with new clips to visualise progress in posture and affect. If the environment looks unfriendly—poor lighting, slouched posture, obvious distractions—the assistant offers quick adjustments before work begins.
+
+During work the app keeps time visible with an adaptive progress bar that subtly shrinks and changes luminance as the planned interval elapses. On overrun a Stop Guard routine eases the transition: bookmarks are captured, stray thoughts can be dictated into a scratch‑pad, a hydration cue appears and the next scheduled activity is verbally previewed. The goal is to cushion the cognitive gear‑shift so that endings feel safe rather than abrupt.
+
+All guidance comes through an on‑device voice that prioritises privacy while sounding human and compassionate. Guardian Angel continuously summarises the user’s current status, reflects back stated goals, and celebrates incremental victories. Behind the scenes a recommendations engine analyses initiation latency, over‑run duration, goal attainment and mood check‑ins to suggest tiny, evidence‑based interventions—perhaps a two‑minute rule for a stubborn micro‑task, a mindfulness micro‑break, or a visual timer overlay—ranked by historical efficacy for that individual.
+
+Data analysis is a first‑class citizen. Every action is timestamped and context‑tagged so that the user can instantly answer questions like “What did I do yesterday?” or “How did I handle a similar Tuesday morning two weeks ago?” A dedicated Insights view combines three lenses:
+
+Yesterday at a Glance — an automatically generated story showing total focus time, tasks completed, habits kept, and any schedule deviations, delivered each morning.
+
+Situational Recall — a context search that surfaces previous sessions matching the current location, time‑of‑day or project, enabling pattern recognition and strategy reuse.
+
+Trend Explorer — interactive charts of initiation latency, over‑run duration and streak consistency with drill‑down to individual tasks.
+
+Once a week a short review wizard still invites the user to summarise lessons, adjust priorities and preview the week ahead; now it is fuelled by richer data, making reflection concrete and actionable.
+
+Habit formation is woven through every layer. Borrowing from Tiny Habits and the Fogg Behaviour Model, Guardian Angel always starts small—sometimes as small as opening the task list after brushing teeth—but systematically lengthens focus intervals or increases task complexity once the user sustains an eighty‑percent success streak for five days. Weekly “skill of the week” challenges introduce fresh coping strategies so the experience stays novel and the user’s repertoire keeps expanding.
+
+Technically, the assistant runs a lightweight client built with Flutter and React Progressive Web‑App components. Speech recognition happens offline via Vosk to keep all microphone data on‑device, while intent understanding and dialogue generation rely on fine‑tuned GPT‑4o models distilled to TensorFlow Lite and ONNX formats for efficient local inference. A small graph database links tasks, contexts, interventions and outcomes so that recommendations can be both semantically rich and fast. Over‑the‑air model updates use federated‑learning: aggregate gradients are transmitted, but personal datapoints remain on the phone.
+
+
+
+The development roadmap moves in weekly sprints. The first four weeks (5 May – 1 June 2025) establish foundations—architecture, design system and research synthesis. Weeks five through twelve deliver the MVP with the adaptive planner, start/stop routines and text‑plus‑voice conversational coach. A brief internal alpha occupies week thirteen, followed by a three‑week private beta aimed at telemetry tuning and onboarding polish. Weeks seventeen to twenty‑four add the first‑generation recommendation engine, and the remaining eight weeks of 2025 integrate the habit‑builder before opening a public beta in December. From week thirty‑three onward the team shifts into a continuous‑improvement cadence, shipping weekly model updates, A/B tests and growth experiments.
+
+Success will be measured by five headline metrics: an onboarding completion rate of eighty percent within forty‑eight hours, a median daily active time of at least thirty minutes, a twenty‑five‑percent reduction in initiation latency and a twenty‑percent reduction in task over‑runs by week eight, a six‑month churn rate no higher than thirty percent, and a habit‑adherence score showing that seventy percent of users maintain a seven‑day streak on at least one micro‑habit by week four.
+
+The project draws academic guidance from the UC Berkeley Psychology Clinic, curates psycho‑educational content under licence from the Greater Good Science Center, and integrates the Forest timer’s API for playful interval training. Ongoing engagement with ADHD advocacy groups such as CHADD and ADDA ensures that lived experience stays central throughout design and testing.
+
+Open questions focus on technical voice quality, the cadence of federated‑learning updates and fine‑tuning the balance between gentle coaching and information overload. These will be revisited after the private beta when real‑world usage patterns begin to surface.
+
+Key references include Hinshaw’s 2024 work on executive‑function delays, a 2024 Berkeley psychiatrists’ blog on adult time management, and empirical studies on impulsivity, collaborative life‑skills training and time blindness published between 2021 and 2025. Together they form the scientific backbone against which every coaching script and algorithmic nudge is benchmarked.
+
+With these foundations Guardian Angel is positioned to become a steadfast, always‑on ally—one that not only reminds the user what to do but nurtures the capacity to start, sustain and gracefully stop, habit by habit, week by week.
+
