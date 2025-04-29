@@ -4,16 +4,24 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
 
-  // Refresh session if expired - required for Server Components
-  await supabase.auth.getSession()
+  try {
+    // Create Supabase client with middleware helper
+    const supabase = createMiddlewareClient({ req, res })
+    
+    // This refreshes the session if needed and sets fresh cookies
+    await supabase.auth.getSession()
 
-  return res
+    return res
+  } catch (error) {
+    console.error('Middleware error:', error)
+    return res
+  }
 }
 
+// Simplified matcher that avoids capturing groups
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+    '/dashboard/:path*'  // Protect all dashboard routes
+  ]
 } 

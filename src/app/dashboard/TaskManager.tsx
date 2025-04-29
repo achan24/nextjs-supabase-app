@@ -37,7 +37,7 @@ export default function TaskManager({ user }: { user: User }) {
   const [isTagModalOpen, setIsTagModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
-  const [hideCompleted, setHideCompleted] = useState(false)
+  const [hideCompleted, setHideCompleted] = useState(true)
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -395,13 +395,6 @@ export default function TaskManager({ user }: { user: User }) {
                 Hide Completed
               </label>
             </div>
-            <div className="flex space-x-2 mb-4">
-              <button
-                className="px-3 py-1 text-sm bg-white shadow rounded"
-              >
-                List View
-              </button>
-            </div>
             <button
               onClick={() => setIsTagModalOpen(true)}
               className="rounded-lg bg-gray-600 px-4 py-2 text-white hover:bg-gray-700"
@@ -631,14 +624,29 @@ export default function TaskManager({ user }: { user: User }) {
             </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Due Date (optional)
+                Due Date and Time (optional)
               </label>
-              <input
-                type="date"
-                className="w-full p-2 border rounded"
-                value={newTask.due_date}
-                onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
-              />
+              <div className="flex space-x-2">
+                <input
+                  type="date"
+                  className="flex-1 p-2 border rounded"
+                  value={newTask.due_date ? newTask.due_date.split('T')[0] : ''}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    const time = newTask.due_date ? newTask.due_date.split('T')[1] : '00:00';
+                    setNewTask({ ...newTask, due_date: date ? `${date}T${time}` : '' });
+                  }}
+                />
+                <input
+                  type="time"
+                  className="w-32 p-2 border rounded"
+                  value={newTask.due_date ? newTask.due_date.split('T')[1].substring(0, 5) : '00:00'}
+                  onChange={(e) => {
+                    const date = newTask.due_date ? newTask.due_date.split('T')[0] : new Date().toISOString().split('T')[0];
+                    setNewTask({ ...newTask, due_date: `${date}T${e.target.value}:00` });
+                  }}
+                />
+              </div>
             </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -804,14 +812,29 @@ export default function TaskManager({ user }: { user: User }) {
             </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Due Date (optional)
+                Due Date and Time (optional)
               </label>
-              <input
-                type="date"
-                className="w-full p-2 border rounded"
-                value={editForm.due_date}
-                onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-              />
+              <div className="flex space-x-2">
+                <input
+                  type="date"
+                  className="flex-1 p-2 border rounded"
+                  value={editForm.due_date ? editForm.due_date.split('T')[0] : ''}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    const time = editForm.due_date ? editForm.due_date.split('T')[1] : '00:00';
+                    setEditForm({ ...editForm, due_date: date ? `${date}T${time}` : '' });
+                  }}
+                />
+                <input
+                  type="time"
+                  className="w-32 p-2 border rounded"
+                  value={editForm.due_date ? editForm.due_date.split('T')[1].substring(0, 5) : '00:00'}
+                  onChange={(e) => {
+                    const date = editForm.due_date ? editForm.due_date.split('T')[0] : new Date().toISOString().split('T')[0];
+                    setEditForm({ ...editForm, due_date: `${date}T${e.target.value}:00` });
+                  }}
+                />
+              </div>
             </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
