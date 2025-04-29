@@ -89,6 +89,17 @@ export default function HomePage({ user }: { user: User }) {
             </div>
           </Link>
 
+          {/* Notes Card */}
+          <Link href="/dashboard/notes" className="block">
+            <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <h3 className="text-xl font-semibold mb-2">Notes</h3>
+              <p className="text-gray-600 mb-4">
+                Keep track of your thoughts, ideas, and important information.
+              </p>
+              <div className="text-blue-600 font-medium">Go to Notes →</div>
+            </div>
+          </Link>
+
           {/* AI Suggestions Card */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-xl font-semibold mb-2">AI Suggestions</h3>
