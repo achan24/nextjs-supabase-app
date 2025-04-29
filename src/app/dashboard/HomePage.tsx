@@ -66,17 +66,42 @@ export default function HomePage({ user }: { user: User }) {
 
         {/* Feature Cards */}
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Task Manager Card */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {/* Tasks Card */}
           <Link href="/dashboard/tasks" className="block">
-            <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-              <h3 className="text-xl font-semibold mb-2">Task Manager</h3>
+            <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <h3 className="text-xl font-semibold mb-2">Tasks</h3>
               <p className="text-gray-600 mb-4">
-                Create, organize, and track your tasks with priority levels and due dates.
+                Manage your daily tasks and track your progress.
               </p>
-              <div className="text-blue-600 font-medium">Go to Task Manager →</div>
+              <div className="text-blue-600 font-medium">Go to Tasks →</div>
             </div>
           </Link>
+
+          {/* Calendar Card */}
+          <Link href="/dashboard/calendar" className="block">
+            <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <h3 className="text-xl font-semibold mb-2">Calendar</h3>
+              <p className="text-gray-600 mb-4">
+                View your tasks and commitments in a calendar format for better planning.
+              </p>
+              <div className="text-blue-600 font-medium">Go to Calendar →</div>
+            </div>
+          </Link>
+
+          {/* AI Suggestions Card */}
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold mb-2">AI Suggestions</h3>
+            <p className="text-gray-600 mb-4">
+              Get personalized suggestions to improve your productivity.
+            </p>
+            <button
+              onClick={getAiSuggestion}
+              className="text-blue-600 font-medium hover:text-blue-700"
+            >
+              Get Suggestions →
+            </button>
+          </div>
 
           {/* Habit Tracker Card (Placeholder) */}
           <div className="bg-white p-6 rounded-lg shadow opacity-75">
@@ -92,15 +117,6 @@ export default function HomePage({ user }: { user: User }) {
             <h3 className="text-xl font-semibold mb-2">Focus Timer</h3>
             <p className="text-gray-600 mb-4">
               Use timed work sessions with breaks to maintain focus and prevent burnout.
-            </p>
-            <div className="text-gray-400 font-medium">Coming Soon</div>
-          </div>
-
-          {/* Calendar Card (Placeholder) */}
-          <div className="bg-white p-6 rounded-lg shadow opacity-75">
-            <h3 className="text-xl font-semibold mb-2">Calendar</h3>
-            <p className="text-gray-600 mb-4">
-              View your tasks and commitments in a calendar format for better planning.
             </p>
             <div className="text-gray-400 font-medium">Coming Soon</div>
           </div>

@@ -58,21 +58,21 @@
   -- Similar policies for projects and task_projects...
   ```
 
-- [ ] Basic Task Management
-  - [ ] Create task form with priority setting
-  - [ ] Task list view with sorting/filtering
-  - [ ] Task detail view
-  - [ ] Edit task functionality
-  - [ ] Delete task functionality
-  - [ ] Task status updates
+- [x] Basic Task Management
+  - [x] Create task form with priority setting
+  - [x] Task list view with sorting/filtering
+  - [x] Task detail view
+  - [x] Edit task functionality
+  - [x] Delete task functionality
+  - [x] Task status updates
   - [ ] Basic project grouping
 
-- [ ] UI/UX Implementation
-  - [ ] Clean, distraction-free interface
-  - [ ] Priority visualization
+- [x] UI/UX Implementation
+  - [x] Clean, distraction-free interface
+  - [x] Priority visualization
   - [ ] Drag-and-drop task ordering
-  - [ ] Task completion animations
-  - [ ] Mobile-responsive design
+  - [x] Task completion animations
+  - [x] Mobile-responsive design
 
 ## Sprint 2: Time Tracking & Analytics (Weeks 3-4)
 - [ ] Time Tracking

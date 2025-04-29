@@ -4,6 +4,7 @@ import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import TaskTimer from '@/components/TaskTimer'
 
 interface Task {
   id: string
@@ -15,6 +16,8 @@ interface Task {
   created_at: string
   user_id: string
   tags?: Tag[]
+  time_spent?: number // in seconds
+  last_started_at?: string | null
 }
 
 interface Tag {
@@ -23,6 +26,8 @@ interface Tag {
   color: string
   user_id: string
 }
+
+const isInProgress = (status: Task['status']): status is 'in_progress' => status === 'in_progress';
 
 export default function TaskManager({ user }: { user: User }) {
   const supabase = createClient()
@@ -54,6 +59,9 @@ export default function TaskManager({ user }: { user: User }) {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [filterStatus, setFilterStatus] = useState<Task['status'] | 'all'>('all')
+  const [sortBy, setSortBy] = useState<'created' | 'priority'>('created')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     fetchTasks()
@@ -387,6 +395,13 @@ export default function TaskManager({ user }: { user: User }) {
                 Hide Completed
               </label>
             </div>
+            <div className="flex space-x-2 mb-4">
+              <button
+                className="px-3 py-1 text-sm bg-white shadow rounded"
+              >
+                List View
+              </button>
+            </div>
             <button
               onClick={() => setIsTagModalOpen(true)}
               className="rounded-lg bg-gray-600 px-4 py-2 text-white hover:bg-gray-700"
@@ -433,7 +448,6 @@ export default function TaskManager({ user }: { user: User }) {
           </div>
         )}
 
-        {/* Tasks List */}
         <div className="space-y-4">
           {visibleTasks.length === 0 ? (
             <div className="bg-white p-6 rounded-lg shadow text-center">
@@ -478,6 +492,28 @@ export default function TaskManager({ user }: { user: User }) {
                           Due: {new Date(task.due_date).toLocaleDateString()}
                         </span>
                       )}
+                      {/* Timer display logic */}
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-500">Time spent:</span>
+                        <TaskTimer 
+                          initialTime={task.time_spent || 0}
+                          isRunning={task.status === 'in_progress'}
+                          onTimeUpdate={async (time) => {
+                            try {
+                              const { error } = await supabase
+                                .from('tasks')
+                                .update({ 
+                                  time_spent: time,
+                                  last_started_at: task.status === 'in_progress' ? new Date().toISOString() : null
+                                })
+                                .eq('id', task.id)
+                              if (error) throw error
+                            } catch (error) {
+                              console.error('Error updating task time:', error)
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
                     
                     {/* Task Tags */}
@@ -504,7 +540,39 @@ export default function TaskManager({ user }: { user: User }) {
                   <div className="flex items-center space-x-2">
                     <select
                       value={task.status}
-                      onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value as Task['status'])}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value as Task['status']
+                        try {
+                          // Get the current accumulated time before any status change
+                          const currentAccumulatedTime = task.time_spent || 0
+
+                          if (newStatus === 'in_progress') {
+                            // Starting or resuming a task
+                            await supabase
+                              .from('tasks')
+                              .update({ 
+                                status: newStatus,
+                                last_started_at: new Date().toISOString(),
+                                time_spent: currentAccumulatedTime // Preserve existing time
+                              })
+                              .eq('id', task.id)
+                          } else {
+                            // Moving to completed or pending - always preserve the time
+                            await supabase
+                              .from('tasks')
+                              .update({ 
+                                status: newStatus,
+                                time_spent: currentAccumulatedTime,
+                                last_started_at: null
+                              })
+                              .eq('id', task.id)
+                          }
+                          await fetchTasks() // Refresh the task list
+                        } catch (error) {
+                          console.error('Error updating task status:', error)
+                          setError('Failed to update task status')
+                        }
+                      }}
                       className={`rounded border-gray-300 text-sm ${
                         task.status === 'completed' ? 'text-gray-500' : ''
                       }`}

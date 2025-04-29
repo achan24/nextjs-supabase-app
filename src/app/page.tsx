@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-white to-gray-50">
@@ -84,6 +86,26 @@ export default function Home() {
           <p>© 2024 NotesApp. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Task Manager Card */}
+      <Link href="/dashboard/tasks" className="block">
+        <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
+          <h3 className="text-xl font-semibold mb-2">Task Manager</h3>
+          <p className="text-gray-600 mb-4">
+            Create, organize, and track your tasks with priority levels and due dates.
+          </p>
+          <div className="text-blue-600 font-medium">Go to Task Manager →</div>
+        </div>
+      </Link>
+
+      {/* AI Assistant Card */}
+      <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
+        <h3 className="text-xl font-semibold mb-2">AI Assistant</h3>
+        <p className="text-gray-600 mb-4">
+          Get personalized suggestions and help managing your tasks and time.
+        </p>
+        <div className="text-blue-600 font-medium">Coming Soon →</div>
+      </div>
     </main>
   )
 } 
