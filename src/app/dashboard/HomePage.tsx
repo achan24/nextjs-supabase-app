@@ -4,6 +4,7 @@ import { User } from '@supabase/supabase-js'
 import { useState } from 'react'
 import Link from 'next/link'
 import SignOutButton from '@/components/SignOutButton'
+import ProjectManager from './ProjectManager'
 
 export default function HomePage({ user }: { user: User }) {
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
@@ -41,32 +42,20 @@ export default function HomePage({ user }: { user: User }) {
           </p>
         </div>
 
-        {/* AI Assistant Section */}
-        <div className="mb-12 bg-white p-6 rounded-lg shadow">
-          <h2 className="text-2xl font-semibold mb-4">AI Assistant</h2>
-          <p className="text-gray-700 mb-4">
-            Your AI assistant analyzes your tasks, energy patterns, and schedule to provide personalized recommendations.
-          </p>
-          <div className="bg-blue-50 p-4 rounded-lg mb-4">
-            {isLoadingSuggestion ? (
-              <p className="text-blue-700">Loading suggestion...</p>
-            ) : aiSuggestion ? (
-              <p className="text-blue-700">{aiSuggestion}</p>
-            ) : (
-              <p className="text-blue-700">Click the button below to get a personalized suggestion.</p>
-            )}
-          </div>
-          <button
-            onClick={getAiSuggestion}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-          >
-            Get AI Suggestion
-          </button>
-        </div>
-
         {/* Feature Cards */}
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {/* Projects Card */}
+          <Link href="/dashboard/projects" className="block">
+            <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <h3 className="text-xl font-semibold mb-2">Projects</h3>
+              <p className="text-gray-600 mb-4">
+                Organize and manage your projects with deadlines and priorities.
+              </p>
+              <div className="text-blue-600 font-medium">Go to Projects →</div>
+            </div>
+          </Link>
+
           {/* Tasks Card */}
           <Link href="/dashboard/tasks" className="block">
             <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
@@ -102,16 +91,16 @@ export default function HomePage({ user }: { user: User }) {
 
           {/* AI Suggestions Card */}
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-xl font-semibold mb-2">AI Suggestions</h3>
+            <h3 className="text-xl font-semibold mb-2">AI Recommendations</h3>
             <p className="text-gray-600 mb-4">
               Get personalized suggestions to improve your productivity.
             </p>
-            <button
-              onClick={getAiSuggestion}
-              className="text-blue-600 font-medium hover:text-blue-700"
+            <Link
+              href="/dashboard/recommendations"
+              className="text-blue-600 font-medium hover:text-blue-700 flex items-center gap-2"
             >
-              Get Suggestions →
-            </button>
+              View Recommendations →
+            </Link>
           </div>
 
           {/* Habit Tracker Card (Placeholder) */}

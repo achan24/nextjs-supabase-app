@@ -5,26 +5,51 @@ import { createClient } from '@/lib/supabase'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import TaskTimer from '@/components/TaskTimer'
+import Modal from '@/components/Modal'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 
 interface Task {
-  id: string
-  title: string
-  description: string | null
-  priority: number
-  status: 'pending' | 'in_progress' | 'completed'
-  due_date: string | null
-  created_at: string
-  user_id: string
-  tags?: Tag[]
-  time_spent?: number // in seconds
-  last_started_at?: string | null
+  id?: string;
+  title: string;
+  description?: string;
+  project_id?: string;
+  status: 'todo' | 'in_progress' | 'completed';
+  created_at?: string;
+  updated_at?: string;
+  priority: number;
+  due_date: string | null;
+  user_id: string;
+  tags?: Tag[];
+  time_spent?: number; // in seconds
+  last_started_at?: string | null;
+  project?: {
+    id: string;
+    title: string;
+  };
 }
 
 interface Tag {
-  id: string
-  name: string
-  color: string
-  user_id: string
+  id: string;
+  name: string;
+  color: string;
+  user_id: string;
+}
+
+interface Project {
+  id: string;
+  title: string;
+  deadline?: string;
+  status: 'active' | 'completed';
+}
+
+interface TaskFormData {
+  title: string;
+  description: string;
+  priority: number;
+  due_date: string;
+  tagIds: string[];
+  project_id: string;
+  status: 'todo' | 'in_progress' | 'completed';
 }
 
 const isInProgress = (status: Task['status']): status is 'in_progress' => status === 'in_progress';
@@ -33,24 +58,38 @@ export default function TaskManager({ user }: { user: User }) {
   const supabase = createClient()
   const [tasks, setTasks] = useState<Task[]>([])
   const [tags, setTags] = useState<Tag[]>([])
+  const [projects, setProjects] = useState<{ id: string; title: string }[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isTagModalOpen, setIsTagModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [editingTask, setEditingTask] = useState<Task>({
+    id: '',
+    title: '',
+    description: '',
+    project_id: undefined,
+    status: 'todo',
+    priority: 3,
+    due_date: null,
+    user_id: user.id
+  })
   const [hideCompleted, setHideCompleted] = useState(true)
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
     priority: 3,
     due_date: '',
-    tagIds: [] as string[]
+    tagIds: [] as string[],
+    project_id: '',
+    status: 'todo' as Task['status']
   })
-  const [newTask, setNewTask] = useState({ 
-    title: '', 
-    description: '', 
-    priority: 3,
+  const [newTaskForm, setNewTaskForm] = useState<TaskFormData>({
+    title: '',
+    description: '',
+    priority: 1,
     due_date: '',
-    tagIds: [] as string[]
+    tagIds: [],
+    project_id: '',
+    status: 'todo'
   })
   const [newTag, setNewTag] = useState({
     name: '',
@@ -66,48 +105,52 @@ export default function TaskManager({ user }: { user: User }) {
   useEffect(() => {
     fetchTasks()
     fetchTags()
+    fetchProjects()
   }, [])
 
-  const fetchTasks = async () => {
+  const fetchProjects = async () => {
     try {
       const { data, error } = await supabase
-        .from('tasks')
+        .from('projects')
         .select('*')
-        .eq('user_id', user.id)
-        .order('priority', { ascending: true })
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      
-      // Fetch tags for each task
-      const tasksWithTags = await Promise.all(
-        (data || []).map(async (task) => {
-          const { data: taskTags } = await supabase
-            .from('task_tags')
-            .select('tag_id')
-            .eq('task_id', task.id)
-          
-          const tagIds = taskTags?.map(t => t.tag_id) || []
-          
-          // Get tag details
-          const { data: tagData } = await supabase
-            .from('tags')
-            .select('id, name, color')
-            .in('id', tagIds)
-          
-          return {
-            ...task,
-            tags: tagData || []
-          }
-        })
-      )
-      
-      setTasks(tasksWithTags)
+      setProjects(data || [])
     } catch (error) {
-      console.error('Error fetching tasks:', error)
-      setError('Failed to fetch tasks')
+      console.error('Error fetching projects:', error)
+      setError('Failed to fetch projects')
     }
   }
+
+  const fetchTasks = async () => {
+    try {
+      const { data: tasks, error } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          task_tags!left(
+            tags(*)
+          ),
+          task_projects!left(project:projects(id, title))
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Transform the tasks data to include tags and project info
+      const transformedTasks = tasks.map(task => ({
+        ...task,
+        tags: task.task_tags?.map((t: { tags: Tag }) => t.tags) || [],
+        project: task.task_projects?.[0]?.project || null,
+        project_id: task.task_projects?.[0]?.project?.id || ''
+      }));
+
+      setTasks(transformedTasks);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
 
   const fetchTags = async () => {
     try {
@@ -125,52 +168,67 @@ export default function TaskManager({ user }: { user: User }) {
     }
   }
 
-  const handleCreateTask = async () => {
-    if (!newTask.title.trim()) return
-
-    setIsLoading(true)
-    setError(null)
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      // Create the task
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([
-          {
-            title: newTask.title,
-            description: newTask.description,
-            priority: newTask.priority,
-            due_date: newTask.due_date || null,
-            user_id: user.id
-          }
-        ])
-        .select()
+      const taskData: Task = {
+        title: newTaskForm.title,
+        description: newTaskForm.description,
+        priority: newTaskForm.priority,
+        due_date: newTaskForm.due_date || null,
+        status: newTaskForm.status,
+        user_id: user.id
+      };
 
-      if (error) throw error
-      
-      // Add tags to the task
-      if (data && data[0] && newTask.tagIds.length > 0) {
-        const taskTags = newTask.tagIds.map(tagId => ({
-          task_id: data[0].id,
+      const { data: newTask, error } = await supabase
+        .from('tasks')
+        .insert([taskData])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add project relationship if a project is selected
+      if (newTaskForm.project_id) {
+        const { error: projectError } = await supabase
+          .from('task_projects')
+          .insert([{
+            task_id: newTask.id,
+            project_id: newTaskForm.project_id
+          }]);
+        
+        if (projectError) throw projectError;
+      }
+
+      // Add tags if any are selected
+      if (newTaskForm.tagIds.length > 0) {
+        const taskTags = newTaskForm.tagIds.map(tagId => ({
+          task_id: newTask.id,
           tag_id: tagId
-        }))
+        }));
         
         const { error: tagError } = await supabase
           .from('task_tags')
-          .insert(taskTags)
+          .insert(taskTags);
         
-        if (tagError) throw tagError
+        if (tagError) throw tagError;
       }
 
-      setNewTask({ title: '', description: '', priority: 3, due_date: '', tagIds: [] })
-      setIsModalOpen(false)
-      fetchTasks()
+      setTasks([...tasks, newTask]);
+      setNewTaskForm({
+        title: '',
+        description: '',
+        priority: 1,
+        due_date: '',
+        tagIds: [],
+        project_id: '',
+        status: 'todo'
+      });
+      setIsModalOpen(false);
     } catch (error) {
-      console.error('Error creating task:', error)
-      setError('Failed to create task')
-    } finally {
-      setIsLoading(false)
+      console.error('Error creating task:', error);
     }
-  }
+  };
 
   const handleCreateTag = async () => {
     if (!newTag.name.trim()) return
@@ -279,7 +337,9 @@ export default function TaskManager({ user }: { user: User }) {
       description: task.description || '',
       priority: task.priority,
       due_date: task.due_date || '',
-      tagIds: task.tags?.map(tag => tag.id) || []
+      tagIds: task.tags?.map(tag => tag.id) || [],
+      project_id: task.project_id || '',
+      status: task.status
     })
     setIsEditModalOpen(true)
   }
@@ -304,58 +364,110 @@ export default function TaskManager({ user }: { user: User }) {
     : filteredTasks
 
   const handleEditTask = async () => {
-    if (!editingTask) return;
-    
-    if (!editForm.title.trim()) {
-      setError('Title is required');
-      return;
-    }
+    if (!editingTask || !editForm.title.trim()) return
 
+    setIsLoading(true)
+    setError(null)
     try {
-      setIsLoading(true);
-      const { error } = await supabase
+      console.log('Updating task with data:', {
+        title: editForm.title,
+        description: editForm.description,
+        priority: editForm.priority,
+        due_date: editForm.due_date || null
+      });
+
+      // Update the task
+      const { error: taskError } = await supabase
         .from('tasks')
-        .update({ 
-          title: editForm.title, 
+        .update({
+          title: editForm.title,
           description: editForm.description,
           priority: editForm.priority,
           due_date: editForm.due_date || null
         })
-        .eq('id', editingTask.id);
+        .eq('id', editingTask.id)
 
-      if (error) throw error;
+      if (taskError) {
+        console.error('Error updating task:', taskError);
+        throw taskError;
+      }
+
+      console.log('Updating project relationship:', {
+        task_id: editingTask.id,
+        project_id: editForm.project_id
+      });
+
+      // Update task-project relationship
+      // First, remove any existing project relationship
+      const { error: deleteProjectError } = await supabase
+        .from('task_projects')
+        .delete()
+        .eq('task_id', editingTask.id)
+
+      if (deleteProjectError) {
+        console.error('Error deleting existing project relationship:', deleteProjectError);
+        throw deleteProjectError;
+      }
+
+      // Then add the new project relationship if a project is selected
+      if (editForm.project_id) {
+        const { error: projectError } = await supabase
+          .from('task_projects')
+          .insert([{
+            task_id: editingTask.id,
+            project_id: editForm.project_id
+          }])
+        
+        if (projectError) {
+          console.error('Error adding new project relationship:', projectError);
+          throw projectError;
+        }
+      }
 
       // Update task tags
-      const { error: tagError } = await supabase
+      // First, remove all existing tags
+      const { error: deleteTagsError } = await supabase
         .from('task_tags')
         .delete()
-        .eq('task_id', editingTask.id);
+        .eq('task_id', editingTask.id)
 
-      if (tagError) throw tagError;
+      if (deleteTagsError) {
+        console.error('Error deleting existing tags:', deleteTagsError);
+        throw deleteTagsError;
+      }
 
+      // Then add the new tags
       if (editForm.tagIds.length > 0) {
         const taskTags = editForm.tagIds.map(tagId => ({
           task_id: editingTask.id,
           tag_id: tagId
-        }));
+        }))
         
-        const { error: insertTagError } = await supabase
+        const { error: tagError } = await supabase
           .from('task_tags')
-          .insert(taskTags);
+          .insert(taskTags)
         
-        if (insertTagError) throw insertTagError;
+        if (tagError) {
+          console.error('Error adding new tags:', tagError);
+          throw tagError;
+        }
       }
 
-      fetchTasks();
-      setIsEditModalOpen(false);
-      setEditingTask(null);
-      setEditForm({ title: '', description: '', priority: 3, due_date: '', tagIds: [] });
+      setIsEditModalOpen(false)
+      fetchTasks()
     } catch (error) {
-      console.error('Error updating task:', error);
-      setError('Failed to update task');
+      console.error('Error updating task:', error)
+      setError('Failed to update task: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
+  }
+
+  const handleStatusChange = (value: 'todo' | 'in_progress' | 'completed') => {
+    setNewTaskForm(prev => ({
+      ...prev,
+      status: value
+    }));
   };
 
   return (
@@ -570,7 +682,7 @@ export default function TaskManager({ user }: { user: User }) {
                         task.status === 'completed' ? 'text-gray-500' : ''
                       }`}
                     >
-                      <option value="pending">Pending</option>
+                      <option value="todo">Pending</option>
                       <option value="in_progress">In Progress</option>
                       <option value="completed">Completed</option>
                     </select>
@@ -589,116 +701,126 @@ export default function TaskManager({ user }: { user: User }) {
       </div>
 
       {/* Create Task Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">Create New Task</h2>
-            <input
-              type="text"
-              placeholder="Task Title"
-              className="w-full mb-4 p-2 border rounded"
-              value={newTask.title}
-              onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-            />
-            <textarea
-              placeholder="Task Description (optional)"
-              className="w-full mb-4 p-2 border rounded h-32"
-              value={newTask.description}
-              onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-            />
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Priority
-              </label>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Create New Task</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Title</label>
+              <input
+                type="text"
+                value={newTaskForm.title}
+                onChange={(e) => setNewTaskForm({ ...newTaskForm, title: e.target.value })}
+                placeholder="Task title"
+                className="w-full p-2 mb-4 border rounded"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <textarea
+                value={newTaskForm.description}
+                onChange={(e) => setNewTaskForm({ ...newTaskForm, description: e.target.value })}
+                placeholder="Description"
+                className="w-full p-2 mb-4 border rounded"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Priority</label>
               <select
-                value={newTask.priority}
-                onChange={(e) => setNewTask({ ...newTask, priority: parseInt(e.target.value) })}
-                className="w-full p-2 border rounded"
+                value={newTaskForm.priority}
+                onChange={(e) => setNewTaskForm({ ...newTaskForm, priority: Number(e.target.value) })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               >
-                <option value="1">1 - Highest</option>
-                <option value="2">2 - High</option>
-                <option value="3">3 - Medium</option>
-                <option value="4">4 - Low</option>
-                <option value="5">5 - Lowest</option>
+                <option value="1">High Priority</option>
+                <option value="2">Medium-High Priority</option>
+                <option value="3">Medium Priority</option>
+                <option value="4">Medium-Low Priority</option>
+                <option value="5">Low Priority</option>
               </select>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Due Date and Time (optional)
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="date"
-                  className="flex-1 p-2 border rounded"
-                  value={newTask.due_date ? newTask.due_date.split('T')[0] : ''}
-                  onChange={(e) => {
-                    const date = e.target.value;
-                    const time = newTask.due_date ? newTask.due_date.split('T')[1] : '00:00';
-                    setNewTask({ ...newTask, due_date: date ? `${date}T${time}` : '' });
-                  }}
-                />
-                <input
-                  type="time"
-                  className="w-32 p-2 border rounded"
-                  value={newTask.due_date ? newTask.due_date.split('T')[1].substring(0, 5) : '00:00'}
-                  onChange={(e) => {
-                    const date = newTask.due_date ? newTask.due_date.split('T')[0] : new Date().toISOString().split('T')[0];
-                    setNewTask({ ...newTask, due_date: `${date}T${e.target.value}:00` });
-                  }}
-                />
-              </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Project</label>
+              <select
+                value={newTaskForm.project_id || ''}
+                onChange={(e) => setNewTaskForm({ ...newTaskForm, project_id: e.target.value })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              >
+                <option value="">No Project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tags
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map(tag => (
-                  <label key={tag.id} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={newTask.tagIds.includes(tag.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setNewTask({ ...newTask, tagIds: [...newTask.tagIds, tag.id] })
-                        } else {
-                          setNewTask({ ...newTask, tagIds: newTask.tagIds.filter(id => id !== tag.id) })
-                        }
-                      }}
-                      className="rounded"
-                    />
-                    <span 
-                      className="px-2 py-1 rounded text-xs"
-                      style={{ 
-                        backgroundColor: `${tag.color}20`,
-                        color: tag.color,
-                        border: `1px solid ${tag.color}`
-                      }}
-                    >
-                      {tag.name}
-                    </span>
-                  </label>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Due Date</label>
+              <input
+                type="date"
+                value={newTaskForm.due_date}
+                onChange={(e) => setNewTaskForm({ ...newTaskForm, due_date: e.target.value })}
+                className="w-full p-2 mb-4 border rounded"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Status</label>
+              <Select
+                value={newTaskForm.status}
+                onValueChange={handleStatusChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todo">Pending</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Tags</label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTagFilter(tag.id)}
+                    className={`px-3 py-1 rounded-full text-sm ${
+                      newTaskForm.tagIds.includes(tag.id)
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-200 text-gray-700'
+                    }`}
+                  >
+                    {tag.name}
+                  </button>
                 ))}
               </div>
             </div>
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateTask}
-                disabled={isLoading}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isLoading ? 'Creating...' : 'Create Task'}
-              </button>
-            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateTask}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+            >
+              Create Task
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Manage Tags Modal */}
       {isTagModalOpen && (
@@ -777,120 +899,122 @@ export default function TaskManager({ user }: { user: User }) {
       )}
 
       {/* Edit Task Modal */}
-      {isEditModalOpen && editingTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">Edit Task</h2>
-            <input
-              type="text"
-              placeholder="Task Title"
-              className="w-full mb-4 p-2 border rounded"
-              value={editForm.title}
-              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-            />
-            <textarea
-              placeholder="Task Description (optional)"
-              className="w-full mb-4 p-2 border rounded h-32"
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            />
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Priority
-              </label>
-              <select
-                value={editForm.priority}
-                onChange={(e) => setEditForm({ ...editForm, priority: parseInt(e.target.value) })}
-                className="w-full p-2 border rounded"
-              >
-                <option value="1">1 - Highest</option>
-                <option value="2">2 - High</option>
-                <option value="3">3 - Medium</option>
-                <option value="4">4 - Low</option>
-                <option value="5">5 - Lowest</option>
-              </select>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Due Date and Time (optional)
-              </label>
-              <div className="flex space-x-2">
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)}>
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Edit Task</h2>
+          {editForm && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Title</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Priority</label>
+                <select
+                  value={editForm.priority}
+                  onChange={(e) => setEditForm({ ...editForm, priority: Number(e.target.value) })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="1">High Priority</option>
+                  <option value="2">Medium-High Priority</option>
+                  <option value="3">Medium Priority</option>
+                  <option value="4">Medium-Low Priority</option>
+                  <option value="5">Low Priority</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Project</label>
+                <select
+                  value={editForm.project_id || ''}
+                  onChange={(e) => setEditForm({ ...editForm, project_id: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="">No Project</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Due Date</label>
                 <input
                   type="date"
-                  className="flex-1 p-2 border rounded"
-                  value={editForm.due_date ? editForm.due_date.split('T')[0] : ''}
-                  onChange={(e) => {
-                    const date = e.target.value;
-                    const time = editForm.due_date ? editForm.due_date.split('T')[1] : '00:00';
-                    setEditForm({ ...editForm, due_date: date ? `${date}T${time}` : '' });
-                  }}
-                />
-                <input
-                  type="time"
-                  className="w-32 p-2 border rounded"
-                  value={editForm.due_date ? editForm.due_date.split('T')[1].substring(0, 5) : '00:00'}
-                  onChange={(e) => {
-                    const date = editForm.due_date ? editForm.due_date.split('T')[0] : new Date().toISOString().split('T')[0];
-                    setEditForm({ ...editForm, due_date: `${date}T${e.target.value}:00` });
-                  }}
+                  value={editForm.due_date}
+                  onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 />
               </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tags
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map(tag => (
-                  <label key={tag.id} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={editForm.tagIds.includes(tag.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setEditForm({ ...editForm, tagIds: [...editForm.tagIds, tag.id] })
-                        } else {
-                          setEditForm({ ...editForm, tagIds: editForm.tagIds.filter(id => id !== tag.id) })
-                        }
-                      }}
-                      className="rounded"
-                    />
-                    <span 
-                      className="px-2 py-1 rounded text-xs"
-                      style={{ 
-                        backgroundColor: `${tag.color}20`,
-                        color: tag.color,
-                        border: `1px solid ${tag.color}`
-                      }}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value as Task['status'] })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="todo">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Tags</label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <button
+                      key={tag.id}
+                      onClick={() => toggleTagFilter(tag.id)}
+                      className={`px-3 py-1 rounded-full text-sm ${
+                        editForm.tagIds.includes(tag.id)
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-200 text-gray-700'
+                      }`}
                     >
                       {tag.name}
-                    </span>
-                  </label>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => {
-                  setEditingTask(null)
-                  setEditForm({ title: '', description: '', priority: 3, due_date: '', tagIds: [] })
-                  setIsEditModalOpen(false)
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditTask}
-                disabled={isLoading}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isLoading ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
+          )}
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              onClick={() => setIsEditModalOpen(false)}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleEditTask}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+            >
+              Update Task
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 } 
