@@ -99,8 +99,8 @@ export default function TaskManager({ user }: { user: User }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<Task['status'] | 'all'>('all')
-  const [sortBy, setSortBy] = useState<'created' | 'priority'>('created')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [sortBy, setSortBy] = useState<'created' | 'priority'>('priority')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     fetchTasks()
@@ -260,7 +260,8 @@ export default function TaskManager({ user }: { user: User }) {
     }
   }
 
-  const handleUpdateTaskStatus = async (taskId: string, newStatus: Task['status']) => {
+  const handleUpdateTaskStatus = async (taskId: string | undefined, newStatus: Task['status']) => {
+    if (!taskId) return;
     try {
       const { error } = await supabase
         .from('tasks')
@@ -362,6 +363,20 @@ export default function TaskManager({ user }: { user: User }) {
   const visibleTasks = hideCompleted
     ? filteredTasks.filter(task => task.status !== 'completed')
     : filteredTasks
+
+  // Add sorting logic before the visibleTasks mapping
+  const sortedTasks = [...visibleTasks]
+    .sort((a, b) => {
+      if (sortBy === 'priority') {
+        return sortOrder === 'asc' 
+          ? a.priority - b.priority
+          : b.priority - a.priority;
+      } else {
+        return sortOrder === 'asc'
+          ? new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+          : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      }
+    })
 
   const handleEditTask = async () => {
     if (!editingTask || !editForm.title.trim()) return
@@ -470,6 +485,51 @@ export default function TaskManager({ user }: { user: User }) {
     }));
   };
 
+  const toggleTaskTag = (tagId: string, formSetter: React.Dispatch<React.SetStateAction<TaskFormData | typeof editForm>>) => {
+    formSetter(prev => ({
+      ...prev,
+      tagIds: prev.tagIds.includes(tagId)
+        ? prev.tagIds.filter(id => id !== tagId)
+        : [...prev.tagIds, tagId]
+    }));
+  };
+
+  const handleDeleteTask = async (taskId: string | undefined) => {
+    if (!taskId || !confirm('Are you sure you want to delete this task?')) return;
+
+    try {
+      // First delete task-tag relationships
+      const { error: tagError } = await supabase
+        .from('task_tags')
+        .delete()
+        .eq('task_id', taskId);
+
+      if (tagError) throw tagError;
+
+      // Delete task-project relationships
+      const { error: projectError } = await supabase
+        .from('task_projects')
+        .delete()
+        .eq('task_id', taskId);
+
+      if (projectError) throw projectError;
+
+      // Finally delete the task
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      // Update local state
+      setTasks(tasks.filter(t => t.id !== taskId));
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      setError('Failed to delete task');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation Bar */}
@@ -493,7 +553,25 @@ export default function TaskManager({ user }: { user: User }) {
         )}
         
         <div className="mb-8 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Your Tasks</h2>
+          <div className="flex items-center space-x-4">
+            <h2 className="text-2xl font-bold text-gray-900">Your Tasks</h2>
+            <div className="flex items-center space-x-2">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'created' | 'priority')}
+                className="px-2 py-1 border rounded text-sm"
+              >
+                <option value="created">Sort by Date</option>
+                <option value="priority">Sort by Priority</option>
+              </select>
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="p-1 rounded hover:bg-gray-100"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+          </div>
           <div className="flex space-x-2">
             <div className="flex items-center mr-4">
               <input
@@ -554,12 +632,13 @@ export default function TaskManager({ user }: { user: User }) {
         )}
 
         <div className="space-y-4">
-          {visibleTasks.length === 0 ? (
+          {/* Apply sorting to visible tasks */}
+          {sortedTasks.length === 0 ? (
             <div className="bg-white p-6 rounded-lg shadow text-center">
               <p className="text-gray-500">No tasks found. Create a new task to get started.</p>
             </div>
           ) : (
-            visibleTasks.map((task) => (
+            sortedTasks.map((task) => (
               <div 
                 key={task.id} 
                 className={`bg-white p-4 rounded-lg shadow ${
@@ -645,42 +724,8 @@ export default function TaskManager({ user }: { user: User }) {
                   <div className="flex items-center space-x-2">
                     <select
                       value={task.status}
-                      onChange={async (e) => {
-                        const newStatus = e.target.value as Task['status']
-                        try {
-                          // Get the current accumulated time before any status change
-                          const currentAccumulatedTime = task.time_spent || 0
-
-                          if (newStatus === 'in_progress') {
-                            // Starting or resuming a task
-                            await supabase
-                              .from('tasks')
-                              .update({ 
-                                status: newStatus,
-                                last_started_at: new Date().toISOString(),
-                                time_spent: currentAccumulatedTime // Preserve existing time
-                              })
-                              .eq('id', task.id)
-                          } else {
-                            // Moving to completed or pending - always preserve the time
-                            await supabase
-                              .from('tasks')
-                              .update({ 
-                                status: newStatus,
-                                time_spent: currentAccumulatedTime,
-                                last_started_at: null
-                              })
-                              .eq('id', task.id)
-                          }
-                          await fetchTasks() // Refresh the task list
-                        } catch (error) {
-                          console.error('Error updating task status:', error)
-                          setError('Failed to update task status')
-                        }
-                      }}
-                      className={`rounded border-gray-300 text-sm ${
-                        task.status === 'completed' ? 'text-gray-500' : ''
-                      }`}
+                      onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value as Task['status'])}
+                      className="text-sm border rounded p-1"
                     >
                       <option value="todo">Pending</option>
                       <option value="in_progress">In Progress</option>
@@ -691,6 +736,12 @@ export default function TaskManager({ user }: { user: User }) {
                       className="text-blue-600 hover:text-blue-800"
                     >
                       Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Delete
                     </button>
                   </div>
                 </div>
@@ -791,12 +842,13 @@ export default function TaskManager({ user }: { user: User }) {
                 {tags.map((tag) => (
                   <button
                     key={tag.id}
-                    onClick={() => toggleTagFilter(tag.id)}
+                    onClick={() => toggleTaskTag(tag.id, setNewTaskForm)}
                     className={`px-3 py-1 rounded-full text-sm ${
                       newTaskForm.tagIds.includes(tag.id)
                         ? 'bg-indigo-600 text-white'
                         : 'bg-gray-200 text-gray-700'
                     }`}
+                    type="button"
                   >
                     {tag.name}
                   </button>
@@ -984,12 +1036,13 @@ export default function TaskManager({ user }: { user: User }) {
                   {tags.map((tag) => (
                     <button
                       key={tag.id}
-                      onClick={() => toggleTagFilter(tag.id)}
+                      onClick={() => toggleTaskTag(tag.id, setEditForm)}
                       className={`px-3 py-1 rounded-full text-sm ${
                         editForm.tagIds.includes(tag.id)
                           ? 'bg-indigo-600 text-white'
                           : 'bg-gray-200 text-gray-700'
                       }`}
+                      type="button"
                     >
                       {tag.name}
                     </button>
