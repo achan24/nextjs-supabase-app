@@ -89,6 +89,17 @@ export default function HomePage({ user }: { user: User }) {
             </div>
           </Link>
 
+          {/* Process Flow Card */}
+          <Link href="/dashboard/process-flow" className="block">
+            <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <h3 className="text-xl font-semibold mb-2">Process Flow</h3>
+              <p className="text-gray-600 mb-4">
+                Visualize and track your learning progress, practice sessions, and skill development through interactive process flows.
+              </p>
+              <div className="text-blue-600 font-medium">Go to Process Flow →</div>
+            </div>
+          </Link>
+
           {/* AI Suggestions Card */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-xl font-semibold mb-2">AI Recommendations</h3>

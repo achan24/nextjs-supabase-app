@@ -1,0 +1,289 @@
+A visual productivity and practice tool where users move through nodes in a process flow. Nodes can represent tasks, processes, skills, or notes. The app highlights nodes when they are ready, tracks time spent, collects quick feedback, and records stats to monitor progress over time. All nodes are connectable.
+
+Using react flow
+
+Node Types
+Node Type	Description
+Note	Simple text-based node. Can be attached to any node for context, thoughts.
+Task	A single actionable task. Has a start/stop timer, and stats.
+Process	A compound node that expands into a sub-flow of Task nodes.
+Skill	Represents a broader skill area (e.g. "Data Analysis")
+Technique	A technique under a Skill (e.g. "Box Plot Interpretation")
+
+
+Core Features
+1. Visual Editor
+
+Drag-and-drop nodes
+Connect nodes freely
+Expand/collapse compound nodes (e.g., Process → Task List)
+2. Node Lifecycle
+
+Ready: Highlighted, can be started
+Active: On start, node lights up differently
+Completed: On stop, stats are recorded
+3. Timers & Tracking
+
+Start/Stop buttons in Task and Technique nodes
+Record:
+Time spent
+Date started/completed
+Manual input (e.g., difficulty, focus level)
+4. Quick Questionnaire (Post-Task)
+
+Optional questionnaire depending on if user assigns any questions.
+Appears after task completion
+Questions:
+I get to select the questions and the answer type
+
+
+5. Progress & Iteration Tracking
+
+View history per node:
+Time logs
+Questionnaire answers
+Iteration count
+Filter flows by date range or tag
+6. Stats Dashboard
+
+Per-node and global stats:
+Total time spent
+Average focus/difficulty
+Last completed
+Charts (line/heatmap) for trends
+Advanced Features (Future)
+Templates: Prebuilt flows for recurring processes
+Versioning: Track changes to process structures
+Collaboration: Share flows with friends/teams
+Gamification: Streaks, badges for consistency
+
+
+UI Notes
+Left Panel: Node toolbox (drag to canvas)
+Right Panel: Node detail view (editable fields, stats)
+Bottom Panel: Timeline or session summary
+Canvas: React Flow viewport
+Example Use Case
+Start with a Skill node: “Presentation Skills”
+Connect it to Technique nodes: “Eye Contact”, “Pacing”
+Each Technique node links to Task nodes: “Practice with Timer”
+You begin a task, complete it, fill in the questionnaire
+View progress in the dashboard after a week of practice
+
+
+
+
+Node information from a different app:
+
+Let me explain how nodes are connected in the Skill Builder:
+
+Connection Validation:
+The isValidConnection function (lines 376-391) validates connection attempts
+It checks that both source and target handles exist
+Currently, it allows connections between any handles (very flexible)
+Connection Handling:
+The handleConnect function (lines 394-411) manages node connections
+When a connection is made, it: a. Generates a unique ID for the edge using uuidv4() b. Sets a default edge type c. Adds a custom style (purple stroke, width 2) d. Adds the new edge to the existing edges e. Triggers an auto-save
+Connection Modes:
+Uses ConnectionMode.Loose (from earlier context), allowing flexible connections
+Connection line is set to ConnectionLineType.Straight
+Backend Integration:
+Connections are saved to the backend via the saveSkillMap function
+Converts ReactFlow edges to a format the backend can understand
+Key Observations:
+
+Extremely flexible connection system
+Supports connecting nodes from any handle
+Automatically generates unique IDs for connections
+Provides visual feedback with a purple connection line
+Automatically saves connections to the backend
+The design follows the memory about Visual Skill Builder, specifically the point about "Flexible node connections: Nodes can connect from any point to any point".
+
+Would you like me to elaborate on any specific aspect of the node connection mechanism?
+
+Feedback submitted
+Me
+
+How are the nodes setup?
+
+I'll investigate how the nodes are set up by searching through the relevant files:
+
+Semantic searched codebase
+97 results
+Semantic searchedai-todo-frontend/src/components/SkillBuilderwith querynode type setup ReactFlow
+Based on the code, here's a detailed explanation of how nodes are set up in the Skill Builder:
+
+Node Types: The application supports three main node types, defined in the nodeTypes object:
+typescript
+CopyInsert
+const nodeTypes: NodeTypes = {
+  skill: SkillNode,
+  technique: TechniqueNode,
+  note: NoteNode,
+};
+Node Data Structure: Each node type has a specific data structure. For example, a Skill Node:
+typescript
+CopyInsert
+type SkillNodeData = {
+  title: string;
+  description: string;
+  status: 'not_started' | 'in_progress' | 'completed' | 'paused';
+  progress: number;
+  color?: string;
+  width?: number;
+  height?: number;
+  // ... other optional fields
+};
+Initial Node Creation: When creating a new node, it's given a default structure:
+typescript
+CopyInsert
+const initialNodes: Node[] = [
+  {
+    id: uuidv4(), // Unique identifier
+    type: 'skill', // Node type
+    position: { x: 250, y: 100 }, // Initial position
+    data: { 
+      title: 'New Skill',
+      description: '',
+      status: 'not_started',
+      progress: 0,
+      width: 220,
+      height: 150,
+      color: '#C8E6C9', // Light green for new skills
+    },
+  }
+];
+Node Addition: Nodes can be added through the NodeToolbar component:
+typescript
+CopyInsert
+const handleAddNode = (nodeType: string) => {
+  // Default position in the center of the viewport
+  onAddNode(nodeType, { x: 400, y: 300 });
+};
+Node Rendering: Each node type (SkillNode, TechniqueNode, NoteNode) has a custom renderer that defines its appearance:
+Supports custom colors
+Displays node-specific information
+Includes progress indicators
+Handles different statuses
+Backend Integration:
+Nodes are converted to a backend-friendly format when saving
+Can be loaded from the backend with full metadata
+Supports color customization
+Tracks practice metrics and node-specific details
+Key Observations:
+
+Extremely flexible node system
+Supports multiple node types
+Rich metadata for each node
+Customizable appearance
+Integrated with practice tracking
+Would you like me to elaborate on any specific aspect of the node setup?
+
+Feedback submitted
+Me
+
+how the connections work
+
+I'll provide a comprehensive explanation of how connections work in the Skill Builder by analyzing the relevant code:
+
+Connection Validation:
+typescript
+CopyInsert
+const isValidConnection = useCallback((connection: Connection) => {
+  console.log('Connection attempt:', {
+    source: connection.source,
+    sourceHandle: connection.sourceHandle,
+    target: connection.target,
+    targetHandle: connection.targetHandle
+  });
+  
+  // Ensure we have valid handles
+  if (!connection.sourceHandle || !connection.targetHandle) {
+    return false;
+  }
+
+  // Allow connections between any handles
+  return true;
+}, []);
+Key points:
+
+Validates connection attempts
+Requires both source and target handles
+Currently allows connections between any handles (very flexible)
+Connection Handling:
+typescript
+CopyInsert
+const handleConnect = useCallback(
+  (params: Connection) => {
+    console.log('handleConnect called with params:', params);
+    if (params.source && params.target && params.sourceHandle && params.targetHandle) {
+      const newEdge = {
+        ...params,
+        id: uuidv4(),
+        type: 'default',
+        animated: false,
+        style: { stroke: '#6A0572', strokeWidth: 2 }
+      };
+      console.log('Creating new edge:', newEdge);
+      setEdges((eds) => addEdge(newEdge, eds));
+      triggerAutoSave();
+    }
+  },
+  [setEdges, triggerAutoSave]
+);
+Connection Creation Process:
+
+Generates a unique ID for each connection
+Sets a default edge type
+Adds a custom purple stroke style
+Automatically saves the connection
+Connection Configuration:
+typescript
+CopyInsert
+<ReactFlow
+  connectionMode={ConnectionMode.Loose}
+  connectionLineStyle={{ stroke: '#6A0572', strokeWidth: 2 }}
+  connectionLineType={ConnectionLineType.Straight}
+  // ... other props
+>
+Connection Modes:
+
+Uses ConnectionMode.Loose for flexible connections
+Straight connection lines
+Consistent purple styling
+Backend Integration: When saving, connections are converted to a backend-friendly format:
+typescript
+CopyInsert
+connections: edges.map(edge => ({
+  id: edge.id,
+  source_id: edge.source,
+  target_id: edge.target,
+  source_handle: edge.sourceHandle || 'bottom',
+  target_handle: edge.targetHandle || 'top',
+  label: edge.label || ''
+}))
+Loading Connections: When loading a skill map, connections are converted from backend format:
+typescript
+CopyInsert
+const flowEdges = data.connections.map((conn: any) => ({
+  id: conn.id,
+  source: conn.source_id,
+  target: conn.target_id,
+  sourceHandle,
+  targetHandle,
+  label: conn.label || '',
+  type: 'default',
+  animated: false,
+  style: { stroke: '#6A0572', strokeWidth: 2 }
+}));
+Key Observations:
+
+Extremely flexible connection system
+Supports connecting nodes from any handle
+Automatically generates unique IDs
+Provides visual feedback with purple connection lines
+Seamless backend integration
+Automatic saving of connections
+The design follows the memory about Visual Skill Builder, specifically the point about "Flexible node connections: Nodes can connect from any point to any point".
+
+Would you like me to elaborate on any specific aspect of the connection mechanism?
