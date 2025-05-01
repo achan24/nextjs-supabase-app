@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -16,6 +16,8 @@ import ReactFlow, {
   MarkerType,
   ConnectionMode,
   ConnectionLineType,
+  ReactFlowInstance,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -42,6 +44,7 @@ export default function ProcessFlowEditor() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isToolboxOpen, setIsToolboxOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -54,9 +57,45 @@ export default function ProcessFlowEditor() {
     return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
+  const onInit = useCallback((instance: ReactFlowInstance) => {
+    setReactFlowInstance(instance);
+  }, []);
+
+  const adjustNodePosition = useCallback((node: Node) => {
+    if (!reactFlowInstance) return node;
+
+    // Get the current viewport
+    const { x, y, zoom } = reactFlowInstance.getViewport();
+    
+    // Get the flow bounds
+    const flowBounds = reactFlowInstance.getViewport();
+    
+    // Calculate the center of the viewport in flow coordinates
+    const centerX = (-x + window.innerWidth / 2) / zoom;
+    const centerY = (-y + window.innerHeight / 2) / zoom;
+    
+    return {
+      ...node,
+      position: {
+        x: centerX - 75, // Offset by half the node width
+        y: centerY - 50, // Offset by half the node height
+      },
+    };
+  }, [reactFlowInstance]);
+
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
-    []
+    (changes: NodeChange[]) => {
+      setNodes((nds) => {
+        const updatedNodes = applyNodeChanges(changes, nds);
+        return updatedNodes.map((node) => {
+          if (changes.some((change) => change.type === 'add' && change.item.id === node.id)) {
+            return adjustNodePosition(node);
+          }
+          return node;
+        });
+      });
+    },
+    [adjustNodePosition]
   );
 
   const onEdgesChange = useCallback(
@@ -240,6 +279,7 @@ export default function ProcessFlowEditor() {
             onNodeClick={onNodeClick}
             onDragOver={onDragOver}
             onDrop={onDrop}
+            onInit={onInit}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
             minZoom={0.1}
@@ -256,6 +296,8 @@ export default function ProcessFlowEditor() {
             connectionMode={ConnectionMode.Loose}
             connectionLineType={ConnectionLineType.Straight}
             className="h-full w-full"
+            draggable={true}
+            nodesDraggable={true}
           >
             <Background gap={12} size={1} />
             <Controls showInteractive={true} />

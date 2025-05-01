@@ -46,17 +46,23 @@ export default function NodeToolbox({ setNodes }: NodeToolboxProps) {
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const onDrop = (event: DragEvent) => {
-    event.preventDefault();
-
-    const type = event.dataTransfer.getData('application/reactflow');
-    const position = { x: event.clientX, y: event.clientY };
-
+  const addNode = (type: string) => {
+    // Add node to the center of the viewport
     const newNode: Node = {
       id: `${type}-${Date.now()}`,
       type,
-      position,
-      data: { label: `New ${type}` },
+      // Position will be adjusted by the parent component
+      position: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+      data: {
+        label: `New ${type}`,
+        description: '',
+        status: 'ready',
+        ...(type === 'task' && { timeSpent: 0, isRunning: false }),
+        ...(type === 'note' && { content: '' }),
+        ...(type === 'process' && { subTasks: [], progress: 0 }),
+        ...(type === 'skill' && { level: 1, experience: '' }),
+        ...(type === 'technique' && { effectiveness: 0, steps: [] }),
+      },
     };
 
     setNodes((nds) => [...nds, newNode]);
@@ -71,7 +77,8 @@ export default function NodeToolbox({ setNodes }: NodeToolboxProps) {
             key={nodeType.type}
             draggable
             onDragStart={(event) => onDragStart(event, nodeType.type)}
-            className="p-3 bg-white rounded-md shadow-sm border border-gray-200 cursor-move hover:shadow-md transition-shadow"
+            onClick={() => addNode(nodeType.type)}
+            className="p-3 bg-white rounded-md shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow active:bg-gray-50"
           >
             <div className="flex items-center space-x-2">
               <span className="text-xl">{nodeType.icon}</span>
