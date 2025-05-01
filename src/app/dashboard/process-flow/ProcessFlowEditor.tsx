@@ -144,9 +144,12 @@ export default function ProcessFlowEditor() {
     setSelectedNode(null);
   }, []);
 
-  const handleBackgroundClick = useCallback(() => {
-    if (isDetailsOpen) {
-      closeDetails();
+  const handleBackgroundClick = useCallback((e: React.MouseEvent) => {
+    // Only close the details panel if clicking directly on the background
+    if (e.target === e.currentTarget) {
+      if (isDetailsOpen) {
+        closeDetails();
+      }
     }
   }, [isDetailsOpen, closeDetails]);
 
@@ -316,6 +319,7 @@ export default function ProcessFlowEditor() {
         className={`${
           isDetailsOpen ? 'translate-x-0' : 'translate-x-full'
         } fixed md:static w-80 bg-white shadow-md overflow-y-auto transition-transform duration-300 ease-in-out h-full border-l border-gray-200 flex-shrink-0 z-20 right-0 md:right-auto`}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
           <div className="flex justify-between items-center">
