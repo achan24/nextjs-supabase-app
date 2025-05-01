@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { createClient } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 import ReactFlow, {
   Node,
   Edge,
@@ -30,6 +32,14 @@ import { ProcessNode } from './nodes/ProcessNode';
 import { SkillNode } from './nodes/SkillNode';
 import { TechniqueNode } from './nodes/TechniqueNode';
 
+interface ProcessFlow {
+  id: string;
+  title: string;
+  description: string;
+  nodes: Node[];
+  edges: Edge[];
+}
+
 const nodeTypes = {
   task: TaskNode,
   note: NoteNode,
@@ -38,13 +48,20 @@ const nodeTypes = {
   technique: TechniqueNode,
 };
 
-export default function ProcessFlowEditor() {
+export default function ProcessFlowEditor({ user }: { user: User }) {
+  const supabase = createClient();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isToolboxOpen, setIsToolboxOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [currentFlow, setCurrentFlow] = useState<ProcessFlow | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
+  const [flowTitle, setFlowTitle] = useState('Untitled Flow');
+  const [flowDescription, setFlowDescription] = useState('');
+  const [flows, setFlows] = useState<ProcessFlow[]>([]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -173,19 +190,24 @@ export default function ProcessFlowEditor() {
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
+    // Only set dropEffect to 'move' if we're dragging from the toolbox
+    const isToolboxDrag = event.dataTransfer.types.includes('application/reactflow');
+    event.dataTransfer.dropEffect = isToolboxDrag ? 'move' : 'none';
   }, []);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
 
+      // Only handle drops from the toolbox
       const type = event.dataTransfer.getData('application/reactflow');
+      if (!type) return;
+
       const reactFlowBounds = event.currentTarget.getBoundingClientRect();
-      const position = {
+      const position = reactFlowInstance?.project({
         x: event.clientX - reactFlowBounds.left,
         y: event.clientY - reactFlowBounds.top,
-      };
+      }) || { x: 0, y: 0 };
 
       // Default data for all node types
       const baseData = {
@@ -244,7 +266,7 @@ export default function ProcessFlowEditor() {
 
       setNodes((nds) => [...nds, newNode]);
     },
-    []
+    [reactFlowInstance]
   );
 
   const defaultEdgeOptions = {
@@ -253,6 +275,220 @@ export default function ProcessFlowEditor() {
       strokeWidth: 2,
       stroke: '#555',
     },
+  };
+
+  // Load flows on mount
+  useEffect(() => {
+    const loadFlows = async () => {
+      try {
+        console.log('Loading flows for user:', user.id);
+        const { data: flows, error } = await supabase
+          .from('process_flows')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error loading flows:', error);
+          throw error;
+        }
+        
+        console.log('Loaded flows:', flows);
+        setFlows(flows);
+        if (flows.length > 0) {
+          const latestFlow = flows[0];
+          setCurrentFlow(latestFlow);
+          setNodes(latestFlow.nodes);
+          setEdges(latestFlow.edges);
+          setFlowTitle(latestFlow.title);
+          setFlowDescription(latestFlow.description || '');
+        }
+      } catch (error) {
+        console.error('Error in loadFlows:', error);
+      }
+    };
+
+    loadFlows();
+  }, [supabase, user.id]);
+
+  const createNewFlow = () => {
+    setCurrentFlow(null);
+    setNodes([]);
+    setEdges([]);
+    setFlowTitle('Untitled Flow');
+    setFlowDescription('');
+  };
+
+  const loadFlow = async (flow: ProcessFlow) => {
+    try {
+      const { data, error } = await supabase
+        .from('process_flows')
+        .select('*')
+        .eq('id', flow.id)
+        .single();
+
+      if (error) throw error;
+      
+      setCurrentFlow(data);
+      setNodes(data.nodes);
+      setEdges(data.edges);
+      setFlowTitle(data.title);
+      setFlowDescription(data.description || '');
+    } catch (error) {
+      console.error('Error loading flow:', error);
+    }
+  };
+
+  const deleteFlow = async (flowId: string) => {
+    if (!confirm('Are you sure you want to delete this flow?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('process_flows')
+        .delete()
+        .eq('id', flowId);
+      
+      if (error) throw error;
+      
+      setFlows(flows.filter(f => f.id !== flowId));
+      if (currentFlow?.id === flowId) {
+        createNewFlow();
+      }
+    } catch (error) {
+      console.error('Error deleting flow:', error);
+    }
+  };
+
+  // Save flow
+  const saveFlow = async () => {
+    setIsSaving(true);
+    setSaveStatus({ type: null, message: '' });
+    
+    try {
+      console.log('Save attempt - User:', user.id, 'Current flow:', currentFlow?.id);
+      
+      const flowData = {
+        user_id: user.id,
+        title: flowTitle || 'Untitled Flow',
+        description: flowDescription,
+        nodes: nodes || [],
+        edges: edges || [],
+      };
+
+      console.log('Flow data to save:', {
+        ...flowData,
+        nodesCount: nodes.length,
+        edgesCount: edges.length
+      });
+
+      let operation;
+      if (currentFlow?.id) {
+        console.log('Updating existing flow:', currentFlow.id);
+        operation = supabase
+          .from('process_flows')
+          .update(flowData)
+          .eq('id', currentFlow.id)
+          .eq('user_id', user.id)
+          .select()
+          .single();
+      } else {
+        console.log('Creating new flow');
+        operation = supabase
+          .from('process_flows')
+          .insert(flowData)
+          .select()
+          .single();
+      }
+
+      const { data, error: dbError } = await operation;
+
+      if (dbError) {
+        console.error('Database operation failed:', {
+          code: dbError.code,
+          message: dbError.message,
+          details: dbError.details,
+          hint: dbError.hint
+        });
+        throw new Error(`Database error: ${dbError.message} (${dbError.code})`);
+      }
+
+      console.log('Flow saved successfully:', data);
+      setCurrentFlow(data);
+
+      // Refresh the flows list
+      console.log('Refreshing flows list for user:', user.id);
+      const { data: updatedFlows, error: flowsError } = await supabase
+        .from('process_flows')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (flowsError) {
+        console.error('Error refreshing flows:', {
+          code: flowsError.code,
+          message: flowsError.message,
+          details: flowsError.details,
+          hint: flowsError.hint
+        });
+        throw new Error(`Failed to refresh flows: ${flowsError.message}`);
+      }
+
+      console.log('Updated flows list:', updatedFlows);
+      setFlows(updatedFlows);
+      
+      setSaveStatus({ type: 'success', message: 'Flow saved successfully!' });
+    } catch (error) {
+      console.error('Save operation failed:', error);
+      setSaveStatus({ 
+        type: 'error', 
+        message: error instanceof Error 
+          ? `Save failed: ${error.message}` 
+          : 'Failed to save flow. Please try again.'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (saveStatus.type) {
+      const timer = setTimeout(() => {
+        setSaveStatus({ type: null, message: '' });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveStatus]);
+
+  // Auto-save on changes
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      if (nodes.length > 0) {
+        saveFlow();
+      }
+    }, 2000); // Auto-save 2 seconds after last change
+
+    return () => clearTimeout(debounceTimer);
+  }, [nodes, edges, flowTitle, flowDescription]);
+
+  // Make the save status more visible
+  const renderSaveStatus = () => {
+    if (!saveStatus.type || saveStatus.type === 'success') return null;
+
+    return (
+      <div className="p-4 mb-4 bg-red-100 text-red-800 border border-red-400 rounded-md">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm font-medium">{saveStatus.message}</p>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -264,10 +500,94 @@ export default function ProcessFlowEditor() {
         } md:translate-x-0 fixed md:static w-64 bg-white shadow-md p-4 overflow-y-auto transition-transform duration-300 ease-in-out h-full border-r border-gray-200 flex-shrink-0 z-20`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Add Nodes</h3>
+        <div className="flex flex-col space-y-4">
+          <div className="flex justify-between items-center space-x-2">
+            <button
+              onClick={createNewFlow}
+              className="flex-1 px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
+              New Flow
+            </button>
+            <button
+              onClick={saveFlow}
+              disabled={isSaving}
+              className="flex-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 relative"
+            >
+              {isSaving ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Saving...
+                </span>
+              ) : (
+                'Save'
+              )}
+            </button>
+          </div>
+
+          {renderSaveStatus()}
+
+          {/* Flow Management */}
+          <div className="flex flex-col space-y-2">
+            <div className="flex justify-between">
+              {currentFlow && (
+                <button
+                  onClick={() => deleteFlow(currentFlow.id)}
+                  className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+
+            {/* Flow Selector */}
+            <div className="flex flex-col space-y-2">
+              <label className="text-sm font-medium">Select Flow</label>
+              <select
+                value={currentFlow?.id || ''}
+                onChange={(e) => {
+                  const flow = flows.find(f => f.id === e.target.value);
+                  if (flow) loadFlow(flow);
+                }}
+                className="w-full px-2 py-1 border rounded"
+              >
+                <option value="" disabled>Select a flow...</option>
+                {flows.map(flow => (
+                  <option key={flow.id} value={flow.id}>
+                    {flow.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <input
+                type="text"
+                value={flowTitle}
+                onChange={(e) => setFlowTitle(e.target.value)}
+                placeholder="Flow Title"
+                className="w-full px-2 py-1 border rounded"
+              />
+            </div>
+            
+            <div>
+              <textarea
+                value={flowDescription}
+                onChange={(e) => setFlowDescription(e.target.value)}
+                placeholder="Flow Description"
+                className="w-full px-2 py-1 border rounded"
+                rows={3}
+              />
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium mb-2">Add Nodes</h4>
+              <NodeToolbox setNodes={setNodes} />
+            </div>
+          </div>
         </div>
-        <NodeToolbox setNodes={setNodes} />
       </div>
 
       {/* Main Flow Area */}
@@ -296,11 +616,14 @@ export default function ProcessFlowEditor() {
             snapToGrid={true}
             snapGrid={[15, 15]}
             isValidConnection={isValidConnection}
-            connectionMode={ConnectionMode.Loose}
-            connectionLineType={ConnectionLineType.Straight}
+            connectionMode={ConnectionMode.Strict}
+            deleteKeyCode={['Backspace', 'Delete']}
+            selectionKeyCode={['Shift']}
+            multiSelectionKeyCode={['Meta', 'Ctrl']}
+            zoomActivationKeyCode={['Meta', 'Ctrl']}
+            panActivationKeyCode={['Space']}
             className="h-full w-full"
-            draggable={true}
-            nodesDraggable={true}
+            fitView
           >
             <Background gap={12} size={1} />
             <Controls showInteractive={true} />
