@@ -3,6 +3,7 @@
 import { Node } from 'reactflow';
 import { useState, useEffect } from 'react';
 import ClozeText from './ClozeText';
+import FlashcardReview from './FlashcardReview';
 
 interface CompletionRecord {
   completedAt: number;
@@ -13,9 +14,10 @@ interface NodeDetailsProps {
   node: Node | null;
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
   updateNode: (nodeId: string, data: any) => void;
+  onStartReview: () => void;
 }
 
-export default function NodeDetails({ node, setNodes, updateNode }: NodeDetailsProps) {
+export default function NodeDetails({ node, setNodes, updateNode, onStartReview }: NodeDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [label, setLabel] = useState(node?.data?.label || '');
   const [description, setDescription] = useState(node?.data?.description || '');
@@ -34,6 +36,9 @@ export default function NodeDetails({ node, setNodes, updateNode }: NodeDetailsP
       </div>
     );
   }
+
+  // Check if the node has any clozes
+  const hasClozes = node.data.description?.includes('{{');
 
   const handleSave = () => {
     updateNode(node.id, {
@@ -102,9 +107,7 @@ export default function NodeDetails({ node, setNodes, updateNode }: NodeDetailsP
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Node Details</h3>
-      
+    <>
       {isEditing ? (
         <div className="space-y-4">
           <div>
@@ -150,16 +153,26 @@ export default function NodeDetails({ node, setNodes, updateNode }: NodeDetailsP
           <div>
             <div className="flex justify-between items-center">
               <label className="block text-sm font-medium text-gray-700">Description</label>
-              {node.data.description && (
-                <button
-                  onClick={() => updateNode(node.id, { isTestMode: !node.data.isTestMode })}
-                  className={`px-2 py-1 text-xs rounded ${
-                    node.data.isTestMode ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {node.data.isTestMode ? 'Test Mode' : 'Reveal Mode'}
-                </button>
-              )}
+              <div className="flex space-x-2">
+                {node.data.description && (
+                  <button
+                    onClick={() => updateNode(node.id, { isTestMode: !node.data.isTestMode })}
+                    className={`px-2 py-1 text-xs rounded ${
+                      node.data.isTestMode ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {node.data.isTestMode ? 'Test Mode' : 'Reveal Mode'}
+                  </button>
+                )}
+                {hasClozes && (
+                  <button
+                    onClick={onStartReview}
+                    className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+                  >
+                    Review Flashcards
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-1 text-sm">
               {node.data.description ? (
@@ -239,8 +252,41 @@ export default function NodeDetails({ node, setNodes, updateNode }: NodeDetailsP
               </div>
             </div>
           )}
+
+          {/* Flashcard Review History */}
+          {node.data.clozeStats && Object.keys(node.data.clozeStats).length > 0 && (
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                Flashcard Review History
+              </h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {Object.entries(node.data.clozeStats).map(([id, card]: [string, any]) => (
+                  <div 
+                    key={id}
+                    className="text-xs p-2 bg-gray-50 rounded"
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium text-gray-900">{card.content}</span>
+                      <span className="text-gray-500">
+                        {card.stats.lastReviewed ? formatDate(card.stats.lastReviewed) : 'Never reviewed'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Correct: {card.stats.correctCount}</span>
+                      <span>Incorrect: {card.stats.incorrectCount}</span>
+                      {card.stats.correctCount + card.stats.incorrectCount > 0 && (
+                        <span>
+                          Accuracy: {Math.round((card.stats.correctCount / (card.stats.correctCount + card.stats.incorrectCount)) * 100)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
-    </div>
+    </>
   );
 } 

@@ -31,6 +31,7 @@ import { NoteNode } from './nodes/NoteNode';
 import { ProcessNode } from './nodes/ProcessNode';
 import { SkillNode } from './nodes/SkillNode';
 import { TechniqueNode } from './nodes/TechniqueNode';
+import FlashcardReview from './components/FlashcardReview';
 
 interface ProcessFlow {
   id: string;
@@ -38,6 +39,9 @@ interface ProcessFlow {
   description: string;
   nodes: Node[];
   edges: Edge[];
+  updated_at: string;
+  created_at: string;
+  user_id: string;
 }
 
 const nodeTypes = {
@@ -55,6 +59,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isToolboxOpen, setIsToolboxOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isReviewMode, setIsReviewMode] = useState(false);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [currentFlow, setCurrentFlow] = useState<ProcessFlow | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -367,12 +372,52 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
     try {
       console.log('Save attempt - User:', user.id, 'Current flow:', currentFlow?.id);
       
+      // If updating existing flow, check for newer version first
+      if (currentFlow?.id) {
+        const { data: latestVersion, error: checkError } = await supabase
+          .from('process_flows')
+          .select('updated_at')
+          .eq('id', currentFlow.id)
+          .single();
+
+        if (checkError) throw checkError;
+
+        // Compare timestamps
+        const currentTimestamp = new Date(currentFlow.updated_at).getTime();
+        const latestTimestamp = new Date(latestVersion.updated_at).getTime();
+
+        if (latestTimestamp > currentTimestamp) {
+          // Data is stale, fetch latest version
+          const { data: freshData, error: fetchError } = await supabase
+            .from('process_flows')
+            .select('*')
+            .eq('id', currentFlow.id)
+            .single();
+
+          if (fetchError) throw fetchError;
+
+          setCurrentFlow(freshData);
+          setNodes(freshData.nodes);
+          setEdges(freshData.edges);
+          setFlowTitle(freshData.title);
+          setFlowDescription(freshData.description || '');
+
+          setSaveStatus({ 
+            type: 'error', 
+            message: 'Your local version was outdated. The latest version has been loaded.' 
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+      
       const flowData = {
         user_id: user.id,
         title: flowTitle || 'Untitled Flow',
         description: flowDescription,
         nodes: nodes || [],
         edges: edges || [],
+        updated_at: new Date().toISOString(),
       };
 
       console.log('Flow data to save:', {
@@ -389,6 +434,8 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
           .update(flowData)
           .eq('id', currentFlow.id)
           .eq('user_id', user.id)
+          // Add match condition for updated_at to prevent race conditions
+          .eq('updated_at', currentFlow.updated_at)
           .select()
           .single();
       } else {
@@ -403,6 +450,14 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
       const { data, error: dbError } = await operation;
 
       if (dbError) {
+        if (dbError.code === '23514') { // Postgres check constraint violation
+          // This likely means someone else updated the flow while we were editing
+          setSaveStatus({ 
+            type: 'error', 
+            message: 'Someone else modified this flow. Please refresh and try again.' 
+          });
+          return;
+        }
         console.error('Database operation failed:', {
           code: dbError.code,
           message: dbError.message,
@@ -674,6 +729,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
               node={selectedNode} 
               setNodes={setNodes}
               updateNode={updateNode}
+              onStartReview={() => setIsReviewMode(true)}
             />
           ) : (
             <div className="text-gray-500 text-center">
@@ -682,6 +738,16 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
           )}
         </div>
       </div>
+
+      {/* Flashcard Review Modal */}
+      {selectedNode && (
+        <FlashcardReview
+          node={selectedNode}
+          updateNode={updateNode}
+          isOpen={isReviewMode}
+          onClose={() => setIsReviewMode(false)}
+        />
+      )}
 
       {/* Mobile Menu Buttons */}
       <button

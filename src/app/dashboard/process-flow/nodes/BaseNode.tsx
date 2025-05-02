@@ -4,11 +4,23 @@ import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import ClozeText from '../components/ClozeText';
 
+interface ClozeStats {
+  id: string;
+  content: string;
+  context: string;
+  stats: {
+    correctCount: number;
+    incorrectCount: number;
+    lastReviewed?: number;
+  }
+}
+
 export interface BaseNodeData {
   label: string;
   description?: string;
   status?: 'ready' | 'active' | 'completed';
   isTestMode?: boolean;
+  clozeStats?: Record<string, ClozeStats>;
 }
 
 const nodeTypeStyles = {
