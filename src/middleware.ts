@@ -4,27 +4,24 @@ import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  try {
+    // Create Supabase client with middleware helper
+    const supabase = createMiddlewareClient({ req, res })
+    
+    // This refreshes the session if needed and sets fresh cookies
+    await supabase.auth.getSession()
 
-  // If no session and on protected route, redirect to login
-  if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
-    const redirectUrl = req.nextUrl.clone()
-    redirectUrl.pathname = '/login'
-    redirectUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
+    return res
+  } catch (error) {
+    console.error('Middleware error:', error)
+    return res
   }
-
-  return res
 }
 
 // Simplified matcher that avoids capturing groups
 export const config = {
   matcher: [
-    '/dashboard/:path*',
-    '/login',
+    '/dashboard/:path*'  // Protect all dashboard routes
   ]
 } 

@@ -372,39 +372,31 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
     try {
       console.log('Save attempt - User:', user.id, 'Current flow:', currentFlow?.id);
       
-      // If updating existing flow, check for newer version first
+      // First, check if there's a newer version in the database
       if (currentFlow?.id) {
-        const { data: latestVersion, error: checkError } = await supabase
+        const { data: latestFlow, error: checkError } = await supabase
           .from('process_flows')
-          .select('updated_at')
+          .select('*')  // Changed from just updated_at to get full flow
           .eq('id', currentFlow.id)
           .single();
 
         if (checkError) throw checkError;
 
         // Compare timestamps
-        const currentTimestamp = new Date(currentFlow.updated_at).getTime();
-        const latestTimestamp = new Date(latestVersion.updated_at).getTime();
+        const dbTimestamp = new Date(latestFlow.updated_at).getTime();
+        const localTimestamp = new Date(currentFlow.updated_at).getTime();
 
-        if (latestTimestamp > currentTimestamp) {
-          // Data is stale, fetch latest version
-          const { data: freshData, error: fetchError } = await supabase
-            .from('process_flows')
-            .select('*')
-            .eq('id', currentFlow.id)
-            .single();
-
-          if (fetchError) throw fetchError;
-
-          setCurrentFlow(freshData);
-          setNodes(freshData.nodes);
-          setEdges(freshData.edges);
-          setFlowTitle(freshData.title);
-          setFlowDescription(freshData.description || '');
-
-          setSaveStatus({ 
-            type: 'error', 
-            message: 'Your local version was outdated. The latest version has been loaded.' 
+        if (dbTimestamp > localTimestamp) {
+          // Load the newer version automatically
+          setCurrentFlow(latestFlow);
+          setNodes(latestFlow.nodes);
+          setEdges(latestFlow.edges);
+          setFlowTitle(latestFlow.title);
+          setFlowDescription(latestFlow.description || '');
+          
+          setSaveStatus({
+            type: 'success',
+            message: 'Updated to latest version from another session'
           });
           setIsSaving(false);
           return;
@@ -417,7 +409,6 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
         description: flowDescription,
         nodes: nodes || [],
         edges: edges || [],
-        updated_at: new Date().toISOString(),
       };
 
       console.log('Flow data to save:', {
@@ -434,8 +425,6 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
           .update(flowData)
           .eq('id', currentFlow.id)
           .eq('user_id', user.id)
-          // Add match condition for updated_at to prevent race conditions
-          .eq('updated_at', currentFlow.updated_at)
           .select()
           .single();
       } else {
@@ -450,14 +439,6 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
       const { data, error: dbError } = await operation;
 
       if (dbError) {
-        if (dbError.code === '23514') { // Postgres check constraint violation
-          // This likely means someone else updated the flow while we were editing
-          setSaveStatus({ 
-            type: 'error', 
-            message: 'Someone else modified this flow. Please refresh and try again.' 
-          });
-          return;
-        }
         console.error('Database operation failed:', {
           code: dbError.code,
           message: dbError.message,
