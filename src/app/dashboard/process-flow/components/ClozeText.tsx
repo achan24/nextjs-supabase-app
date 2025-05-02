@@ -11,7 +11,8 @@ interface ClozeTextProps {
 export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps) {
   const [revealedWords, setRevealedWords] = useState<Set<string>>(new Set());
 
-  const toggleReveal = (word: string) => {
+  const toggleReveal = (word: string, e: React.MouseEvent) => {
+    e.stopPropagation();  // Prevent event from bubbling up
     if (isTestMode) {
       const newRevealed = new Set(revealedWords);
       if (newRevealed.has(word)) {
@@ -38,7 +39,7 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
             return (
               <span
                 key={index}
-                onClick={() => toggleReveal(word)}
+                onClick={(e) => toggleReveal(word, e)}
                 className="inline-block px-1 mx-0.5 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
               >
                 {'_'.repeat(word.length)}
@@ -49,7 +50,7 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
           return (
             <span
               key={index}
-              onClick={() => toggleReveal(word)}
+              onClick={(e) => toggleReveal(word, e)}
               className={`inline-block px-1 mx-0.5 rounded cursor-pointer ${
                 isTestMode ? 'bg-green-100 hover:bg-green-200' : ''
               }`}

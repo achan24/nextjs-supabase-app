@@ -59,11 +59,11 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
         contextEnd++;
       }
       
-      // Get a few lines before and after for context
+      // Get just one line before and after for context
       let beforeLines = '';
       let currentPos = contextStart;
       let lineCount = 0;
-      while (currentPos > 0 && lineCount < 2) {
+      while (currentPos > 0 && lineCount < 1) {
         currentPos--;
         if (node.data.description[currentPos] === '\n') {
           lineCount++;
@@ -76,7 +76,7 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
       let afterLines = '';
       currentPos = contextEnd;
       lineCount = 0;
-      while (currentPos < node.data.description.length && lineCount < 2) {
+      while (currentPos < node.data.description.length && lineCount < 1) {
         if (node.data.description[currentPos] === '\n') {
           lineCount++;
         }
@@ -217,7 +217,7 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
             <div className="bg-gray-50 rounded-lg p-8 min-h-[200px] my-4 shadow-inner">
               <div className="text-center space-y-6">
                 <pre className="text-lg text-gray-900 whitespace-pre-wrap font-mono bg-white p-4 rounded-lg shadow-sm">
-                  {currentCard.context}
+                  {currentCard.context.replace(currentCard.content, '_'.repeat(currentCard.content.length))}
                 </pre>
                 {isRevealed && (
                   <div className="text-2xl font-bold text-blue-600 bg-white p-4 rounded-lg shadow-sm">
