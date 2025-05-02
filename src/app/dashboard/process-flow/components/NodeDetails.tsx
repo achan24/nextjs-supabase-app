@@ -2,6 +2,7 @@
 
 import { Node } from 'reactflow';
 import { useState, useEffect } from 'react';
+import ClozeText from './ClozeText';
 
 interface CompletionRecord {
   completedAt: number;
@@ -122,6 +123,7 @@ export default function NodeDetails({ node, setNodes, updateNode }: NodeDetailsP
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               rows={3}
+              placeholder="Use {{...}} to create cloze deletions"
             />
           </div>
           <div className="flex justify-end space-x-2">
@@ -146,9 +148,29 @@ export default function NodeDetails({ node, setNodes, updateNode }: NodeDetailsP
             <div className="mt-1 text-sm">{node.data.label || 'Untitled'}</div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <div className="flex justify-between items-center">
+              <label className="block text-sm font-medium text-gray-700">Description</label>
+              {node.data.description && (
+                <button
+                  onClick={() => updateNode(node.id, { isTestMode: !node.data.isTestMode })}
+                  className={`px-2 py-1 text-xs rounded ${
+                    node.data.isTestMode ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {node.data.isTestMode ? 'Test Mode' : 'Reveal Mode'}
+                </button>
+              )}
+            </div>
             <div className="mt-1 text-sm">
-              {node.data.description || 'No description'}
+              {node.data.description ? (
+                <ClozeText 
+                  text={node.data.description} 
+                  isTestMode={!!node.data.isTestMode}
+                  onReveal={(word: string) => console.log(`Revealed word: ${word}`)}
+                />
+              ) : (
+                'No description'
+              )}
             </div>
           </div>
           <div className="flex justify-end">

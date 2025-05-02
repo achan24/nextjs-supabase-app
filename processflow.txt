@@ -287,3 +287,42 @@ Automatic saving of connections
 The design follows the memory about Visual Skill Builder, specifically the point about "Flexible node connections: Nodes can connect from any point to any point".
 
 Would you like me to elaborate on any specific aspect of the connection mechanism?
+
+
+
+
+
+
+Cloze Feature Specification (v1)
+
+Objective
+Enable users to test their recall by hiding specific parts of existing text using a cloze deletion format ({{...}}), with togglable test and reveal modes.
+
+Core Behavior
+🧠 Input Format
+
+Users manually insert {{...}} around words or phrases in any free-form text field (e.g., a description box).
+Example:
+The {{mitochondrion}} is the {{powerhouse}} of the cell.
+👀 Display Modes
+
+Test Mode
+{{...}} parts are hidden as blanks (e.g., _______)
+Optional: clicking a blank reveals the hidden word inline
+Non-cloze text is displayed as-is
+Reveal Mode
+All {{...}} parts are shown normally
+Text appears in full, including hidden words
+Toggle Control
+A UI toggle or button switches between:
+Test Mode (default)
+Reveal Mode
+Optional Enhancements (future versions)
+Interactive Input: Users select words in the UI to wrap in {{...}}
+Partial Reveal: Individual blank reveal on click/tap
+Answer Entry: Input boxes to guess the hidden word
+Progress Tracking: Log correct guesses or attempts
+Technical Considerations
+Parser splits text using regex: /(\{\{.*?\}\})/g
+Blanks replace {{...}} with underscores or styled spans
+No backend change required if {{}} format is used directly in existing note content

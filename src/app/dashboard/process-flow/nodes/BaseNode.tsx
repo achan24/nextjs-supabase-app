@@ -2,11 +2,13 @@
 
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
+import ClozeText from '../components/ClozeText';
 
 export interface BaseNodeData {
   label: string;
   description?: string;
   status?: 'ready' | 'active' | 'completed';
+  isTestMode?: boolean;
 }
 
 const nodeTypeStyles = {
@@ -83,7 +85,12 @@ const BaseNode = ({
         <div className="flex flex-col">
           <div className="text-sm font-bold">{data.label}</div>
           {data.description && (
-            <div className="text-xs text-gray-500 whitespace-pre-wrap">{data.description}</div>
+            <div className="text-xs text-gray-500 whitespace-pre-wrap">
+              <ClozeText 
+                text={data.description} 
+                isTestMode={!!data.isTestMode}
+              />
+            </div>
           )}
         </div>
       </div>
