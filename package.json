@@ -31,6 +31,7 @@
     "react-draggable": "^4.4.6",
     "react-hook-form": "^7.56.1",
     "reactflow": "^11.11.4",
+    "recharts": "^2.15.3",
     "tailwind-merge": "^3.2.0",
     "utf-8-validate": "^6.0.5",
     "zod": "^3.24.3"

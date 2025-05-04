@@ -31,6 +31,7 @@ import { NoteNode } from './nodes/NoteNode';
 import { ProcessNode } from './nodes/ProcessNode';
 import { SkillNode } from './nodes/SkillNode';
 import { TechniqueNode } from './nodes/TechniqueNode';
+import { AnalyticsNode } from './nodes/AnalyticsNode';
 import FlashcardReview from './components/FlashcardReview';
 
 interface ProcessFlow {
@@ -50,6 +51,7 @@ const nodeTypes = {
   process: ProcessNode,
   skill: SkillNode,
   technique: TechniqueNode,
+  analytics: AnalyticsNode,
 };
 
 export default function ProcessFlowEditor({ user }: { user: User }) {
@@ -106,24 +108,53 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
   }, [reactFlowInstance]);
 
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((nds) => {
-        const updatedNodes = applyNodeChanges(changes, nds);
-        return updatedNodes.map((node) => {
-          if (changes.some((change) => change.type === 'add' && change.item.id === node.id)) {
-            return adjustNodePosition(node);
-          }
-          return node;
-        });
-      });
-    },
-    [adjustNodePosition]
+    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    []
   );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
     []
   );
+
+  const updateNode = useCallback((nodeId: string, data: any) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === nodeId) {
+          const updatedNode = {
+            ...node,
+            data: { ...node.data, ...data },
+          };
+          if (selectedNode?.id === nodeId) {
+            setSelectedNode(updatedNode);
+          }
+          return updatedNode;
+        }
+        return node;
+      })
+    );
+
+    // If this is a task node being updated, update connected analytics nodes
+    const updatedNode = nodes.find(n => n.id === nodeId);
+    if (updatedNode?.type === 'task' && updatedNode.data.completionHistory) {
+      const connectedAnalyticsNodes = edges
+        .filter(e => e.source === nodeId)
+        .map(e => nodes.find(n => n.id === e.target))
+        .filter(n => n?.type === 'analytics');
+
+      connectedAnalyticsNodes.forEach(analyticsNode => {
+        if (analyticsNode) {
+          setNodes(nds => 
+            nds.map(n => 
+              n.id === analyticsNode.id 
+                ? { ...n, data: { ...n.data, completionHistory: updatedNode.data.completionHistory } }
+                : n
+            )
+          );
+        }
+      });
+    }
+  }, [nodes, edges, selectedNode]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -146,8 +177,19 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
           },
         }, eds)
       );
+
+      // Update analytics node if target is an analytics node
+      const targetNode = nodes.find(n => n.id === params.target);
+      if (targetNode?.type === 'analytics') {
+        const sourceNode = nodes.find(n => n.id === params.source);
+        if (sourceNode?.type === 'task' && sourceNode.data.completionHistory) {
+          updateNode(targetNode.id, {
+            completionHistory: sourceNode.data.completionHistory
+          });
+        }
+      }
     },
-    []
+    [nodes, updateNode]
   );
 
   const isValidConnection = useCallback((connection: Connection) => {
@@ -174,24 +216,6 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
       }
     }
   }, [isDetailsOpen, closeDetails]);
-
-  const updateNode = useCallback((nodeId: string, data: any) => {
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === nodeId) {
-          const updatedNode = {
-            ...node,
-            data: { ...node.data, ...data },
-          };
-          if (selectedNode?.id === nodeId) {
-            setSelectedNode(updatedNode);
-          }
-          return updatedNode;
-        }
-        return node;
-      })
-    );
-  }, [selectedNode]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -256,6 +280,12 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
             ...baseData,
             effectiveness: 0,
             steps: [],
+          };
+          break;
+        case 'analytics':
+          nodeData = {
+            ...baseData,
+            data: '',
           };
           break;
         default:

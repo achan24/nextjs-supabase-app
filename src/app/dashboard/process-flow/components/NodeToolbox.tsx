@@ -38,6 +38,12 @@ const nodeTypes = [
     description: 'Specific practice method',
     icon: '⚡',
   },
+  {
+    type: 'analytics',
+    label: 'Analytics',
+    description: 'Visualize task completion data',
+    icon: '📊',
+  },
 ];
 
 export default function NodeToolbox({ setNodes }: NodeToolboxProps) {
