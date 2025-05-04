@@ -26,6 +26,11 @@ interface Task {
     id: string;
     title: string;
   };
+  reminders?: {
+    type: 'before' | 'at';
+    minutes_before?: number;
+    time?: string;
+  }[];
 }
 
 interface Tag {
@@ -50,6 +55,10 @@ interface TaskFormData {
   tagIds: string[];
   project_id: string;
   status: 'todo' | 'in_progress' | 'completed';
+  reminders: {
+    type: 'before' | 'at';
+    minutes_before?: number;
+  }[];
 }
 
 const isInProgress = (status: Task['status']): status is 'in_progress' => status === 'in_progress';
@@ -77,19 +86,21 @@ export default function TaskManager({ user }: { user: User }) {
     title: '',
     description: '',
     priority: 3,
-    due_date: '',
+    due_date: new Date().toLocaleString('en-US', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).slice(0, 16),
     tagIds: [] as string[],
     project_id: '',
-    status: 'todo' as Task['status']
+    status: 'todo' as Task['status'],
+    reminders: [] as { type: 'before' | 'at'; minutes_before?: number }[]
   })
   const [newTaskForm, setNewTaskForm] = useState<TaskFormData>({
     title: '',
     description: '',
     priority: 1,
-    due_date: '',
+    due_date: new Date().toLocaleString('en-US', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).slice(0, 16),
     tagIds: [],
     project_id: '',
-    status: 'todo'
+    status: 'todo',
+    reminders: []
   })
   const [newTag, setNewTag] = useState({
     name: '',
@@ -132,7 +143,8 @@ export default function TaskManager({ user }: { user: User }) {
           task_tags!left(
             tags(*)
           ),
-          task_projects!left(project:projects(id, title))
+          task_projects!left(project:projects(id, title)),
+          reminders(*)
         `)
         .order('created_at', { ascending: false });
 
@@ -143,7 +155,8 @@ export default function TaskManager({ user }: { user: User }) {
         ...task,
         tags: task.task_tags?.map((t: { tags: Tag }) => t.tags) || [],
         project: task.task_projects?.[0]?.project || null,
-        project_id: task.task_projects?.[0]?.project?.id || ''
+        project_id: task.task_projects?.[0]?.project?.id || '',
+        reminders: task.reminders || []
       }));
 
       setTasks(transformedTasks);
@@ -171,11 +184,16 @@ export default function TaskManager({ user }: { user: User }) {
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Convert local time to UTC before saving
+      const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const localDueDate = new Date(newTaskForm.due_date);
+      const utcDueDate = new Date(localDueDate.toLocaleString('en-US', { timeZone: 'UTC' }));
+
       const taskData: Task = {
         title: newTaskForm.title,
         description: newTaskForm.description,
         priority: newTaskForm.priority,
-        due_date: newTaskForm.due_date || null,
+        due_date: utcDueDate.toISOString(),
         status: newTaskForm.status,
         user_id: user.id
       };
@@ -187,6 +205,22 @@ export default function TaskManager({ user }: { user: User }) {
         .single();
 
       if (error) throw error;
+
+      // Add reminders if any are set
+      if (newTaskForm.reminders.length > 0) {
+        const reminderData = newTaskForm.reminders.map(reminder => ({
+          task_id: newTask.id,
+          type: reminder.type,
+          minutes_before: reminder.minutes_before,
+          time: reminder.type === 'at' ? newTaskForm.due_date : null
+        }));
+
+        const { error: reminderError } = await supabase
+          .from('reminders')
+          .insert(reminderData);
+
+        if (reminderError) throw reminderError;
+      }
 
       // Add project relationship if a project is selected
       if (newTaskForm.project_id) {
@@ -219,10 +253,11 @@ export default function TaskManager({ user }: { user: User }) {
         title: '',
         description: '',
         priority: 1,
-        due_date: '',
+        due_date: new Date().toLocaleString('en-US', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).slice(0, 16),
         tagIds: [],
         project_id: '',
-        status: 'todo'
+        status: 'todo',
+        reminders: []
       });
       setIsModalOpen(false);
     } catch (error) {
@@ -337,10 +372,11 @@ export default function TaskManager({ user }: { user: User }) {
       title: task.title,
       description: task.description || '',
       priority: task.priority,
-      due_date: task.due_date || '',
+      due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
       tagIds: task.tags?.map(tag => tag.id) || [],
       project_id: task.project_id || '',
-      status: task.status
+      status: task.status,
+      reminders: task.reminders || []
     })
     setIsEditModalOpen(true)
   }
@@ -485,12 +521,13 @@ export default function TaskManager({ user }: { user: User }) {
     }));
   };
 
-  const toggleTaskTag = (tagId: string, formSetter: React.Dispatch<React.SetStateAction<TaskFormData | typeof editForm>>) => {
+  const toggleTaskTag = (tagId: string, formSetter: React.Dispatch<React.SetStateAction<TaskFormData>>) => {
     formSetter(prev => ({
       ...prev,
       tagIds: prev.tagIds.includes(tagId)
         ? prev.tagIds.filter(id => id !== tagId)
-        : [...prev.tagIds, tagId]
+        : [...prev.tagIds, tagId],
+      reminders: prev.reminders // Preserve the reminders array
     }));
   };
 
@@ -673,8 +710,33 @@ export default function TaskManager({ user }: { user: User }) {
                         <span className={`text-sm ${
                           task.status === 'completed' ? 'text-gray-400' : 'text-gray-500'
                         }`}>
-                          Due: {new Date(task.due_date).toLocaleDateString()}
+                          Due: {new Date(task.due_date).toLocaleString('en-US', { 
+                            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                            dateStyle: 'short',
+                            timeStyle: 'short'
+                          })}
                         </span>
+                      )}
+                      {task.reminders && task.reminders.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {task.reminders.map((reminder, index) => (
+                            <span 
+                              key={index}
+                              className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full"
+                            >
+                              {reminder.type === 'at' && reminder.time ? (
+                                `Reminder at ${new Date(reminder.time).toLocaleString('en-US', { 
+                                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                                  timeStyle: 'short'
+                                })}`
+                              ) : reminder.minutes_before ? (
+                                `Reminder ${reminder.minutes_before} mins before`
+                              ) : (
+                                'Reminder set'
+                              )}
+                            </span>
+                          ))}
+                        </div>
                       )}
                       {/* Timer display logic */}
                       <div className="flex items-center space-x-2">
@@ -810,13 +872,101 @@ export default function TaskManager({ user }: { user: User }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Due Date</label>
-              <input
-                type="date"
-                value={newTaskForm.due_date}
-                onChange={(e) => setNewTaskForm({ ...newTaskForm, due_date: e.target.value })}
-                className="w-full p-2 mb-4 border rounded"
-              />
+              <label className="block text-sm font-medium text-gray-700">Due Date and Time</label>
+              <div className="flex space-x-2">
+                <input
+                  type="date"
+                  value={newTaskForm.due_date.split('T')[0]}
+                  onChange={(e) => {
+                    const currentTime = newTaskForm.due_date.split('T')[1] || '00:00';
+                    setNewTaskForm({ 
+                      ...newTaskForm, 
+                      due_date: `${e.target.value}T${currentTime}` 
+                    });
+                  }}
+                  className="w-full p-2 mb-4 border rounded"
+                />
+                <input
+                  type="time"
+                  value={newTaskForm.due_date.split('T')[1] || '00:00'}
+                  onChange={(e) => {
+                    const currentDate = newTaskForm.due_date.split('T')[0] || new Date().toISOString().split('T')[0];
+                    setNewTaskForm({ 
+                      ...newTaskForm, 
+                      due_date: `${currentDate}T${e.target.value}` 
+                    });
+                  }}
+                  className="w-full p-2 mb-4 border rounded"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Reminders</label>
+              <div className="space-y-2">
+                {newTaskForm.reminders.map((reminder, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <select
+                      value={reminder.type}
+                      onChange={(e) => {
+                        const updatedReminders = [...newTaskForm.reminders];
+                        updatedReminders[index] = {
+                          ...reminder,
+                          type: e.target.value as 'before' | 'at'
+                        };
+                        setNewTaskForm({ ...newTaskForm, reminders: updatedReminders });
+                      }}
+                      className="mt-1 block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                      <option value="before">Before</option>
+                      <option value="at">At</option>
+                    </select>
+                    {reminder.type === 'before' && (
+                      <select
+                        value={reminder.minutes_before}
+                        onChange={(e) => {
+                          const updatedReminders = [...newTaskForm.reminders];
+                          updatedReminders[index] = {
+                            ...reminder,
+                            minutes_before: Number(e.target.value)
+                          };
+                          setNewTaskForm({ ...newTaskForm, reminders: updatedReminders });
+                        }}
+                        className="mt-1 block w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      >
+                        <option value="5">5 minutes</option>
+                        <option value="15">15 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="60">1 hour</option>
+                        <option value="120">2 hours</option>
+                        <option value="1440">1 day</option>
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updatedReminders = newTaskForm.reminders.filter((_, i) => i !== index);
+                        setNewTaskForm({ ...newTaskForm, reminders: updatedReminders });
+                      }}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTaskForm({
+                      ...newTaskForm,
+                      reminders: [...newTaskForm.reminders, { type: 'before', minutes_before: 30 }]
+                    });
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  + Add Reminder
+                </button>
+              </div>
             </div>
 
             <div>
@@ -1008,13 +1158,33 @@ export default function TaskManager({ user }: { user: User }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Due Date</label>
-                <input
-                  type="date"
-                  value={editForm.due_date}
-                  onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
+                <label className="block text-sm font-medium text-gray-700">Due Date and Time</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="date"
+                    value={editForm.due_date.split('T')[0]}
+                    onChange={(e) => {
+                      const currentTime = editForm.due_date.split('T')[1] || '00:00';
+                      setEditForm({ 
+                        ...editForm, 
+                        due_date: `${e.target.value}T${currentTime}` 
+                      });
+                    }}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                  <input
+                    type="time"
+                    value={editForm.due_date.split('T')[1] || '00:00'}
+                    onChange={(e) => {
+                      const currentDate = editForm.due_date.split('T')[0] || new Date().toISOString().split('T')[0];
+                      setEditForm({ 
+                        ...editForm, 
+                        due_date: `${currentDate}T${e.target.value}` 
+                      });
+                    }}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
 
               <div>

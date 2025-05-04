@@ -8,6 +8,14 @@ export interface Project {
   user_id: string;
 }
 
+export interface Reminder {
+  id: string;
+  task_id: string;
+  time: string;
+  type: 'before' | 'at';
+  minutes_before?: number; // in minutes, for 'before' type
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -20,4 +28,5 @@ export interface Task {
   due_date?: string;
   project_id?: string;
   project?: Project;
+  reminders?: Reminder[];
 } 
