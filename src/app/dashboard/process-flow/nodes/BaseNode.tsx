@@ -54,6 +54,12 @@ const nodeTypeStyles = {
     borderClass: 'border-orange-200',
     selectedBorderClass: 'border-orange-500',
   },
+  analytics: {
+    icon: '📊',
+    bgClass: 'bg-indigo-50',
+    borderClass: 'border-indigo-200',
+    selectedBorderClass: 'border-indigo-500',
+  },
 };
 
 const BaseNode = ({

@@ -10,8 +10,10 @@ export const ServiceWorkerRegistration = () => {
     const registerServiceWorker = async () => {
       if ('serviceWorker' in navigator && 'Notification' in window) {
         try {
-          const registration = await navigator.serviceWorker.register('/sw.js', {
-            scope: '/'
+          // Get the base URL from the current window location
+          const baseUrl = window.location.origin;
+          const registration = await navigator.serviceWorker.register(`${baseUrl}/sw.js`, {
+            scope: baseUrl + '/'
           });
           console.log('ServiceWorker registration successful');
 
@@ -19,6 +21,18 @@ export const ServiceWorkerRegistration = () => {
           const permission = await requestNotificationPermission();
           if (permission) {
             console.log('Notification permission granted');
+            
+            // Subscribe to push notifications if supported
+            try {
+              const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                // You would need to set up VAPID keys for this
+                // applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY)
+              });
+              console.log('Push notification subscription:', subscription);
+            } catch (pushError) {
+              console.log('Push notification subscription failed:', pushError);
+            }
           }
 
           // Handle service worker updates
