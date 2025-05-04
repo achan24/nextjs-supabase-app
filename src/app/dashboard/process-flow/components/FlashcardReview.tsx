@@ -33,6 +33,7 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
   const [flashcards, setFlashcards] = useState<ClozeStats[]>([]);
   const [sessionStats, setSessionStats] = useState<{correct: number, incorrect: number}>({ correct: 0, incorrect: 0 });
   const [isFinished, setIsFinished] = useState(false);
+  const [isRandomized, setIsRandomized] = useState(false);
 
   // Extract clozes and their context from the description
   useEffect(() => {
@@ -101,12 +102,27 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
       };
     });
 
-    setFlashcards(cards);
+    // Filter out adjacent clozes
+    const filteredCards = cards.filter((card, index) => {
+      if (index === 0) return true;
+      const prevCard = cards[index - 1];
+      return !card.context.includes(prevCard.content);
+    });
+
+    // Randomize if requested
+    if (isRandomized) {
+      for (let i = filteredCards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [filteredCards[i], filteredCards[j]] = [filteredCards[j], filteredCards[i]];
+      }
+    }
+
+    setFlashcards(filteredCards);
     setCurrentCardIndex(0);
     setIsRevealed(false);
     setSessionStats({ correct: 0, incorrect: 0 });
     setIsFinished(false);
-  }, [node.data.description]);
+  }, [node.data.description, isRandomized]);
 
   const handleAnswer = (correct: boolean) => {
     const currentCard = flashcards[currentCardIndex];
@@ -154,6 +170,24 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
     setIsFinished(false);
   };
 
+  const handleNext = () => {
+    if (currentCardIndex < flashcards.length - 1) {
+      setCurrentCardIndex(currentCardIndex + 1);
+      setIsRevealed(false);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentCardIndex > 0) {
+      setCurrentCardIndex(currentCardIndex - 1);
+      setIsRevealed(false);
+    }
+  };
+
+  const toggleRandomize = () => {
+    setIsRandomized(!isRandomized);
+  };
+
   if (flashcards.length === 0) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -174,64 +208,100 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl bg-white">
-        <DialogHeader className="border-b pb-4">
+      <DialogContent className="sm:max-w-2xl bg-white h-[90vh] flex flex-col">
+        <DialogHeader className="border-b pb-4 sticky top-0 bg-white z-10">
           <DialogTitle className="flex justify-between items-center">
             <span className="text-gray-900">Flashcard Review</span>
             {!isFinished && <span className="text-sm text-gray-600">{progress}</span>}
           </DialogTitle>
         </DialogHeader>
 
-        {isFinished ? (
-          <div className="py-8">
-            <div className="text-center space-y-6">
-              <h3 className="text-2xl font-bold text-gray-900">Review Complete!</h3>
-              <div className="bg-gray-50 rounded-lg p-6 space-y-4">
-                <div className="text-lg">
-                  <span className="text-green-600 font-semibold">Correct: {sessionStats.correct}</span>
-                  <span className="mx-4">|</span>
-                  <span className="text-red-600 font-semibold">Incorrect: {sessionStats.incorrect}</span>
-                </div>
-                <div className="text-gray-600">
-                  Accuracy: {Math.round((sessionStats.correct / flashcards.length) * 100)}%
-                </div>
-              </div>
-              <div className="flex justify-center space-x-4 mt-6">
-                <button
-                  onClick={handleRestart}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium shadow-sm"
-                >
-                  Review Again
-                </button>
-                <button
-                  onClick={onClose}
-                  className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium shadow-sm"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="bg-gray-50 rounded-lg p-8 min-h-[200px] my-4 shadow-inner">
-              <div className="text-center space-y-6">
-                <pre className="text-lg text-gray-900 whitespace-pre-wrap font-mono bg-white p-4 rounded-lg shadow-sm">
-                  {currentCard.context.replace(currentCard.content, '_'.repeat(currentCard.content.length))}
-                </pre>
-                {isRevealed && (
-                  <div className="text-2xl font-bold text-blue-600 bg-white p-4 rounded-lg shadow-sm">
-                    {currentCard.content}
+        <div className="flex-1 overflow-y-auto">
+          {isFinished ? (
+            <div className="py-4">
+              <div className="text-center space-y-4">
+                <h3 className="text-xl font-bold text-gray-900">Review Complete!</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="text-base">
+                    <span className="text-green-600 font-semibold">Correct: {sessionStats.correct}</span>
+                    <span className="mx-2">|</span>
+                    <span className="text-red-600 font-semibold">Incorrect: {sessionStats.incorrect}</span>
                   </div>
-                )}
+                  <div className="text-gray-600">
+                    Accuracy: {Math.round((sessionStats.correct / flashcards.length) * 100)}%
+                  </div>
+                </div>
               </div>
             </div>
+          ) : (
+            <>
+              <div className="bg-gray-50 rounded-lg p-4 my-2 shadow-inner">
+                <div className="text-center space-y-4">
+                  <pre className="text-base text-gray-900 whitespace-pre-wrap font-mono bg-white p-3 rounded-lg shadow-sm">
+                    {currentCard.context.replace(currentCard.content, '_'.repeat(currentCard.content.length))}
+                  </pre>
+                  {isRevealed && (
+                    <div className="text-xl font-bold text-blue-600 bg-white p-3 rounded-lg shadow-sm">
+                      {currentCard.content}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-            <div className="flex justify-center space-x-4 mt-6">
+              <div className="flex justify-between items-center text-xs text-gray-600 text-center mt-2 border-t pt-2">
+                <div>Session: {sessionStats.correct} correct, {sessionStats.incorrect} incorrect</div>
+                <div>Total: {currentCard.stats.correctCount} correct, {currentCard.stats.incorrectCount} incorrect</div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t pt-4 pb-2">
+          <div className="flex justify-between items-center mb-4">
+            <button
+              onClick={handlePrevious}
+              disabled={currentCardIndex === 0}
+              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+            >
+              ← Previous
+            </button>
+            <button
+              onClick={toggleRandomize}
+              className={`px-3 py-1 text-sm rounded ${
+                isRandomized ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+              }`}
+            >
+              {isRandomized ? 'Sequential' : 'Random'}
+            </button>
+            <button
+              onClick={handleNext}
+              disabled={currentCardIndex === flashcards.length - 1}
+              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+            >
+              Next →
+            </button>
+          </div>
+          {isFinished ? (
+            <div className="flex justify-center space-x-2">
+              <button
+                onClick={handleRestart}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-sm"
+              >
+                Review Again
+              </button>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium text-sm"
+              >
+                Close
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-center space-x-2">
               {!isRevealed ? (
                 <button
                   onClick={() => setIsRevealed(true)}
-                  className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium shadow-sm"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-sm"
                 >
                   Show Answer
                 </button>
@@ -239,26 +309,21 @@ export default function FlashcardReview({ node, updateNode, isOpen, onClose }: F
                 <>
                   <button
                     onClick={() => handleAnswer(false)}
-                    className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium shadow-sm"
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-sm"
                   >
                     Incorrect
                   </button>
                   <button
                     onClick={() => handleAnswer(true)}
-                    className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium shadow-sm"
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium text-sm"
                   >
                     Correct
                   </button>
                 </>
               )}
             </div>
-
-            <div className="flex justify-between items-center text-sm text-gray-600 text-center mt-4 border-t pt-4">
-              <div>Session: {sessionStats.correct} correct, {sessionStats.incorrect} incorrect</div>
-              <div>Total: {currentCard.stats.correctCount} correct, {currentCard.stats.incorrectCount} incorrect</div>
-            </div>
-          </>
-        )}
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

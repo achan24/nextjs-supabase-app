@@ -7,6 +7,7 @@ import BaseNode, { BaseNodeData } from './BaseNode';
 interface CompletionRecord {
   completedAt: number;
   timeSpent: number;
+  note?: string;
 }
 
 interface TaskNodeData extends BaseNodeData {
