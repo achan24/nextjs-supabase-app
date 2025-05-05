@@ -67,6 +67,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
   };
 
   const handleSave = () => {
+    if (!node) return;
     updateNode(node.id, {
       label,
       description,
@@ -86,6 +87,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
   const hasClozes = node.data.description?.includes('{{');
 
   const handleStartTimer = () => {
+    if (!node) return;
     updateNode(node.id, {
       isRunning: true,
       startTime: Date.now(),
@@ -94,6 +96,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
   };
 
   const handleStopTimer = () => {
+    if (!node) return;
     const now = Date.now();
     updateNode(node.id, {
       isRunning: false,
@@ -104,6 +107,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
   };
 
   const handleCompleteTask = () => {
+    if (!node) return;
     const now = Date.now();
     const currentTimeSpent = node.data.isRunning 
       ? (node.data.timeSpent || 0) + (now - (node.data.startTime || now))
@@ -126,6 +130,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
   };
 
   const handleResetTask = () => {
+    if (!node) return;
     updateNode(node.id, {
       isRunning: false,
       timeSpent: 0,
