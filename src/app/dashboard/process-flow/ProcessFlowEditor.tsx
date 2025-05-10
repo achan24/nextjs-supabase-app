@@ -558,13 +558,14 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
   };
 
   return (
-    <div className="h-full w-full flex" onClick={handleBackgroundClick}>
+    <div className="h-full w-full flex p-0 m-0" onClick={handleBackgroundClick} style={{margin:0,padding:0}}>
       {/* Left Panel - Node Toolbox */}
       <div
         className={`${
           isToolboxOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0 fixed md:static w-64 bg-white shadow-md p-4 overflow-y-auto transition-transform duration-300 ease-in-out h-full border-r border-gray-200 flex-shrink-0 z-20`}
+        } fixed w-64 bg-white shadow-md p-4 overflow-y-auto transition-transform duration-300 ease-in-out h-full border-r border-gray-200 flex-shrink-0 z-20`}
         onClick={(e) => e.stopPropagation()}
+        style={{ left: 0, top: 0 }}
       >
         <div className="flex flex-col space-y-4">
           <div className="flex justify-between items-center space-x-2">
@@ -590,6 +591,15 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
               ) : (
                 'Save'
               )}
+            </button>
+            <button
+              onClick={() => setIsToolboxOpen(false)}
+              className="ml-2 p-1 rounded hover:bg-gray-100"
+              title="Hide Sidebar"
+            >
+              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
 
@@ -657,8 +667,8 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
       </div>
 
       {/* Main Flow Area */}
-      <div className="flex-1 h-full flex flex-col min-w-0 overflow-hidden">
-        <div className="flex-1 relative w-full h-full">
+      <div className="flex-1 h-full flex flex-col min-w-0 overflow-hidden p-0 m-0" style={{margin:0,padding:0}}>
+        <div className="flex-1 relative w-full h-full p-0 m-0" style={{margin:0,padding:0}}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -688,8 +698,9 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
             multiSelectionKeyCode={['Meta', 'Ctrl']}
             zoomActivationKeyCode={['Meta', 'Ctrl']}
             panActivationKeyCode={['Space']}
-            className="h-full w-full"
+            className="h-full w-full p-0 m-0"
             fitView
+            style={{margin:0,padding:0}}
           >
             <Background gap={12} size={1} />
             <Controls showInteractive={true} />
@@ -698,7 +709,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
         </div>
 
         {/* Bottom Panel - Timeline */}
-        <div className="h-16 bg-white border-t border-gray-200 flex-shrink-0">
+        <div className="h-16 bg-white border-t border-gray-200 flex-shrink-0 p-0 m-0" style={{margin:0,padding:0}}>
           <TimelinePanel nodes={nodes} />
         </div>
       </div>
@@ -707,8 +718,9 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
       <div
         className={`${
           isDetailsOpen ? 'translate-x-0' : 'translate-x-full'
-        } fixed md:static w-80 bg-white shadow-md overflow-y-auto transition-transform duration-300 ease-in-out h-full border-l border-gray-200 flex-shrink-0 z-20 right-0 md:right-auto`}
+        } fixed w-80 bg-white shadow-md overflow-y-auto transition-transform duration-300 ease-in-out h-full border-l border-gray-200 flex-shrink-0 z-20 right-0`}
         onClick={(e) => e.stopPropagation()}
+        style={{ top: 0 }}
       >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
           <div className="flex justify-between items-center">
@@ -716,6 +728,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
             <button
               onClick={closeDetails}
               className="p-2 hover:bg-gray-100 rounded-full"
+              title="Hide Details"
             >
               <svg
                 className="w-5 h-5 text-gray-500"
@@ -733,7 +746,6 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
             </button>
           </div>
         </div>
-        
         <div className="p-4">
           {selectedNode ? (
             <NodeDetails 
@@ -750,6 +762,28 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
         </div>
       </div>
 
+      {/* Right Sidebar Toggle Button */}
+      <button
+        onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+        className="fixed top-4 right-4 z-30 p-2 bg-white rounded-md shadow-md"
+        style={{ display: isDetailsOpen ? 'none' : 'block' }}
+        title="Show Details"
+      >
+        <svg
+          className="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+      </button>
+
       {/* Flashcard Review Modal */}
       {selectedNode && (
         <FlashcardReview
@@ -763,7 +797,8 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
       {/* Mobile Menu Buttons */}
       <button
         onClick={() => setIsToolboxOpen(!isToolboxOpen)}
-        className="md:hidden fixed top-4 left-4 z-30 p-2 bg-white rounded-md shadow-md"
+        className="fixed top-4 left-4 z-30 p-2 bg-white rounded-md shadow-md"
+        style={{ display: isToolboxOpen ? 'none' : 'block' }}
       >
         <svg
           className="w-6 h-6"
@@ -776,25 +811,6 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
             strokeLinejoin="round"
             strokeWidth={2}
             d="M4 6h16M4 12h16M4 18h16"
-          />
-        </svg>
-      </button>
-
-      <button
-        onClick={() => setIsDetailsOpen(!isDetailsOpen)}
-        className="md:hidden fixed top-4 right-4 z-30 p-2 bg-white rounded-md shadow-md"
-      >
-        <svg
-          className="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
           />
         </svg>
       </button>

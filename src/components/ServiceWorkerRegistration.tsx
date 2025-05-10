@@ -3,6 +3,21 @@
 import { useEffect } from 'react';
 import { useNotifications } from '@/contexts/NotificationContext';
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export const ServiceWorkerRegistration = () => {
   const { requestNotificationPermission } = useNotifications();
 
@@ -22,16 +37,34 @@ export const ServiceWorkerRegistration = () => {
           if (permission) {
             console.log('Notification permission granted');
             
-            // Subscribe to push notifications if supported
+            // Subscribe to push notifications
             try {
+              const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+              if (!publicKey) {
+                throw new Error('VAPID public key not found');
+              }
+
               const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
-                // You would need to set up VAPID keys for this
-                // applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY)
+                applicationServerKey: urlBase64ToUint8Array(publicKey)
               });
-              console.log('Push notification subscription:', subscription);
+
+              // Send the subscription to your backend
+              const response = await fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(subscription),
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to store push subscription on server');
+              }
+
+              console.log('Push notification subscription successful:', subscription);
             } catch (pushError) {
-              console.log('Push notification subscription failed:', pushError);
+              console.error('Push notification subscription failed:', pushError);
             }
           }
 

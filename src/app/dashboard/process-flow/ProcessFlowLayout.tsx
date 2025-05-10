@@ -6,10 +6,10 @@ import ProcessFlowEditor from './ProcessFlowEditor';
 
 export default function ProcessFlowLayout({ user }: { user: User }) {
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-white">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="bg-white border-b border-gray-200 flex-shrink-0 w-full">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 w-full">
           <div className="flex items-center justify-between">
             <Link 
               href="/dashboard" 
@@ -37,7 +37,7 @@ export default function ProcessFlowLayout({ user }: { user: User }) {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 min-w-0 w-full h-full overflow-hidden bg-white p-0 m-0" style={{margin:0,padding:0}}>
         <ProcessFlowEditor user={user} />
       </div>
     </div>

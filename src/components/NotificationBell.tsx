@@ -3,7 +3,7 @@ import { useNotifications } from '../contexts/NotificationContext';
 import { BellIcon } from '@heroicons/react/24/outline';
 
 export const NotificationBell: React.FC = () => {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, sendPushNotification } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
 
   const handleNotificationClick = (id: string, url?: string) => {
@@ -14,19 +14,40 @@ export const NotificationBell: React.FC = () => {
     setIsOpen(false);
   };
 
+  const testNotification = async () => {
+    try {
+      await sendPushNotification(
+        "Test Notification",
+        "This is a test notification to verify push notifications are working!",
+        "/dashboard"
+      );
+      console.log("Test notification sent");
+    } catch (error) {
+      console.error("Failed to send test notification:", error);
+    }
+  };
+
   return (
     <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded-full hover:bg-gray-100 relative"
-      >
-        <BellIcon className="h-6 w-6 text-gray-600" />
-        {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
-            {unreadCount}
-          </span>
-        )}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={testNotification}
+          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Test Notification
+        </button>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 rounded-full hover:bg-gray-100 relative"
+        >
+          <BellIcon className="h-6 w-6 text-gray-600" />
+          {unreadCount > 0 && (
+            <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+              {unreadCount}
+            </span>
+          )}
+        </button>
+      </div>
 
       {isOpen && (
         <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">

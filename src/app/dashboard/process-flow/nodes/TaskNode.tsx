@@ -15,6 +15,7 @@ interface TaskNodeData extends BaseNodeData {
   startTime?: number;
   isRunning?: boolean;
   completionHistory?: CompletionRecord[];
+  videoUrl?: string;
 }
 
 export const TaskNode = (props: NodeProps<TaskNodeData>) => {
@@ -68,6 +69,14 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
           )}
         </div>
       </div>
+      {data.videoUrl && (
+        <div className="mt-4">
+          <video width="320" height="180" controls style={{ maxWidth: '100%' }}>
+            <source src={data.videoUrl} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      )}
     </div>
   );
 };
