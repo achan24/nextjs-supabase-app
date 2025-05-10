@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 import { BellIcon } from '@heroicons/react/24/outline';
 
 export const NotificationBell: React.FC = () => {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, sendPushNotification } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, sendPushNotification, requestNotificationPermission } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
+  const [permission, setPermission] = useState<'default' | 'granted' | 'denied'>('default');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPermission(Notification.permission);
+      console.log("[NotificationBell] Notification.permission:", Notification.permission);
+    } else {
+      console.log("[NotificationBell] Notification API not available");
+    }
+  }, []);
 
   const handleNotificationClick = (id: string, url?: string) => {
     markAsRead(id);
@@ -14,7 +24,18 @@ export const NotificationBell: React.FC = () => {
     setIsOpen(false);
   };
 
+  const handleEnableNotifications = async () => {
+    const granted = await requestNotificationPermission();
+    setPermission(Notification.permission);
+    if (granted) {
+      // Optionally, you can trigger a test notification or subscription here
+      window.location.reload(); // Reload to trigger ServiceWorkerRegistration logic if needed
+    }
+  };
+
   const testNotification = async () => {
+    console.log("Test Notification button clicked");
+    console.log("sendPushNotification is:", sendPushNotification); // Debug log
     try {
       await sendPushNotification(
         "Test Notification",
@@ -30,9 +51,18 @@ export const NotificationBell: React.FC = () => {
   return (
     <div className="relative">
       <div className="flex items-center gap-2">
+        {permission !== 'granted' && (
+          <button
+            onClick={handleEnableNotifications}
+            className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+          >
+            Enable Notifications
+          </button>
+        )}
         <button
           onClick={testNotification}
           className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          disabled={permission !== 'granted'}
         >
           Test Notification
         </button>

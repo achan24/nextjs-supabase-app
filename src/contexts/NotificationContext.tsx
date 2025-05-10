@@ -87,16 +87,28 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   };
 
   const sendPushNotification = async (title: string, body: string, url?: string) => {
+    console.log("[sendPushNotification] called with:", { title, body, url });
     try {
-      const registration = await navigator.serviceWorker.ready;
+      if (!('serviceWorker' in navigator)) {
+        console.error("[sendPushNotification] Service workers not supported in this browser.");
+        return;
+      }
+      const readyPromise = navigator.serviceWorker.ready;
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Service worker ready timed out")), 5000)
+      );
+      const registration = await Promise.race([readyPromise, timeoutPromise]) as ServiceWorkerRegistration;
+      console.log("[sendPushNotification] Service worker ready:", registration);
+
       await registration.showNotification(title, {
         body,
         icon: '/icons/icon-192x192.png',
         badge: '/icons/icon-192x192.png',
         data: { url }
       });
+      console.log("[sendPushNotification] Notification should be shown now.");
     } catch (error) {
-      console.error('Error sending push notification:', error);
+      console.error("[sendPushNotification] Error sending push notification:", error);
     }
   };
 

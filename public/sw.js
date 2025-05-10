@@ -11,9 +11,11 @@ const urlsToCache = [
 
 // Install event - cache assets
 self.addEventListener('install', event => {
+  console.log('[ServiceWorker] Install event');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
+        console.log('[ServiceWorker] Caching assets');
         return cache.addAll(urlsToCache);
       })
   );
@@ -23,17 +25,20 @@ self.addEventListener('install', event => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
+  console.log('[ServiceWorker] Activate event');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
+            console.log('[ServiceWorker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
       // Take control of all clients immediately
+      console.log('[ServiceWorker] Claiming clients');
       return clients.claim();
     })
   );
@@ -41,11 +46,13 @@ self.addEventListener('activate', event => {
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', event => {
+  console.log('[ServiceWorker] Fetch event for:', event.request.url);
   event.respondWith(
     caches.match(event.request)
       .then(response => {
         // Cache hit - return response
         if (response) {
+          console.log('[ServiceWorker] Serving from cache:', event.request.url);
           return response;
         }
 
@@ -76,6 +83,7 @@ self.addEventListener('fetch', event => {
 
 // Push notification event
 self.addEventListener('push', event => {
+  console.log('[ServiceWorker] Push event:', event);
   const data = event.data.json();
   
   const options = {
@@ -101,10 +109,12 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title, options)
   );
+  console.log('[ServiceWorker] Notification shown:', data.title);
 });
 
 // Notification click event
 self.addEventListener('notificationclick', event => {
+  console.log('[ServiceWorker] Notification click event:', event);
   event.notification.close();
 
   if (event.action === 'open') {
@@ -112,5 +122,8 @@ self.addEventListener('notificationclick', event => {
     event.waitUntil(
       clients.openWindow(event.notification.data.url)
     );
+    console.log('[ServiceWorker] Open action clicked, opening URL:', event.notification.data.url);
+  } else {
+    console.log('[ServiceWorker] Notification dismissed');
   }
 }); 

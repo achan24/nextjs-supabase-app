@@ -27,16 +27,16 @@ export const ServiceWorkerRegistration = () => {
         try {
           // Get the base URL from the current window location
           const baseUrl = window.location.origin;
-          const registration = await navigator.serviceWorker.register(`${baseUrl}/sw.js`, {
+          await navigator.serviceWorker.register(`${baseUrl}/sw.js`, {
             scope: baseUrl + '/'
           });
           console.log('ServiceWorker registration successful');
 
-          // Request notification permission after SW registration
-          const permission = await requestNotificationPermission();
-          if (permission) {
-            console.log('Notification permission granted');
-            
+          // Wait for the service worker to be fully active
+          const registration = await navigator.serviceWorker.ready;
+
+          // Only proceed if permission is already granted
+          if (Notification.permission === 'granted') {
             // Subscribe to push notifications
             try {
               const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -86,7 +86,7 @@ export const ServiceWorkerRegistration = () => {
     };
 
     registerServiceWorker();
-  }, [requestNotificationPermission]);
+  }, []);
 
   return null;
 }; 
