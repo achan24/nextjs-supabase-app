@@ -14,6 +14,7 @@ export interface Reminder {
   time: string;
   type: 'before' | 'at';
   minutes_before?: number; // in minutes, for 'before' type
+  sent_at?: string; // timestamp when reminder was sent
 }
 
 export interface Task {

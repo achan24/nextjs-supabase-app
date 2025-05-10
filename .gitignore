@@ -5,6 +5,8 @@
 node_modules/
 
 
+serviceAccountKey.json
+
 # testing
 /coverage
 
@@ -42,4 +44,5 @@ next-env.d.ts
 *.swo
 
 # Supabase
-**/supabase/.temp 
+**/supabase/.temp serviceAccountKey.json
+serviceAccountKey.json

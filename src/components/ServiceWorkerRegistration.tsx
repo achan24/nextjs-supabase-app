@@ -23,65 +23,60 @@ export const ServiceWorkerRegistration = () => {
 
   useEffect(() => {
     const registerServiceWorker = async () => {
-      if ('serviceWorker' in navigator && 'Notification' in window) {
+      if ('serviceWorker' in navigator) {
         try {
-          // Get the base URL from the current window location
-          const baseUrl = window.location.origin;
-          await navigator.serviceWorker.register(`${baseUrl}/sw.js`, {
-            scope: baseUrl + '/'
+          // Check for existing registration first
+          const existingRegistration = await navigator.serviceWorker.getRegistration();
+          if (existingRegistration) {
+            console.log('[SW] Existing service worker found:', existingRegistration);
+            return;
+          }
+
+          console.log('[SW] Starting service worker registration...');
+          const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+            scope: '/'
           });
-          console.log('ServiceWorker registration successful');
+          console.log('[SW] Service worker registered successfully:', registration);
+
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            console.log('[SW] New worker installing:', newWorker);
+            
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                console.log('[SW] Worker state changed:', newWorker.state);
+                if (newWorker.state === 'activated') {
+                  console.log('[SW] New service worker activated');
+                }
+              });
+            }
+          });
 
           // Wait for the service worker to be fully active
-          const registration = await navigator.serviceWorker.ready;
+          console.log('[SW-DEBUG] Waiting for navigator.serviceWorker.ready...');
+          const ready = await navigator.serviceWorker.ready;
+          console.log('[SW-DEBUG] navigator.serviceWorker.ready resolved:', ready);
 
-          // Only proceed if permission is already granted
           if (Notification.permission === 'granted') {
-            // Subscribe to push notifications
             try {
               const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
               if (!publicKey) {
                 throw new Error('VAPID public key not found');
               }
-
-              const subscription = await registration.pushManager.subscribe({
+              const subscription = await ready.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(publicKey)
               });
-
-              // Send the subscription to your backend
-              const response = await fetch('/api/push/subscribe', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(subscription),
-              });
-
-              if (!response.ok) {
-                throw new Error('Failed to store push subscription on server');
-              }
-
-              console.log('Push notification subscription successful:', subscription);
+              console.log('[SW-DEBUG] Push notification subscription successful:', subscription);
             } catch (pushError) {
-              console.error('Push notification subscription failed:', pushError);
+              console.error('[SW-DEBUG] Push notification subscription failed:', pushError);
             }
           }
-
-          // Handle service worker updates
-          registration.addEventListener('updatefound', () => {
-            const newWorker = registration.installing;
-            if (newWorker) {
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'activated') {
-                  console.log('New service worker activated');
-                }
-              });
-            }
-          });
-        } catch (err) {
-          console.error('ServiceWorker registration failed: ', err);
+        } catch (error) {
+          console.error('[SW] Service worker registration failed:', error);
         }
+      } else {
+        console.log('[SW] Service workers not supported in this browser');
       }
     };
 

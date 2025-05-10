@@ -504,6 +504,31 @@ export default function TaskManager({ user }: { user: User }) {
         }
       }
 
+      // Update reminders: remove all, then insert current
+      const { error: deleteRemindersError } = await supabase
+        .from('reminders')
+        .delete()
+        .eq('task_id', editingTask.id);
+      if (deleteRemindersError) {
+        console.error('Error deleting existing reminders:', deleteRemindersError);
+        throw deleteRemindersError;
+      }
+      if (editForm.reminders.length > 0) {
+        const reminderData = editForm.reminders.map(reminder => ({
+          task_id: editingTask.id,
+          type: reminder.type,
+          minutes_before: reminder.minutes_before,
+          time: reminder.type === 'at' ? editForm.due_date : null
+        }));
+        const { error: insertRemindersError } = await supabase
+          .from('reminders')
+          .insert(reminderData);
+        if (insertRemindersError) {
+          console.error('Error inserting reminders:', insertRemindersError);
+          throw insertRemindersError;
+        }
+      }
+
       setIsEditModalOpen(false)
       fetchTasks()
     } catch (error) {
@@ -1217,6 +1242,74 @@ export default function TaskManager({ user }: { user: User }) {
                       {tag.name}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Reminders</label>
+                <div className="space-y-2">
+                  {editForm.reminders.map((reminder, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <select
+                        value={reminder.type}
+                        onChange={(e) => {
+                          const updatedReminders = [...editForm.reminders];
+                          updatedReminders[index] = {
+                            ...reminder,
+                            type: e.target.value as 'before' | 'at'
+                          };
+                          setEditForm({ ...editForm, reminders: updatedReminders });
+                        }}
+                        className="mt-1 block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      >
+                        <option value="before">Before</option>
+                        <option value="at">At</option>
+                      </select>
+                      {reminder.type === 'before' && (
+                        <select
+                          value={reminder.minutes_before}
+                          onChange={(e) => {
+                            const updatedReminders = [...editForm.reminders];
+                            updatedReminders[index] = {
+                              ...reminder,
+                              minutes_before: Number(e.target.value)
+                            };
+                            setEditForm({ ...editForm, reminders: updatedReminders });
+                          }}
+                          className="mt-1 block w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        >
+                          <option value="5">5 minutes</option>
+                          <option value="15">15 minutes</option>
+                          <option value="30">30 minutes</option>
+                          <option value="60">1 hour</option>
+                          <option value="120">2 hours</option>
+                          <option value="1440">1 day</option>
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedReminders = editForm.reminders.filter((_, i) => i !== index);
+                          setEditForm({ ...editForm, reminders: updatedReminders });
+                        }}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditForm({
+                        ...editForm,
+                        reminders: [...editForm.reminders, { type: 'before', minutes_before: 30 }]
+                      });
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    + Add Reminder
+                  </button>
                 </div>
               </div>
             </div>

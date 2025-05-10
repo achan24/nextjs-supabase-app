@@ -12,8 +12,8 @@ export class ReminderService {
   }
 
   async startCheckingReminders() {
-    // Check every minute
-    this.checkInterval = setInterval(() => this.checkDueTasks(), 60000);
+    // Check every 5 seconds
+    this.checkInterval = setInterval(() => this.checkDueTasks(), 5000);
     // Initial check
     await this.checkDueTasks();
   }
@@ -27,12 +27,12 @@ export class ReminderService {
 
   private async checkDueTasks() {
     try {
-      // Get tasks with their reminders
+      // Get tasks with their reminders (only unsent reminders)
       const { data: tasks, error: tasksError } = await this.supabase
         .from('tasks')
         .select(`
           *,
-          reminders (*)
+          reminders (*, sent_at)
         `)
         .eq('status', 'todo')
         .not('due_date', 'is', null);
@@ -50,7 +50,8 @@ export class ReminderService {
         const localDueDate = new Date(dueDate.toLocaleString('en-US', { timeZone: localTimeZone }));
         
         // Check each reminder
-        task.reminders?.forEach(reminder => {
+        task.reminders?.forEach(async reminder => {
+          if (reminder.sent_at) return; // Only trigger unsent reminders
           let reminderTime: Date;
           
           if (reminder.type === 'at') {
@@ -66,11 +67,15 @@ export class ReminderService {
           // Check if it's time to show the reminder (within the last minute)
           const oneMinuteAgo = new Date(now.getTime() - 60000);
           if (reminderTime <= now && reminderTime > oneMinuteAgo) {
+            // Mark reminder as sent BEFORE showing notification
+            await this.supabase
+              .from('reminders')
+              .update({ sent_at: new Date().toISOString() })
+              .eq('id', reminder.id);
             const minutesUntilDue = Math.floor((localDueDate.getTime() - now.getTime()) / (60 * 1000));
             const timeText = reminder.type === 'at' 
               ? 'now' 
               : `${reminder.minutes_before} minutes before due time`;
-            
             this.notificationContext.addNotification({
               title: 'Task Reminder',
               body: `${task.title} is due ${timeText} (${minutesUntilDue} minutes remaining)`,
