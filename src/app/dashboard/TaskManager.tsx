@@ -7,6 +7,7 @@ import Link from 'next/link'
 import TaskTimer from '@/components/TaskTimer'
 import Modal from '@/components/Modal'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import type { Reminder } from '@/types/task'
 
 interface Task {
   id?: string;
@@ -58,6 +59,7 @@ interface TaskFormData {
   reminders: {
     type: 'before' | 'at';
     minutes_before?: number;
+    time?: string;
   }[];
 }
 
@@ -82,15 +84,28 @@ export default function TaskManager({ user }: { user: User }) {
     user_id: user.id
   })
   const [hideCompleted, setHideCompleted] = useState(true)
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<{
+    title: string;
+    description: string;
+    priority: number;
+    due_date: string;
+    tagIds: string[];
+    project_id: string;
+    status: Task['status'];
+    reminders: {
+      type: 'before' | 'at';
+      minutes_before?: number;
+      time?: string;
+    }[];
+  }>({
     title: '',
     description: '',
     priority: 3,
     due_date: new Date().toLocaleString('en-US', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).slice(0, 16),
-    tagIds: [] as string[],
+    tagIds: [],
     project_id: '',
-    status: 'todo' as Task['status'],
-    reminders: [] as { type: 'before' | 'at'; minutes_before?: number }[]
+    status: 'todo',
+    reminders: []
   })
   const [newTaskForm, setNewTaskForm] = useState<TaskFormData>({
     title: '',
@@ -112,6 +127,7 @@ export default function TaskManager({ user }: { user: User }) {
   const [filterStatus, setFilterStatus] = useState<Task['status'] | 'all'>('all')
   const [sortBy, setSortBy] = useState<'created' | 'priority'>('priority')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchTasks()
@@ -557,38 +573,39 @@ export default function TaskManager({ user }: { user: User }) {
   };
 
   const handleDeleteTask = async (taskId: string | undefined) => {
-    if (!taskId || !confirm('Are you sure you want to delete this task?')) return;
+    if (!taskId) return;
+    // Show custom modal instead of confirm()
+    setDeleteConfirmId(taskId);
+  };
 
+  const confirmDeleteTask = async () => {
+    if (!deleteConfirmId) return;
     try {
       // First delete task-tag relationships
       const { error: tagError } = await supabase
         .from('task_tags')
         .delete()
-        .eq('task_id', taskId);
-
+        .eq('task_id', deleteConfirmId);
       if (tagError) throw tagError;
-
       // Delete task-project relationships
       const { error: projectError } = await supabase
         .from('task_projects')
         .delete()
-        .eq('task_id', taskId);
-
+        .eq('task_id', deleteConfirmId);
       if (projectError) throw projectError;
-
       // Finally delete the task
       const { error } = await supabase
         .from('tasks')
         .delete()
-        .eq('id', taskId);
-
+        .eq('id', deleteConfirmId);
       if (error) throw error;
-
       // Update local state
-      setTasks(tasks.filter(t => t.id !== taskId));
+      setTasks(tasks.filter(t => t.id !== deleteConfirmId));
+      setDeleteConfirmId(null);
     } catch (error) {
       console.error('Error deleting task:', error);
       setError('Failed to delete task');
+      setDeleteConfirmId(null);
     }
   };
 
@@ -984,7 +1001,7 @@ export default function TaskManager({ user }: { user: User }) {
                   onClick={() => {
                     setNewTaskForm({
                       ...newTaskForm,
-                      reminders: [...newTaskForm.reminders, { type: 'before', minutes_before: 30 }]
+                      reminders: [...newTaskForm.reminders, { type: 'before', minutes_before: 30, time: '' }]
                     });
                   }}
                   className="text-sm text-blue-600 hover:text-blue-800"
@@ -1286,6 +1303,23 @@ export default function TaskManager({ user }: { user: User }) {
                           <option value="1440">1 day</option>
                         </select>
                       )}
+                      {reminder.type === 'at' && (
+                        <input
+                          type="time"
+                          value={reminder.time ? new Date(reminder.time).toISOString().substring(11, 16) : ''}
+                          onChange={(e) => {
+                            const updatedReminders = [...editForm.reminders];
+                            // Set the time as an ISO string for consistency
+                            const date = editForm.due_date.split('T')[0];
+                            updatedReminders[index] = {
+                              ...reminder,
+                              time: `${date}T${e.target.value}`
+                            };
+                            setEditForm({ ...editForm, reminders: updatedReminders });
+                          }}
+                          className="mt-1 block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -1303,7 +1337,10 @@ export default function TaskManager({ user }: { user: User }) {
                     onClick={() => {
                       setEditForm({
                         ...editForm,
-                        reminders: [...editForm.reminders, { type: 'before', minutes_before: 30 }]
+                        reminders: [
+                          ...editForm.reminders,
+                          { type: 'before', minutes_before: 30, time: '' } // Add time property for type safety
+                        ]
                       });
                     }}
                     className="text-sm text-blue-600 hover:text-blue-800"
@@ -1331,6 +1368,30 @@ export default function TaskManager({ user }: { user: User }) {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <Modal isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+          <div className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Delete Task</h2>
+            <p className="mb-4 text-gray-600">Are you sure you want to delete this task? This action cannot be undone.</p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteTask}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 } 
