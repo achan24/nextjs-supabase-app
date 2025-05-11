@@ -114,13 +114,36 @@ export default function HomePage({ user }: { user: User }) {
             </Link>
           </div>
 
-          {/* Habit Tracker Card (Placeholder) */}
-          <div className="bg-white p-6 rounded-lg shadow opacity-75">
+          {/* Habit Tracker Card */}
+          <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
             <h3 className="text-xl font-semibold mb-2">Habit Tracker</h3>
             <p className="text-gray-600 mb-4">
               Build and maintain positive habits with daily tracking and streak monitoring.
             </p>
-            <div className="text-gray-400 font-medium">Coming Soon</div>
+            {/* Mock habits for today */}
+            <ul className="mb-4">
+              {[
+                { id: 1, name: 'Drink Water', completed: false, streak: 5 },
+                { id: 2, name: 'Morning Walk', completed: true, streak: 12 },
+                { id: 3, name: 'Read 10 Pages', completed: false, streak: 3 },
+              ].map(habit => (
+                <li key={habit.id} className="flex items-center justify-between py-1">
+                  <span className={habit.completed ? 'line-through text-gray-400' : ''}>{habit.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-orange-500">🔥 {habit.streak}</span>
+                    <button
+                      className={`rounded px-2 py-1 text-xs font-medium ${habit.completed ? 'bg-green-200 text-green-700' : 'bg-gray-200 text-gray-700 hover:bg-green-100'}`}
+                      disabled={habit.completed}
+                    >
+                      {habit.completed ? 'Done' : 'Mark Done'}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <Link href="/dashboard/habits" className="text-blue-600 font-medium hover:text-blue-700 flex items-center gap-2">
+              Go to Habit Tracker →
+            </Link>
           </div>
 
           {/* Focus Timer Card (Placeholder) */}

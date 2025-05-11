@@ -1,0 +1,142 @@
+# Habit Tracker App — Product Specification
+
+---
+
+## 1. Core Features
+
+### A. Habit Management
+- Create/Edit/Delete Habits
+  - Set name, description, frequency (daily, weekly, custom), reminders, and category.
+- Daily Habit List
+  - Single-page view showing all habits due today.
+  - Mark habits as complete/incomplete.
+  - Add a note to each completion (journal entry, mood, etc.).
+- Streaks
+  - Track current and longest streak for each habit.
+  - Visual indicator (fire, badge, etc.) for active streaks.
+
+### B. Activity Visualization
+- GitHub-Style Activity Heatmap
+  - Calendar grid showing completion intensity per day.
+  - Color-coded by number of habits completed.
+- Streaks View
+  - List of all habits with current and best streaks.
+  - Sort/filter by streak length, habit name, etc.
+
+### C. Analytics & Deep Dive
+- Overview Dashboard
+  - Weekly/monthly stats: completions, missed days, consistency rate.
+  - Charts: bar, line, pie for various metrics.
+- Habit Deep Dive
+  - Select a habit to see:
+    - Completion history (calendar, chart)
+    - Streaks, best/worst days
+    - Notes/journal entries timeline
+    - Analytics: average completion time, mood correlation, etc.
+
+---
+
+## 2. Gamification Layer
+
+### A. Avatar & Customization
+- Avatar Creator
+  - Choose appearance, outfit, accessories.
+  - Unlock new items by leveling up or completing quests.
+- XP & Leveling
+  - Earn XP for each habit completion.
+  - Level up to unlock new avatar items, themes, and features.
+- Badges & Achievements
+  - Earn for streak milestones, consistency, quest completions, etc.
+
+### B. Quests & Missions
+- Quests
+  - Grouped habits (e.g., "7-Day Cold Shower Challenge").
+  - Progress bar, quest log, and completion rewards (XP, gear, coins).
+- Story Mode
+  - Completing habits/quests unlocks story chapters.
+  - Interactive dialogues, world-building, and choices that affect the story.
+- Daily/Weekly Missions
+  - Randomized or user-selected challenges for bonus rewards.
+
+---
+
+## 3. User Experience
+
+### A. Single-Page Habit List
+- All habits for today in one scrollable view.
+- Quick actions: complete, add note, skip, snooze.
+- Visual feedback for completion (animation, confetti, etc.).
+
+### B. Notes & Journaling
+- Add a note to any habit completion.
+- View notes in habit deep dive or timeline.
+
+### C. Notifications & Reminders
+- Customizable reminders per habit.
+- Push notifications for streaks, quests, and story unlocks.
+
+---
+
+## 4. Data & Analytics
+
+- Consistency Rate: % of days habits completed.
+- Streaks: Current, best, and broken streaks.
+- Completion Trends: By day, week, month.
+- Notes/Mood Correlation: Analyze notes/mood vs. habit success.
+
+---
+
+## 5. Technical/Platform
+
+- Responsive Web App (mobile-first, desktop-friendly)
+- PWA Support (installable, offline support)
+- User Authentication (email, OAuth, guest mode)
+- Cloud Sync (Supabase, Firebase, or similar)
+- Data Privacy (user data export, delete account)
+
+---
+
+## 6. Stretch Goals / Future Features
+
+- Social/Community: Share progress, join group quests.
+- Integrations: Apple Health, Google Fit, calendar sync.
+- AI Coach: Personalized habit suggestions, streak rescue tips.
+- Widgets: Home screen widgets for quick check-in.
+
+---
+
+# Wireframe/UX Flow Suggestions
+
+1. Home/Daily View:
+   - [ ] List of today's habits
+   - [ ] Complete/add note
+   - [ ] XP/streak/quest progress at top
+2. Heatmap/Calendar:
+   - [ ] Visualize activity
+   - [ ] Tap a day for details
+3. Analytics/Overview:
+   - [ ] Charts, stats, badges
+4. Avatar/Story:
+   - [ ] Avatar customization
+   - [ ] Story/quest log
+5. Habit Deep Dive:
+   - [ ] Completion history
+   - [ ] Notes timeline
+
+---
+
+# Summary Table
+
+| Feature                | Description                                                      |
+|------------------------|------------------------------------------------------------------|
+| Daily Habit List       | All habits for today, single page, mark complete, add note       |
+| Activity Heatmap       | GitHub-style, color-coded by completions                         |
+| Streaks                | Current/best streaks, streak view                               |
+| Gamification           | Avatar, XP, leveling, quests, story, badges                      |
+| Analytics              | Overview dashboard, deep dive per habit                          |
+| Notes                  | Add/view notes per habit entry                                   |
+| Quests/Missions        | Grouped habits, story unlocks, rewards                           |
+| Notifications          | Reminders, streak alerts, quest/story unlocks                    |
+| Responsive/PWA         | Mobile-first, installable, offline support                       |
+
+</rewritten_file> 
