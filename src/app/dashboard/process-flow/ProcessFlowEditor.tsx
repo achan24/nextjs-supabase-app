@@ -660,7 +660,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
 
             <div className="border-t pt-4">
               <h4 className="text-sm font-medium mb-2">Add Nodes</h4>
-              <NodeToolbox setNodes={setNodes} />
+              <NodeToolbox setNodes={setNodes} reactFlowInstance={reactFlowInstance} />
             </div>
           </div>
         </div>

@@ -1,11 +1,11 @@
 'use client';
 
 import { DragEvent } from 'react';
-import { Node } from 'reactflow';
-import { useReactFlow } from 'reactflow';
+import { Node, ReactFlowInstance } from 'reactflow';
 
 interface NodeToolboxProps {
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
+  reactFlowInstance: ReactFlowInstance | null;
 }
 
 const nodeTypes = [
@@ -47,9 +47,7 @@ const nodeTypes = [
   },
 ];
 
-export default function NodeToolbox({ setNodes }: NodeToolboxProps) {
-  const reactFlowInstance = useReactFlow();
-
+export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolboxProps) {
   const onDragStart = (event: DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
