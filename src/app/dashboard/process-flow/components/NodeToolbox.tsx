@@ -2,6 +2,7 @@
 
 import { DragEvent } from 'react';
 import { Node } from 'reactflow';
+import { useReactFlow } from 'reactflow';
 
 interface NodeToolboxProps {
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
@@ -47,18 +48,27 @@ const nodeTypes = [
 ];
 
 export default function NodeToolbox({ setNodes }: NodeToolboxProps) {
+  const reactFlowInstance = useReactFlow();
+
   const onDragStart = (event: DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
   };
 
   const addNode = (type: string) => {
-    // Add node to the center of the viewport
+    if (!reactFlowInstance) return;
+
+    // Get the current viewport
+    const { x, y, zoom } = reactFlowInstance.getViewport();
+    
+    // Get the center of the current viewport in flow coordinates
+    const centerX = (-x + window.innerWidth / 2) / zoom;
+    const centerY = (-y + window.innerHeight / 2) / zoom;
+
     const newNode: Node = {
       id: `${type}-${Date.now()}`,
       type,
-      // Position will be adjusted by the parent component
-      position: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+      position: { x: centerX, y: centerY },
       data: {
         label: `New ${type}`,
         description: '',

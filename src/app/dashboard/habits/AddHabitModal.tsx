@@ -1,12 +1,28 @@
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase';
 
+const HABIT_ICONS = [
+  { emoji: '💧', label: 'Water' },
+  { emoji: '🛏️', label: 'Sleep' },
+  { emoji: '🥤', label: 'Drink' },
+  { emoji: '🧍', label: 'Stand' },
+  { emoji: '🚶', label: 'Walk' },
+  { emoji: '🧘', label: 'Meditate' },
+  { emoji: '🏃', label: 'Run' },
+  { emoji: '📚', label: 'Read' },
+  { emoji: '🎯', label: 'Goal' },
+  { emoji: '🎨', label: 'Create' },
+  { emoji: '🎵', label: 'Music' },
+  { emoji: '🌱', label: 'Plant' },
+];
+
 export default function AddHabitModal({ onClose, onHabitAdded }: {
   onClose: () => void,
   onHabitAdded: () => void
 }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedIcon, setSelectedIcon] = useState(HABIT_ICONS[0].emoji);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +42,8 @@ export default function AddHabitModal({ onClose, onHabitAdded }: {
       .insert({
         user_id: user.id,
         name,
-        description
+        description,
+        icon: selectedIcon
       })
       .select()
       .single();
@@ -65,6 +82,24 @@ export default function AddHabitModal({ onClose, onHabitAdded }: {
               value={description}
               onChange={e => setDescription(e.target.value)}
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Icon</label>
+            <div className="grid grid-cols-6 gap-2 p-2 border rounded">
+              {HABIT_ICONS.map(({ emoji, label }) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setSelectedIcon(emoji)}
+                  className={`w-10 h-10 flex items-center justify-center text-xl rounded transition-colors ${
+                    selectedIcon === emoji ? 'bg-blue-100 ring-2 ring-blue-500' : 'hover:bg-gray-100'
+                  }`}
+                  title={label}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
           {error && <div className="text-red-600 text-sm">{error}</div>}
           <div className="flex justify-end gap-2">
