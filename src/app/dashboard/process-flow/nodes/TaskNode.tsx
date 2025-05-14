@@ -51,11 +51,23 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Compute average completion time if there are completions
+  let avgTime: number | null = null;
+  if (data.completionHistory && data.completionHistory.length > 0) {
+    const total = data.completionHistory.reduce((sum, rec) => sum + rec.timeSpent, 0);
+    avgTime = total / data.completionHistory.length;
+  }
+
   return (
     <div className="task-node">
       <BaseNode {...props} />
-      <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
+      <div className="mt-2 text-xs text-gray-500 flex items-center justify-between w-full">
         <span>⏱ {formatTime(currentTime)}</span>
+        <span className="flex-1 text-center text-gray-500">
+          {avgTime !== null && (
+            <span>{formatTime(avgTime)}</span>
+          )}
+        </span>
         <div className="flex items-center space-x-1">
           {data.isRunning ? (
             <span className="text-green-500">●</span>
