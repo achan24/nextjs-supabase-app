@@ -4,7 +4,6 @@ import { NotificationBell } from '../../components/NotificationBell';
 import { useEffect } from 'react';
 import { ReminderService } from '../../services/reminderService';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { FCMTokenButton } from '../../components/FCMTokenButton';
 
 export default function DashboardLayout({
   children,
@@ -30,12 +29,11 @@ export default function DashboardLayout({
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <div className="flex items-center gap-4">
               <NotificationBell />
-              <FCMTokenButton />
             </div>
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {children}
       </main>
     </div>

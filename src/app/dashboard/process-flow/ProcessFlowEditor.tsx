@@ -33,6 +33,7 @@ import { SkillNode } from './nodes/SkillNode';
 import { TechniqueNode } from './nodes/TechniqueNode';
 import { AnalyticsNode } from './nodes/AnalyticsNode';
 import FlashcardReview from './components/FlashcardReview';
+import LinkNode from './nodes/LinkNode';
 
 interface ProcessFlow {
   id: string;
@@ -52,9 +53,16 @@ const nodeTypes = {
   skill: SkillNode,
   technique: TechniqueNode,
   analytics: AnalyticsNode,
+  link: LinkNode,
 };
 
-export default function ProcessFlowEditor({ user }: { user: User }) {
+interface ProcessFlowEditorProps {
+  user: User;
+  flowTitle: string;
+  setFlowTitle: (title: string) => void;
+}
+
+export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: ProcessFlowEditorProps) {
   const supabase = createClient();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -66,9 +74,10 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
   const [currentFlow, setCurrentFlow] = useState<ProcessFlow | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
-  const [flowTitle, setFlowTitle] = useState('Untitled Flow');
   const [flowDescription, setFlowDescription] = useState('');
   const [flows, setFlows] = useState<ProcessFlow[]>([]);
+  const [rf, setRf] = useState<ReactFlowInstance | null>(null);
+  const jumpTargetRef = useRef<{ flowId: string; nodeId: string } | null>(null);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -82,7 +91,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
   }, []);
 
   const onInit = useCallback((instance: ReactFlowInstance) => {
-    setReactFlowInstance(instance);
+    setRf(instance);
   }, []);
 
   const adjustNodePosition = useCallback((node: Node) => {
@@ -232,8 +241,9 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
       const type = event.dataTransfer.getData('application/reactflow');
       if (!type) return;
 
+      // FIX: Use mouse position for node placement
       const reactFlowBounds = event.currentTarget.getBoundingClientRect();
-      const position = reactFlowInstance?.project({
+      const position = rf?.project({
         x: event.clientX - reactFlowBounds.left,
         y: event.clientY - reactFlowBounds.top,
       }) || { x: 0, y: 0 };
@@ -301,7 +311,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
 
       setNodes((nds) => [...nds, newNode]);
     },
-    [reactFlowInstance]
+    [rf]
   );
 
   const defaultEdgeOptions = {
@@ -557,6 +567,70 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
     );
   };
 
+  // Function to jump to a node in a flow
+  const jumpToNode = (flowId: string, nodeId: string) => {
+    console.log('[jump][step1] jumpToNode called with', { flowId, nodeId });
+    jumpTargetRef.current = { flowId, nodeId };
+    loadFlowByIdAndJump(flowId); // don't await
+  };
+
+  // Helper to load a flow (no need to pass nodeId)
+  const loadFlowByIdAndJump = async (flowId: string) => {
+    console.log('[jump][step2] loadFlowByIdAndJump called with', { flowId });
+    try {
+      const { data, error } = await supabase
+        .from('process_flows')
+        .select('*')
+        .eq('id', flowId)
+        .single();
+      if (error) throw error;
+      setCurrentFlow(data);
+      setNodes(data.nodes);
+      setEdges(data.edges);
+      setFlowTitle(data.title);
+      setFlowDescription(data.description || '');
+      console.log('[jump][step2] loadFlowByIdAndJump finished, flow loaded:', data?.id);
+    } catch (error) {
+      console.error('[jump][step2] Error loading flow for jump:', error);
+    }
+  };
+
+  // Single effect for jump-to-link logic
+  useEffect(() => {
+    const jumpTarget = jumpTargetRef.current;
+    console.log('[jump][step3] useEffect triggered', { jumpTarget, currentFlowId: currentFlow?.id, rfReady: !!rf, nodesLength: nodes.length });
+    if (!jumpTarget || !rf) {
+      console.log('[jump][step3] jumpTarget or rf not ready');
+      return;
+    }
+    if (currentFlow?.id !== jumpTarget.flowId) {
+      console.log('[jump][step3] Not on the right flow yet, waiting...');
+      return;
+    }
+    const node = rf.getNodes().find(n => n.id === jumpTarget.nodeId);
+    if (!node) {
+      console.log('[jump][step3] Node not found yet, waiting...');
+      return;
+    }
+    console.log('[jump][step3] Node found, jumping to', node.id, node.position);
+    rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
+    jumpTargetRef.current = null;
+    console.log('[jump][step3] Jump complete, jumpTarget cleared');
+  }, [currentFlow, rf, nodes]);
+
+  // Fallback timeout for missing node
+  useEffect(() => {
+    if (!jumpTargetRef.current) return;
+    const timer = setTimeout(() => {
+      if (jumpTargetRef.current) {
+        console.log('[jump][step4] Fallback timeout: node not found in time, showing alert and clearing jumpTarget');
+        alert("Sorry, I can't find that node in this flow.");
+        jumpTargetRef.current = null;
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [currentFlow, rf, nodes]);
+
   return (
     <div className="h-full w-full flex p-0 m-0" onClick={handleBackgroundClick} style={{margin:0,padding:0}}>
       {/* Left Panel - Node Toolbox */}
@@ -753,6 +827,7 @@ export default function ProcessFlowEditor({ user }: { user: User }) {
               setNodes={setNodes}
               updateNode={updateNode}
               onStartReview={() => setIsReviewMode(true)}
+              jumpToNode={jumpToNode}
             />
           ) : (
             <div className="text-gray-500 text-center">

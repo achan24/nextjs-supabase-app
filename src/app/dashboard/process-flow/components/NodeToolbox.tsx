@@ -1,6 +1,6 @@
 'use client';
 
-import { DragEvent } from 'react';
+import { DragEvent, useState, useEffect } from 'react';
 import { Node, ReactFlowInstance } from 'reactflow';
 
 interface NodeToolboxProps {
@@ -45,15 +45,53 @@ const nodeTypes = [
     description: 'Visualize task completion data',
     icon: '📊',
   },
+  {
+    type: 'link',
+    label: 'Node Link',
+    description: 'Jump to a node in another map',
+    icon: '🔗',
+  },
 ];
 
 export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolboxProps) {
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [pendingNodeType, setPendingNodeType] = useState<string | null>(null);
+  const [flows, setFlows] = useState<any[]>([]);
+  const [selectedFlowId, setSelectedFlowId] = useState<string>('');
+  const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+
+  // Fetch all flows when modal opens
+  useEffect(() => {
+    if (showLinkModal) {
+      fetch('/api/process-flows')
+        .then(res => res.json())
+        .then(data => setFlows(data));
+    }
+  }, [showLinkModal]);
+
+  // Fetch nodes for selected flow
+  useEffect(() => {
+    if (selectedFlowId) {
+      fetch(`/api/process-flows/${selectedFlowId}`)
+        .then(res => res.json())
+        .then(data => setNodesInFlow(data.nodes || []));
+    } else {
+      setNodesInFlow([]);
+    }
+  }, [selectedFlowId]);
+
   const onDragStart = (event: DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
   };
 
   const addNode = (type: string) => {
+    if (type === 'link') {
+      setPendingNodeType(type);
+      setShowLinkModal(true);
+      return;
+    }
     if (!reactFlowInstance) return;
 
     // Get the current viewport
@@ -82,6 +120,27 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
     setNodes((nds) => [...nds, newNode]);
   };
 
+  const handleCreateLinkNode = () => {
+    if (!reactFlowInstance || !selectedFlowId || !selectedNodeId) return;
+    const { x, y, zoom } = reactFlowInstance.getViewport();
+    const centerX = (-x + window.innerWidth / 2) / zoom;
+    const centerY = (-y + window.innerHeight / 2) / zoom;
+    const newNode: Node = {
+      id: `link-${Date.now()}`,
+      type: 'link',
+      position: { x: centerX, y: centerY },
+      data: {
+        label: 'Node Link',
+        linkedFlowId: selectedFlowId,
+        linkedNodeId: selectedNodeId,
+      },
+    };
+    setNodes(nds => [...nds, newNode]);
+    setShowLinkModal(false);
+    setSelectedFlowId('');
+    setSelectedNodeId('');
+  };
+
   return (
     <div>
       <h3 className="text-lg font-semibold mb-4">Add Nodes</h3>
@@ -104,6 +163,37 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
           </div>
         ))}
       </div>
+      {showLinkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg min-w-[320px]">
+            <h2 className="text-lg font-semibold mb-4">Link to Node</h2>
+            <div className="mb-4">
+              <label className="block mb-1 font-medium">Select Flow</label>
+              <select className="w-full border rounded px-2 py-1" value={selectedFlowId} onChange={e => setSelectedFlowId(e.target.value)}>
+                <option value="">-- Choose a flow --</option>
+                {flows.map(flow => (
+                  <option key={flow.id} value={flow.id}>{flow.title}</option>
+                ))}
+              </select>
+            </div>
+            {selectedFlowId && (
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Select Node</label>
+                <select className="w-full border rounded px-2 py-1" value={selectedNodeId} onChange={e => setSelectedNodeId(e.target.value)}>
+                  <option value="">-- Choose a node --</option>
+                  {nodesInFlow.map(node => (
+                    <option key={node.id} value={node.id}>{node.data?.label || node.id}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <button className="px-4 py-2 bg-gray-200 rounded" onClick={() => setShowLinkModal(false)}>Cancel</button>
+              <button className="px-4 py-2 bg-blue-600 text-white rounded" disabled={!selectedFlowId || !selectedNodeId} onClick={handleCreateLinkNode}>Create Link</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

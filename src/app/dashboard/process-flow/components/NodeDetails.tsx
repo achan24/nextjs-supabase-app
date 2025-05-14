@@ -4,6 +4,7 @@ import { Node } from 'reactflow';
 import { useState, useEffect, useRef } from 'react';
 import ClozeText from './ClozeText';
 import FlashcardReview from './FlashcardReview';
+import { createClient } from '@/lib/supabase';
 
 interface CompletionRecord {
   completedAt: number;
@@ -16,9 +17,10 @@ interface NodeDetailsProps {
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
   updateNode: (nodeId: string, data: any) => void;
   onStartReview: () => void;
+  jumpToNode?: (flowId: string, nodeId: string) => void;
 }
 
-export default function NodeDetails({ node, setNodes, updateNode, onStartReview }: NodeDetailsProps) {
+export default function NodeDetails({ node, setNodes, updateNode, onStartReview, jumpToNode }: NodeDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<'desc' | 'asc'>('desc');
   const [newNote, setNewNote] = useState('');
@@ -27,6 +29,13 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // State for link node editing
+  const HARDCODED_USER_ID = '875d44ba-8794-4d12-ba86-48e5e90dc796';
+  const [flows, setFlows] = useState<any[]>([]);
+  const [selectedFlowId, setSelectedFlowId] = useState<string>(node?.data?.linkedFlowId || '');
+  const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
+  const supabase = createClient();
 
   useEffect(() => {
     if (node) {
@@ -74,6 +83,45 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
     });
     setIsEditing(false);
   };
+
+  // Fetch all flows when a link node is selected
+  useEffect(() => {
+    if (node?.type === 'link') {
+      supabase
+        .from('process_flows')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          setFlows(Array.isArray(data) ? data : []);
+        });
+    }
+  }, [node?.type]);
+
+  // Fetch nodes for selected flow
+  useEffect(() => {
+    if (node?.type === 'link' && selectedFlowId) {
+      supabase
+        .from('process_flows')
+        .select('*')
+        .eq('id', selectedFlowId)
+        .single()
+        .then(({ data, error }) => {
+          setNodesInFlow(Array.isArray(data?.nodes) ? data.nodes : []);
+        });
+    } else {
+      setNodesInFlow([]);
+    }
+  }, [node?.type, selectedFlowId]);
+
+  // Update node data when selection changes
+  useEffect(() => {
+    if (node?.type === 'link' && (selectedFlowId !== node.data?.linkedFlowId || selectedNodeId !== node.data?.linkedNodeId)) {
+      updateNode(node.id, {
+        linkedFlowId: selectedFlowId,
+        linkedNodeId: selectedNodeId,
+      });
+    }
+  }, [selectedFlowId, selectedNodeId]);
 
   if (!node) {
     return (
@@ -166,8 +214,82 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
     setEditingNoteId(null);
   };
 
+  // Add this function to handle jump (to be implemented)
+  const handleJumpToLink = () => {
+    // TODO: Implement navigation to linked node in another flow
+    alert('Jump to linked node!');
+  };
+
   return (
     <div className="space-y-4">
+      {/* Show link reference if node is a link node */}
+      {node?.type === 'link' && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <div className="font-medium text-blue-800 mb-1">Linked Node</div>
+          <div className="mb-2">
+            <label className="block mb-1 font-medium">Select Flow</label>
+            <select className="w-full border rounded px-2 py-1" value={selectedFlowId} onChange={e => setSelectedFlowId(e.target.value)}>
+              <option value="">-- Choose a flow --</option>
+              {flows.map(flow => (
+                <option key={flow.id} value={flow.id}>{flow.title}</option>
+              ))}
+            </select>
+          </div>
+          {selectedFlowId && (
+            <div className="mb-2">
+              <label className="block mb-1 font-medium">Select Node</label>
+              <select className="w-full border rounded px-2 py-1" value={selectedNodeId} onChange={e => setSelectedNodeId(e.target.value)}>
+                <option value="">-- Choose a node --</option>
+                {nodesInFlow.map(n => (
+                  <option key={n.id} value={n.id}>{n.data?.label || n.id}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
+            className="mt-2 px-3 py-1 bg-blue-600 text-white rounded"
+            disabled={!selectedFlowId || !selectedNodeId}
+            onClick={async () => {
+              if (!jumpToNode) return;
+              // Fetch the target flow and node
+              const { data: flow } = await supabase
+                .from('process_flows')
+                .select('*')
+                .eq('id', selectedFlowId)
+                .single();
+              if (flow) {
+                const targetNode = (flow.nodes || []).find((n: any) => n.id === selectedNodeId);
+                if (targetNode) {
+                  // Add reference if not present
+                  const ref = {
+                    linkNodeId: node?.id,
+                    flowId: node?.data?.linkedFlowId || flow.id,
+                    flowTitle: flow.title,
+                    linkNodeLabel: node?.data?.label || 'Node Link',
+                    createdAt: new Date().toISOString(),
+                  };
+                  const referencedBy = Array.isArray(targetNode.data?.referencedBy) ? targetNode.data.referencedBy : [];
+                  if (!referencedBy.some((r: any) => r.linkNodeId === ref.linkNodeId && r.flowId === ref.flowId)) {
+                    targetNode.data = {
+                      ...targetNode.data,
+                      referencedBy: [...referencedBy, ref],
+                    };
+                    // Save the updated node in the flow
+                    const updatedNodes = (flow.nodes || []).map((n: any) => n.id === selectedNodeId ? targetNode : n);
+                    await supabase
+                      .from('process_flows')
+                      .update({ nodes: updatedNodes })
+                      .eq('id', selectedFlowId);
+                  }
+                }
+              }
+              jumpToNode(selectedFlowId, selectedNodeId);
+            }}
+          >
+            Jump to Node
+          </button>
+        </div>
+      )}
       <div>
         <label className="block text-sm font-medium text-gray-700">Label</label>
         {isEditing ? (
@@ -373,6 +495,32 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview 
                       </div>
                     </div>
                   ))}
+              </div>
+            </div>
+          )}
+
+          {Array.isArray(node?.data?.referencedBy) && node.data.referencedBy.length > 0 && (
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Referenced by</h4>
+              <div className="space-y-2">
+                {node.data.referencedBy.map((ref: any) => (
+                  <div key={ref.linkNodeId + ref.flowId} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                    <span>
+                      <span className="font-bold">{ref.flowTitle || 'Unknown Map'}</span>
+                      <span className="mx-1">–</span>
+                      <span>{ref.linkNodeLabel || 'Link'}</span>
+                      {ref.createdAt && (
+                        <span className="ml-2 text-xs text-gray-500">{new Date(ref.createdAt).toLocaleDateString()}</span>
+                      )}
+                    </span>
+                    <button
+                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      onClick={() => jumpToNode && jumpToNode(ref.flowId, ref.linkNodeId)}
+                    >
+                      Jump to Link
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           )}
