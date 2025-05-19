@@ -345,7 +345,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
           />
         ) : (
           <div 
-            className="mt-1 text-sm cursor-pointer hover:text-blue-600 whitespace-pre-wrap"
+            className="mt-1 text-sm text-black cursor-pointer hover:text-blue-600 whitespace-pre-wrap"
             onClick={() => setIsEditing(true)}
           >
             {node.data.description ? (

@@ -103,7 +103,7 @@ const BaseNode = ({
         <div className="flex flex-col">
           <div className="text-sm font-bold">{data.label}</div>
           {data.description && (
-            <div className="text-xs text-gray-500 whitespace-pre-wrap">
+            <div className="text-xs text-black whitespace-pre-wrap">
               <ClozeText 
                 text={data.description} 
                 isTestMode={!!data.isTestMode}
