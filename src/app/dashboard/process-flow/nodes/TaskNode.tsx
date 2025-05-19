@@ -19,9 +19,24 @@ interface TaskNodeData extends BaseNodeData {
 }
 
 export const TaskNode = (props: NodeProps<TaskNodeData>) => {
-  const { data } = props;
+  const { data, id } = props;
   const [currentTime, setCurrentTime] = useState(data.timeSpent || 0);
   
+  useEffect(() => {
+    // Load persisted state from localStorage
+    const persistedState = localStorage.getItem(`timer_${id}`);
+    if (persistedState) {
+      const { startTime, timeSpent } = JSON.parse(persistedState);
+      if (startTime) {
+        // If there was a running timer, calculate the elapsed time
+        const elapsedTime = Date.now() - startTime;
+        setCurrentTime(timeSpent + elapsedTime);
+      } else {
+        setCurrentTime(timeSpent);
+      }
+    }
+  }, [id]);
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
@@ -33,8 +48,16 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
       interval = setInterval(() => {
         setCurrentTime((data.timeSpent || 0) + (Date.now() - data.startTime!));
       }, 1000);
+
+      // Persist the timer state
+      localStorage.setItem(`timer_${id}`, JSON.stringify({
+        startTime: data.startTime,
+        timeSpent: data.timeSpent || 0
+      }));
     } else {
       setCurrentTime(data.timeSpent || 0);
+      // Clear persisted state when timer is stopped
+      localStorage.removeItem(`timer_${id}`);
     }
 
     return () => {
@@ -42,7 +65,7 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
         clearInterval(interval);
       }
     };
-  }, [data.isRunning, data.startTime, data.timeSpent]);
+  }, [data.isRunning, data.startTime, data.timeSpent, id]);
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);

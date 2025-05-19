@@ -172,9 +172,8 @@ function parseMarkup(text: string): { type: 'ul' | 'line', content: string }[] {
         blocks.push({ type: 'ul', content: listItems });
         listItems = [];
       }
-      if (line.trim() !== '') {
-        blocks.push({ type: 'line', content: line });
-      }
+      // Always add the line, even if it's empty
+      blocks.push({ type: 'line', content: line });
     }
   }
   if (listItems.length > 0) {
@@ -212,7 +211,7 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
     }
     if (part.type === 'line') {
       return (
-        <div key={index}>{parseInlineMarkup(part.content).map(renderPart)}</div>
+        <div key={index} className="min-h-[1.2em]">{parseInlineMarkup(part.content).map(renderPart)}</div>
       );
     }
     // Inline markup rendering (same as before)

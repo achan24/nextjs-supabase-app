@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Node, XYPosition } from 'reactflow';
-import { throttle } from 'lodash-es';
+import throttle from 'lodash-es/throttle';
 
 /**
  * Returns a mousedown handler for a resize handle + the inline style for it.
