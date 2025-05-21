@@ -1,6 +1,6 @@
 'use client';
 
-import { DragEvent, useState, useEffect } from 'react';
+import { useMemo, PointerEvent, useState, useEffect, KeyboardEvent, DragEvent } from 'react';
 import { Node, ReactFlowInstance } from 'reactflow';
 
 interface NodeToolboxProps {
@@ -61,6 +61,14 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
 
+  // Simple runtime test for touch devices - runs only in browser
+  const isTouch = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+    []
+  );
+
   // Fetch all flows when modal opens
   useEffect(() => {
     if (showLinkModal) {
@@ -81,11 +89,6 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
     }
   }, [selectedFlowId]);
 
-  const onDragStart = (event: DragEvent, nodeType: string) => {
-    event.dataTransfer.setData('application/reactflow', nodeType);
-    event.dataTransfer.effectAllowed = 'move';
-  };
-
   const addNode = (type: string) => {
     if (type === 'link') {
       setPendingNodeType(type);
@@ -95,8 +98,6 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
     if (!reactFlowInstance) return;
 
     const { x, y, zoom } = reactFlowInstance.getViewport();
-    
-    // Calculate center position
     const centerX = (-x + window.innerWidth / 2) / zoom;
     const centerY = (-y + window.innerHeight / 2) / zoom;
 
@@ -118,6 +119,35 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
 
     setNodes((nds) => [...nds, newNode]);
   };
+
+  /** Unified pointer handler for mouse/touch/pen input */
+  const handlePointerDown = 
+    (type: string) => 
+    (e: PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'mouse' && !isTouch) {
+        // For desktop mouse, we'll handle the drag start separately
+        return;
+      } else {
+        // tap/pen → just drop the node in the centre
+        addNode(type);
+      }
+    };
+
+  /** Handle drag start for desktop */
+  const onDragStart = (event: DragEvent<HTMLDivElement>, type: string) => {
+    event.dataTransfer.setData('application/reactflow', type);
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
+  /** Handle keyboard interaction for accessibility */
+  const handleKeyDown =
+    (type: string) =>
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        addNode(type);
+      }
+    };
 
   const handleCreateLinkNode = () => {
     if (!reactFlowInstance || !selectedFlowId || !selectedNodeId) return;
@@ -145,14 +175,18 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
   return (
     <div>
       <h3 className="text-lg font-semibold mb-4">Add Nodes</h3>
-      <div className="space-y-2">
+      <div className="space-y-2 select-none">
         {nodeTypes.map((nodeType) => (
           <div
             key={nodeType.type}
-            draggable
-            onDragStart={(event) => onDragStart(event, nodeType.type)}
-            onClick={() => addNode(nodeType.type)}
-            className="p-3 bg-white rounded-md shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow active:bg-gray-50"
+            draggable={!isTouch}
+            onDragStart={(e) => onDragStart(e, nodeType.type)}
+            onPointerDown={handlePointerDown(nodeType.type)}
+            onKeyDown={handleKeyDown(nodeType.type)}
+            tabIndex={0}
+            className="p-3 bg-white rounded-md shadow-sm border border-gray-200 
+                     cursor-pointer hover:shadow-md transition-shadow active:bg-gray-50
+                     focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <div className="flex items-center space-x-2">
               <span className="text-xl">{nodeType.icon}</span>
