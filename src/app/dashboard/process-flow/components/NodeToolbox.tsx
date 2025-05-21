@@ -94,12 +94,16 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
     }
     if (!reactFlowInstance) return;
 
+    // Get the ReactFlow container element
+    const reactFlowBounds = document.querySelector('.react-flow')?.getBoundingClientRect();
+    if (!reactFlowBounds) return;
+
     // Get the current viewport
     const { x, y, zoom } = reactFlowInstance.getViewport();
     
-    // Get the center of the current viewport in flow coordinates
-    const centerX = (-x + window.innerWidth / 2) / zoom;
-    const centerY = (-y + window.innerHeight / 2) / zoom;
+    // Calculate the center position based on the ReactFlow container bounds
+    const centerX = (-x + (reactFlowBounds.width / 2)) / zoom;
+    const centerY = (-y + (reactFlowBounds.height / 2)) / zoom;
 
     const newNode: Node = {
       id: `${type}-${Date.now()}`,
@@ -122,9 +126,15 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
 
   const handleCreateLinkNode = () => {
     if (!reactFlowInstance || !selectedFlowId || !selectedNodeId) return;
+
+    // Get the ReactFlow container element
+    const reactFlowBounds = document.querySelector('.react-flow')?.getBoundingClientRect();
+    if (!reactFlowBounds) return;
+
     const { x, y, zoom } = reactFlowInstance.getViewport();
-    const centerX = (-x + window.innerWidth / 2) / zoom;
-    const centerY = (-y + window.innerHeight / 2) / zoom;
+    const centerX = (-x + (reactFlowBounds.width / 2)) / zoom;
+    const centerY = (-y + (reactFlowBounds.height / 2)) / zoom;
+
     const newNode: Node = {
       id: `link-${Date.now()}`,
       type: 'link',
