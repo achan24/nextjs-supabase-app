@@ -21,6 +21,7 @@ interface TaskNodeData extends BaseNodeData {
 export const TaskNode = (props: NodeProps<TaskNodeData>) => {
   const { data, id } = props;
   const [currentTime, setCurrentTime] = useState(data.timeSpent || 0);
+  const [eta, setEta] = useState<string | null>(null);
   
   useEffect(() => {
     // Load persisted state from localStorage
@@ -41,6 +42,14 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
     let interval: NodeJS.Timeout;
     
     if (data.isRunning && data.startTime) {
+      // Calculate ETA when timer starts
+      if (data.completionHistory && data.completionHistory.length > 0) {
+        const total = data.completionHistory.reduce((sum, rec) => sum + rec.timeSpent, 0);
+        const avgTime = total / data.completionHistory.length;
+        const etaTime = new Date(data.startTime + avgTime);
+        setEta(etaTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }
+
       // Update immediately
       setCurrentTime((data.timeSpent || 0) + (Date.now() - data.startTime));
       
@@ -56,6 +65,7 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
       }));
     } else {
       setCurrentTime(data.timeSpent || 0);
+      setEta(null); // Clear ETA when timer stops
       // Clear persisted state when timer is stopped
       localStorage.removeItem(`timer_${id}`);
     }
@@ -65,7 +75,7 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
         clearInterval(interval);
       }
     };
-  }, [data.isRunning, data.startTime, data.timeSpent, id]);
+  }, [data.isRunning, data.startTime, data.timeSpent, id, data.completionHistory]);
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -88,7 +98,12 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
         <span>⏱ {formatTime(currentTime)}</span>
         <span className="flex-1 text-center text-gray-500">
           {avgTime !== null && (
-            <span>{formatTime(avgTime)}</span>
+            <div className="flex flex-col">
+              <span>Avg: {formatTime(avgTime)}</span>
+              {eta && data.isRunning && (
+                <span className="text-blue-500">ETA: {eta}</span>
+              )}
+            </div>
           )}
         </span>
         <div className="flex items-center space-x-1">
