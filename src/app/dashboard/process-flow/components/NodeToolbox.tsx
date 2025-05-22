@@ -1,12 +1,11 @@
 'use client';
 
-import { useMemo, PointerEvent, useState, useEffect, KeyboardEvent, DragEvent } from 'react';
-import { Node, ReactFlowInstance } from 'reactflow';
+import { DragEvent, useState, useEffect } from 'react';
+import { Node, ReactFlowInstance, useReactFlow } from 'reactflow';
 
 interface NodeToolboxProps {
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
   reactFlowInstance: ReactFlowInstance | null;
-  onNodeTypeSelect?: (type: string | null) => void;
 }
 
 const nodeTypes = [
@@ -54,22 +53,14 @@ const nodeTypes = [
   },
 ];
 
-export default function NodeToolbox({ setNodes, reactFlowInstance, onNodeTypeSelect }: NodeToolboxProps) {
+export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolboxProps) {
+  const { project, getViewport } = useReactFlow();
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [pendingNodeType, setPendingNodeType] = useState<string | null>(null);
   const [flows, setFlows] = useState<any[]>([]);
   const [selectedFlowId, setSelectedFlowId] = useState<string>('');
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<string | null>(null);
-
-  // Simple runtime test for touch devices - runs only in browser
-  const isTouch = useMemo(
-    () =>
-      typeof window !== 'undefined' &&
-      ('ontouchstart' in window || navigator.maxTouchPoints > 0),
-    []
-  );
 
   // Fetch all flows when modal opens
   useEffect(() => {
@@ -91,35 +82,49 @@ export default function NodeToolbox({ setNodes, reactFlowInstance, onNodeTypeSel
     }
   }, [selectedFlowId]);
 
-  const handleNodeTypeSelect = (type: string) => {
-    if (type === 'link') {
-      setPendingNodeType(type);
-      setShowLinkModal(true);
-      setSelectedType(null);
-      onNodeTypeSelect?.(null);
-      return;
-    }
-
-    // Toggle selection
-    if (selectedType === type) {
-      setSelectedType(null);
-      onNodeTypeSelect?.(null);
-    } else {
-      setSelectedType(type);
-      onNodeTypeSelect?.(type);
-    }
-  };
-
-  /** Handle drag start for desktop */
-  const onDragStart = (event: DragEvent<HTMLDivElement>, type: string) => {
-    event.dataTransfer.setData('application/reactflow', type);
+  const onDragStart = (event: DragEvent, nodeType: string) => {
+    event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleCreateLinkNode = () => {
-    if (!reactFlowInstance || !selectedFlowId || !selectedNodeId) return;
+  const addNode = (type: string) => {
+    if (type === 'link') {
+      setPendingNodeType(type);
+      setShowLinkModal(true);
+      return;
+    }
 
-    const { x, y, zoom } = reactFlowInstance.getViewport();
+    // Get the current viewport
+    const { x, y, zoom } = getViewport();
+    
+    // Calculate center position
+    const centerX = (-x + window.innerWidth / 2) / zoom;
+    const centerY = (-y + window.innerHeight / 2) / zoom;
+
+    const newNode: Node = {
+      id: `${type}-${Date.now()}`,
+      type,
+      position: { x: centerX, y: centerY },
+      data: {
+        label: `New ${type}`,
+        description: '',
+        status: 'ready',
+        ...(type === 'task' && { timeSpent: 0, isRunning: false }),
+        ...(type === 'note' && { content: '' }),
+        ...(type === 'process' && { subTasks: [], progress: 0 }),
+        ...(type === 'skill' && { level: 1, experience: '' }),
+        ...(type === 'technique' && { effectiveness: 0, steps: [] }),
+      },
+    };
+
+    console.log('Adding node:', { type, position: newNode.position, viewport: { x, y, zoom }});
+    setNodes((nds) => [...nds, newNode]);
+  };
+
+  const handleCreateLinkNode = () => {
+    if (!selectedFlowId || !selectedNodeId) return;
+
+    const { x, y, zoom } = getViewport();
     const centerX = (-x + window.innerWidth / 2) / zoom;
     const centerY = (-y + window.innerHeight / 2) / zoom;
 
@@ -142,24 +147,14 @@ export default function NodeToolbox({ setNodes, reactFlowInstance, onNodeTypeSel
   return (
     <div>
       <h3 className="text-lg font-semibold mb-4">Add Nodes</h3>
-      <div className="space-y-2 select-none">
+      <div className="space-y-2">
         {nodeTypes.map((nodeType) => (
           <div
             key={nodeType.type}
-            draggable={!isTouch}
-            onDragStart={(e) => onDragStart(e, nodeType.type)}
-            onClick={() => handleNodeTypeSelect(nodeType.type)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleNodeTypeSelect(nodeType.type);
-              }
-            }}
-            tabIndex={0}
-            className={`p-3 bg-white rounded-md shadow-sm border 
-                     cursor-pointer hover:shadow-md transition-shadow active:bg-gray-50
-                     focus:outline-none focus:ring-2 focus:ring-blue-500
-                     ${selectedType === nodeType.type ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
+            draggable
+            onDragStart={(event) => onDragStart(event, nodeType.type)}
+            onClick={() => addNode(nodeType.type)}
+            className="p-3 bg-white rounded-md shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow active:bg-gray-50"
           >
             <div className="flex items-center space-x-2">
               <span className="text-xl">{nodeType.icon}</span>

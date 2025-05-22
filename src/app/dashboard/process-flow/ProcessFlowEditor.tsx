@@ -20,6 +20,7 @@ import ReactFlow, {
   ConnectionLineType,
   ReactFlowInstance,
   useReactFlow,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -78,7 +79,6 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
   const [flows, setFlows] = useState<ProcessFlow[]>([]);
   const [rf, setRf] = useState<ReactFlowInstance | null>(null);
   const jumpTargetRef = useRef<{ flowId: string; nodeId: string } | null>(null);
-  const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -632,271 +632,266 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
     return () => clearTimeout(timer);
   }, [currentFlow, rf, nodes]);
 
-  const onPaneClick = (event: React.MouseEvent) => {
-    if (selectedNodeType && reactFlowInstance) {
-      // Convert the click position to flow coordinates
-      const position = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      const newNode: Node = {
-        id: `${selectedNodeType}-${Date.now()}`,
-        type: selectedNodeType,
-        position,
-        data: {
-          label: `New ${selectedNodeType}`,
-          description: '',
-          status: 'ready',
-          ...(selectedNodeType === 'task' && { timeSpent: 0, isRunning: false }),
-          ...(selectedNodeType === 'note' && { content: '' }),
-          ...(selectedNodeType === 'process' && { subTasks: [], progress: 0 }),
-          ...(selectedNodeType === 'skill' && { level: 1, experience: '' }),
-          ...(selectedNodeType === 'technique' && { effectiveness: 0, steps: [] }),
-        },
-      };
-
-      setNodes((nds) => [...nds, newNode]);
-      setSelectedNodeType(null);
-    }
-  };
-
-  const formatDate = (date: string | number) => {
-    return new Date(date).toLocaleDateString();
-  };
-
   return (
-    <div className="h-full w-full flex p-0 m-0" onClick={handleBackgroundClick} style={{margin:0,padding:0}}>
-      {/* Left Panel - Node Toolbox */}
-      <div
-        className={`${
-          isToolboxOpen ? 'translate-x-0' : '-translate-x-full'
-        } fixed w-64 bg-white shadow-md p-4 overflow-y-auto transition-transform duration-300 ease-in-out h-full border-r border-gray-200 flex-shrink-0 z-20`}
-        onClick={(e) => e.stopPropagation()}
-        style={{ left: 0, top: 0 }}
-      >
-        <div className="flex flex-col space-y-4">
-          <div className="flex justify-between items-center space-x-2">
-            <button
-              onClick={createNewFlow}
-              className="flex-1 px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
-              New Flow
-            </button>
-            <button
-              onClick={saveFlow}
-              disabled={isSaving}
-              className="flex-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 relative"
-            >
-              {isSaving ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Saving...
-                </span>
-              ) : (
-                'Save'
-              )}
-            </button>
-            <button
-              onClick={() => setIsToolboxOpen(false)}
-              className="ml-2 p-1 rounded hover:bg-gray-100"
-              title="Hide Sidebar"
-            >
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {renderSaveStatus()}
-
-          {/* Flow Management */}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Your Flows</h4>
-            <div className="space-y-2">
-              {flows.map((flow) => (
-                <div
-                  key={flow.id}
-                  className={`p-2 rounded-md cursor-pointer ${
-                    currentFlow?.id === flow.id
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'hover:bg-gray-100'
-                  }`}
-                  onClick={() => loadFlow(flow)}
-                >
-                  <div className="font-medium">{flow.title}</div>
-                  <div className="text-xs text-gray-500">
-                    {formatDate(flow.updated_at)}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-medium mb-2">Add Nodes</h4>
-              <NodeToolbox 
-                setNodes={setNodes} 
-                reactFlowInstance={reactFlowInstance}
-                onNodeTypeSelect={setSelectedNodeType}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Flow Area */}
-      <div className="flex-1 h-full flex flex-col min-w-0 overflow-hidden p-0 m-0" style={{margin:0,padding:0}}>
-        <div className="flex-1 relative w-full h-full p-0 m-0" style={{margin:0,padding:0}}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            onInit={onInit}
-            onPaneClick={onPaneClick}
-            nodeTypes={nodeTypes}
-            defaultEdgeOptions={defaultEdgeOptions}
-            minZoom={0.1}
-            maxZoom={10}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-            translateExtent={[
-              [-10000, -10000],
-              [10000, 10000]
-            ]}
-            proOptions={{ hideAttribution: true }}
-            snapToGrid={true}
-            snapGrid={[15, 15]}
-            isValidConnection={isValidConnection}
-            connectionMode={ConnectionMode.Strict}
-            deleteKeyCode={['Backspace', 'Delete']}
-            selectionKeyCode={['Shift']}
-            multiSelectionKeyCode={['Meta', 'Ctrl']}
-            zoomActivationKeyCode={['Meta', 'Ctrl']}
-            panActivationKeyCode={['Space']}
-            className="h-full w-full p-0 m-0"
-            fitView
-            style={{margin:0,padding:0}}
-          >
-            <Background gap={12} size={1} />
-            <Controls showInteractive={true} />
-            <MiniMap />
-          </ReactFlow>
-        </div>
-
-        {/* Bottom Panel - Timeline */}
-        <div className="h-16 bg-white border-t border-gray-200 flex-shrink-0 p-0 m-0" style={{margin:0,padding:0}}>
-          <TimelinePanel nodes={nodes} />
-        </div>
-      </div>
-
-      {/* Right Panel - Node Details */}
-      <div
-        className={`${
-          isDetailsOpen ? 'translate-x-0' : 'translate-x-full'
-        } fixed w-80 bg-white shadow-md overflow-y-auto transition-transform duration-300 ease-in-out h-full border-l border-gray-200 flex-shrink-0 z-20 right-0`}
-        onClick={(e) => e.stopPropagation()}
-        style={{ top: 0 }}
-      >
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Node Details</h3>
-            <button
-              onClick={closeDetails}
-              className="p-2 hover:bg-gray-100 rounded-full"
-              title="Hide Details"
-            >
-              <svg
-                className="w-5 h-5 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+    <ReactFlowProvider>
+      <div className="h-full w-full flex p-0 m-0" onClick={handleBackgroundClick} style={{margin:0,padding:0}}>
+        {/* Left Panel - Node Toolbox */}
+        <div
+          className={`${
+            isToolboxOpen ? 'translate-x-0' : '-translate-x-full'
+          } fixed w-64 bg-white shadow-md p-4 overflow-y-auto transition-transform duration-300 ease-in-out h-full border-r border-gray-200 flex-shrink-0 z-20`}
+          onClick={(e) => e.stopPropagation()}
+          style={{ left: 0, top: 0 }}
+        >
+          <div className="flex flex-col space-y-4">
+            <div className="flex justify-between items-center space-x-2">
+              <button
+                onClick={createNewFlow}
+                className="flex-1 px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
+                New Flow
+              </button>
+              <button
+                onClick={saveFlow}
+                disabled={isSaving}
+                className="flex-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 relative"
+              >
+                {isSaving ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </span>
+                ) : (
+                  'Save'
+                )}
+              </button>
+              <button
+                onClick={() => setIsToolboxOpen(false)}
+                className="ml-2 p-1 rounded hover:bg-gray-100"
+                title="Hide Sidebar"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {renderSaveStatus()}
+
+            {/* Flow Management */}
+            <div className="flex flex-col space-y-2">
+              <div className="flex justify-between">
+                {currentFlow && (
+                  <button
+                    onClick={() => deleteFlow(currentFlow.id)}
+                    className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+
+              {/* Flow Selector */}
+              <div className="flex flex-col space-y-2">
+                <label className="text-sm font-medium">Select Flow</label>
+                <select
+                  value={currentFlow?.id || ''}
+                  onChange={(e) => {
+                    const flow = flows.find(f => f.id === e.target.value);
+                    if (flow) loadFlow(flow);
+                  }}
+                  className="w-full px-2 py-1 border rounded"
+                >
+                  <option value="" disabled>Select a flow...</option>
+                  {flows.map(flow => (
+                    <option key={flow.id} value={flow.id}>
+                      {flow.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <input
+                  type="text"
+                  value={flowTitle}
+                  onChange={(e) => setFlowTitle(e.target.value)}
+                  placeholder="Flow Title"
+                  className="w-full px-2 py-1 border rounded"
                 />
-              </svg>
-            </button>
+              </div>
+              
+              <div>
+                <textarea
+                  value={flowDescription}
+                  onChange={(e) => setFlowDescription(e.target.value)}
+                  placeholder="Flow Description"
+                  className="w-full px-2 py-1 border rounded"
+                  rows={3}
+                />
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium mb-2">Add Nodes</h4>
+                <NodeToolbox setNodes={setNodes} reactFlowInstance={reactFlowInstance} />
+              </div>
+            </div>
           </div>
         </div>
-        <div className="p-4">
-          {selectedNode ? (
-            <NodeDetails 
-              node={selectedNode} 
-              setNodes={setNodes}
-              updateNode={updateNode}
-              onStartReview={() => setIsReviewMode(true)}
-              jumpToNode={jumpToNode}
-            />
-          ) : (
-            <div className="text-gray-500 text-center">
-              Select a node to view details
-            </div>
-          )}
+
+        {/* Main Flow Area */}
+        <div className="flex-1 h-full flex flex-col min-w-0 overflow-hidden p-0 m-0" style={{margin:0,padding:0}}>
+          <div className="flex-1 relative w-full h-full p-0 m-0" style={{margin:0,padding:0}}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={onNodeClick}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+              onInit={onInit}
+              nodeTypes={nodeTypes}
+              defaultEdgeOptions={defaultEdgeOptions}
+              minZoom={0.1}
+              maxZoom={10}
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+              translateExtent={[
+                [-10000, -10000],
+                [10000, 10000]
+              ]}
+              proOptions={{ hideAttribution: true }}
+              snapToGrid={true}
+              snapGrid={[15, 15]}
+              isValidConnection={isValidConnection}
+              connectionMode={ConnectionMode.Strict}
+              deleteKeyCode={['Backspace', 'Delete']}
+              selectionKeyCode={['Shift']}
+              multiSelectionKeyCode={['Meta', 'Ctrl']}
+              zoomActivationKeyCode={['Meta', 'Ctrl']}
+              panActivationKeyCode={['Space']}
+              className="h-full w-full p-0 m-0"
+              fitView
+              style={{margin:0,padding:0}}
+            >
+              <Background gap={12} size={1} />
+              <Controls showInteractive={true} />
+              <MiniMap />
+            </ReactFlow>
+          </div>
+
+          {/* Bottom Panel - Timeline */}
+          <div className="h-16 bg-white border-t border-gray-200 flex-shrink-0 p-0 m-0" style={{margin:0,padding:0}}>
+            <TimelinePanel nodes={nodes} />
+          </div>
         </div>
+
+        {/* Right Panel - Node Details */}
+        <div
+          className={`${
+            isDetailsOpen ? 'translate-x-0' : 'translate-x-full'
+          } fixed w-80 bg-white shadow-md overflow-y-auto transition-transform duration-300 ease-in-out h-full border-l border-gray-200 flex-shrink-0 z-20 right-0`}
+          onClick={(e) => e.stopPropagation()}
+          style={{ top: 0 }}
+        >
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-semibold">Node Details</h3>
+              <button
+                onClick={closeDetails}
+                className="p-2 hover:bg-gray-100 rounded-full"
+                title="Hide Details"
+              >
+                <svg
+                  className="w-5 h-5 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div className="p-4">
+            {selectedNode ? (
+              <NodeDetails 
+                node={selectedNode} 
+                setNodes={setNodes}
+                updateNode={updateNode}
+                onStartReview={() => setIsReviewMode(true)}
+                jumpToNode={jumpToNode}
+              />
+            ) : (
+              <div className="text-gray-500 text-center">
+                Select a node to view details
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Sidebar Toggle Button */}
+        <button
+          onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+          className="fixed top-4 right-4 z-30 p-2 bg-white rounded-md shadow-md"
+          style={{ display: isDetailsOpen ? 'none' : 'block' }}
+          title="Show Details"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </button>
+
+        {/* Flashcard Review Modal */}
+        {selectedNode && (
+          <FlashcardReview
+            node={selectedNode}
+            updateNode={updateNode}
+            isOpen={isReviewMode}
+            onClose={() => setIsReviewMode(false)}
+          />
+        )}
+
+        {/* Mobile Menu Buttons */}
+        <button
+          onClick={() => setIsToolboxOpen(!isToolboxOpen)}
+          className="fixed top-4 left-4 z-30 p-2 bg-white rounded-md shadow-md"
+          style={{ display: isToolboxOpen ? 'none' : 'block' }}
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+        </button>
       </div>
-
-      {/* Right Sidebar Toggle Button */}
-      <button
-        onClick={() => setIsDetailsOpen(!isDetailsOpen)}
-        className="fixed top-4 right-4 z-30 p-2 bg-white rounded-md shadow-md"
-        style={{ display: isDetailsOpen ? 'none' : 'block' }}
-        title="Show Details"
-      >
-        <svg
-          className="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      </button>
-
-      {/* Flashcard Review Modal */}
-      {selectedNode && (
-        <FlashcardReview
-          node={selectedNode}
-          updateNode={updateNode}
-          isOpen={isReviewMode}
-          onClose={() => setIsReviewMode(false)}
-        />
-      )}
-
-      {/* Mobile Menu Buttons */}
-      <button
-        onClick={() => setIsToolboxOpen(!isToolboxOpen)}
-        className="fixed top-4 left-4 z-30 p-2 bg-white rounded-md shadow-md"
-        style={{ display: isToolboxOpen ? 'none' : 'block' }}
-      >
-        <svg
-          className="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 6h16M4 12h16M4 18h16"
-          />
-        </svg>
-      </button>
-    </div>
+    </ReactFlowProvider>
   );
 } 
