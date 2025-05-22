@@ -78,6 +78,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
   const [flows, setFlows] = useState<ProcessFlow[]>([]);
   const [rf, setRf] = useState<ReactFlowInstance | null>(null);
   const jumpTargetRef = useRef<{ flowId: string; nodeId: string } | null>(null);
+  const [selectedNodeType, setSelectedNodeType] = useState<string | null>(null);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -631,6 +632,39 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
     return () => clearTimeout(timer);
   }, [currentFlow, rf, nodes]);
 
+  const onPaneClick = (event: React.MouseEvent) => {
+    if (selectedNodeType && reactFlowInstance) {
+      // Convert the click position to flow coordinates
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const newNode: Node = {
+        id: `${selectedNodeType}-${Date.now()}`,
+        type: selectedNodeType,
+        position,
+        data: {
+          label: `New ${selectedNodeType}`,
+          description: '',
+          status: 'ready',
+          ...(selectedNodeType === 'task' && { timeSpent: 0, isRunning: false }),
+          ...(selectedNodeType === 'note' && { content: '' }),
+          ...(selectedNodeType === 'process' && { subTasks: [], progress: 0 }),
+          ...(selectedNodeType === 'skill' && { level: 1, experience: '' }),
+          ...(selectedNodeType === 'technique' && { effectiveness: 0, steps: [] }),
+        },
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      setSelectedNodeType(null);
+    }
+  };
+
+  const formatDate = (date: string | number) => {
+    return new Date(date).toLocaleDateString();
+  };
+
   return (
     <div className="h-full w-full flex p-0 m-0" onClick={handleBackgroundClick} style={{margin:0,padding:0}}>
       {/* Left Panel - Node Toolbox */}
@@ -680,61 +714,34 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
           {renderSaveStatus()}
 
           {/* Flow Management */}
-          <div className="flex flex-col space-y-2">
-            <div className="flex justify-between">
-              {currentFlow && (
-                <button
-                  onClick={() => deleteFlow(currentFlow.id)}
-                  className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+          <div>
+            <h4 className="text-sm font-medium mb-2">Your Flows</h4>
+            <div className="space-y-2">
+              {flows.map((flow) => (
+                <div
+                  key={flow.id}
+                  className={`p-2 rounded-md cursor-pointer ${
+                    currentFlow?.id === flow.id
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'hover:bg-gray-100'
+                  }`}
+                  onClick={() => loadFlow(flow)}
                 >
-                  Delete
-                </button>
-              )}
-            </div>
-
-            {/* Flow Selector */}
-            <div className="flex flex-col space-y-2">
-              <label className="text-sm font-medium">Select Flow</label>
-              <select
-                value={currentFlow?.id || ''}
-                onChange={(e) => {
-                  const flow = flows.find(f => f.id === e.target.value);
-                  if (flow) loadFlow(flow);
-                }}
-                className="w-full px-2 py-1 border rounded"
-              >
-                <option value="" disabled>Select a flow...</option>
-                {flows.map(flow => (
-                  <option key={flow.id} value={flow.id}>
-                    {flow.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <input
-                type="text"
-                value={flowTitle}
-                onChange={(e) => setFlowTitle(e.target.value)}
-                placeholder="Flow Title"
-                className="w-full px-2 py-1 border rounded"
-              />
-            </div>
-            
-            <div>
-              <textarea
-                value={flowDescription}
-                onChange={(e) => setFlowDescription(e.target.value)}
-                placeholder="Flow Description"
-                className="w-full px-2 py-1 border rounded"
-                rows={3}
-              />
+                  <div className="font-medium">{flow.title}</div>
+                  <div className="text-xs text-gray-500">
+                    {formatDate(flow.updated_at)}
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="border-t pt-4">
               <h4 className="text-sm font-medium mb-2">Add Nodes</h4>
-              <NodeToolbox setNodes={setNodes} reactFlowInstance={reactFlowInstance} />
+              <NodeToolbox 
+                setNodes={setNodes} 
+                reactFlowInstance={reactFlowInstance}
+                onNodeTypeSelect={setSelectedNodeType}
+              />
             </div>
           </div>
         </div>
@@ -753,6 +760,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
             onDragOver={onDragOver}
             onDrop={onDrop}
             onInit={onInit}
+            onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
             minZoom={0.1}

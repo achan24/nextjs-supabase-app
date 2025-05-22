@@ -6,6 +6,7 @@ import { Node, ReactFlowInstance } from 'reactflow';
 interface NodeToolboxProps {
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
   reactFlowInstance: ReactFlowInstance | null;
+  onNodeTypeSelect?: (type: string | null) => void;
 }
 
 const nodeTypes = [
@@ -53,13 +54,14 @@ const nodeTypes = [
   },
 ];
 
-export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolboxProps) {
+export default function NodeToolbox({ setNodes, reactFlowInstance, onNodeTypeSelect }: NodeToolboxProps) {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [pendingNodeType, setPendingNodeType] = useState<string | null>(null);
   const [flows, setFlows] = useState<any[]>([]);
   const [selectedFlowId, setSelectedFlowId] = useState<string>('');
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<string | null>(null);
 
   // Simple runtime test for touch devices - runs only in browser
   const isTouch = useMemo(
@@ -89,65 +91,30 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
     }
   }, [selectedFlowId]);
 
-  const addNode = (type: string) => {
+  const handleNodeTypeSelect = (type: string) => {
     if (type === 'link') {
       setPendingNodeType(type);
       setShowLinkModal(true);
+      setSelectedType(null);
+      onNodeTypeSelect?.(null);
       return;
     }
-    if (!reactFlowInstance) return;
 
-    const { x, y, zoom } = reactFlowInstance.getViewport();
-    const centerX = (-x + window.innerWidth / 2) / zoom;
-    const centerY = (-y + window.innerHeight / 2) / zoom;
-
-    const newNode: Node = {
-      id: `${type}-${Date.now()}`,
-      type,
-      position: { x: centerX, y: centerY },
-      data: {
-        label: `New ${type}`,
-        description: '',
-        status: 'ready',
-        ...(type === 'task' && { timeSpent: 0, isRunning: false }),
-        ...(type === 'note' && { content: '' }),
-        ...(type === 'process' && { subTasks: [], progress: 0 }),
-        ...(type === 'skill' && { level: 1, experience: '' }),
-        ...(type === 'technique' && { effectiveness: 0, steps: [] }),
-      },
-    };
-
-    setNodes((nds) => [...nds, newNode]);
+    // Toggle selection
+    if (selectedType === type) {
+      setSelectedType(null);
+      onNodeTypeSelect?.(null);
+    } else {
+      setSelectedType(type);
+      onNodeTypeSelect?.(type);
+    }
   };
-
-  /** Unified pointer handler for mouse/touch/pen input */
-  const handlePointerDown = 
-    (type: string) => 
-    (e: PointerEvent<HTMLDivElement>) => {
-      if (e.pointerType === 'mouse' && !isTouch) {
-        // For desktop mouse, we'll handle the drag start separately
-        return;
-      } else {
-        // tap/pen → just drop the node in the centre
-        addNode(type);
-      }
-    };
 
   /** Handle drag start for desktop */
   const onDragStart = (event: DragEvent<HTMLDivElement>, type: string) => {
     event.dataTransfer.setData('application/reactflow', type);
     event.dataTransfer.effectAllowed = 'move';
   };
-
-  /** Handle keyboard interaction for accessibility */
-  const handleKeyDown =
-    (type: string) =>
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        addNode(type);
-      }
-    };
 
   const handleCreateLinkNode = () => {
     if (!reactFlowInstance || !selectedFlowId || !selectedNodeId) return;
@@ -181,12 +148,18 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
             key={nodeType.type}
             draggable={!isTouch}
             onDragStart={(e) => onDragStart(e, nodeType.type)}
-            onPointerDown={handlePointerDown(nodeType.type)}
-            onKeyDown={handleKeyDown(nodeType.type)}
+            onClick={() => handleNodeTypeSelect(nodeType.type)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleNodeTypeSelect(nodeType.type);
+              }
+            }}
             tabIndex={0}
-            className="p-3 bg-white rounded-md shadow-sm border border-gray-200 
+            className={`p-3 bg-white rounded-md shadow-sm border 
                      cursor-pointer hover:shadow-md transition-shadow active:bg-gray-50
-                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     focus:outline-none focus:ring-2 focus:ring-blue-500
+                     ${selectedType === nodeType.type ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
           >
             <div className="flex items-center space-x-2">
               <span className="text-xl">{nodeType.icon}</span>
