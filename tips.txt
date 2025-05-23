@@ -1,0 +1,47 @@
+# Critical Development Tips
+
+## When Asked to Copy Code "Exactly"
+
+### The Problem
+When asked to copy code "exactly like X", there's a tendency to:
+1. Think we understand the "essence" of what needs to be copied
+2. Use what seems like equivalent alternatives (e.g., different client libraries that serve similar purposes)
+3. Miss crucial implementation details that make the original code work
+
+### Real Example: Supabase Client Issue
+- Original working code in ProcessFlowEditor used:
+  ```typescript
+  import { createBrowserClient } from '@supabase/ssr'
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  ```
+
+- What we incorrectly used instead:
+  ```typescript
+  import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+  const supabase = createClientComponentClient()
+  ```
+
+- Result: Cookie parsing errors and authentication issues
+
+### The Lesson
+1. When asked to copy something EXACTLY, do exactly that:
+   - Use the same imports
+   - Use the same function calls
+   - Use the same client libraries
+   - Use the same implementation details
+   
+2. Don't assume different approaches are equivalent:
+   - Different client libraries may handle auth differently
+   - Different implementations may have different cookie handling
+   - Small differences can cause major issues
+
+3. If something works in one place and not another:
+   - First step should be to make them IDENTICAL
+   - Only deviate from the working implementation after it's working
+
+### Remember
+"Exactly" means EXACTLY. Not "similarly", not "equivalently", not "essentially the same".
+If it works somewhere else in the codebase, copy it character by character first, then understand why it works later. 

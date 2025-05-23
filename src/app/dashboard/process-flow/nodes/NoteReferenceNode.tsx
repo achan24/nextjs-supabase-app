@@ -53,7 +53,7 @@ const NoteReferenceNode = ({
         <div className="flex flex-col">
           <div className="text-sm font-bold">{data.label || data.note?.title || 'Select a Note'}</div>
           {data.note && (
-            <div className="text-xs text-gray-600 whitespace-pre-wrap line-clamp-3">
+            <div className="text-xs text-gray-600 whitespace-pre-wrap">
               {data.note.content}
             </div>
           )}

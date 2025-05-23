@@ -82,6 +82,20 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
   const [rf, setRf] = useState<ReactFlowInstance | null>(null);
   const jumpTargetRef = useRef<{ flowId: string; nodeId: string } | null>(null);
 
+  // Handle URL parameters
+  useEffect(() => {
+    const handleUrlParams = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const flowId = params.get('flowId');
+      const nodeId = params.get('nodeId');
+      
+      if (flowId && nodeId) {
+        jumpToNode(flowId, nodeId);
+      }
+    };
+    handleUrlParams();
+  }, []);
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -329,7 +343,8 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
   useEffect(() => {
     const loadFlows = async () => {
       try {
-        console.log('Loading flows for user:', user.id);
+        console.log('Loading flows - User object:', user);
+        console.log('Loading flows - User ID:', user.id);
         const { data: flows, error } = await supabase
           .from('process_flows')
           .select('*')
@@ -342,9 +357,32 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
         }
         
         console.log('Loaded flows:', flows);
+        console.log('Number of flows:', flows?.length);
         setFlows(flows);
+
+        // Check URL parameters first
+        const params = new URLSearchParams(window.location.search);
+        const flowId = params.get('flowId');
+        const nodeId = params.get('nodeId');
+        
+        if (flowId && nodeId) {
+          console.log('Found URL parameters, loading specific flow:', flowId);
+          const targetFlow = flows.find(f => f.id === flowId);
+          if (targetFlow) {
+            setCurrentFlow(targetFlow);
+            setNodes(targetFlow.nodes);
+            setEdges(targetFlow.edges);
+            setFlowTitle(targetFlow.title);
+            setFlowDescription(targetFlow.description || '');
+            jumpToNode(flowId, nodeId);
+            return;
+          }
+        }
+
+        // If no URL parameters or flow not found, load latest flow
         if (flows.length > 0) {
           const latestFlow = flows[0];
+          console.log('Setting latest flow:', latestFlow);
           setCurrentFlow(latestFlow);
           setNodes(latestFlow.nodes);
           setEdges(latestFlow.edges);
@@ -356,7 +394,12 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
       }
     };
 
-    loadFlows();
+    if (user?.id) {
+      console.log('User ID present, loading flows...');
+      loadFlows();
+    } else {
+      console.error('No user ID available');
+    }
   }, [supabase, user.id]);
 
   const createNewFlow = () => {
