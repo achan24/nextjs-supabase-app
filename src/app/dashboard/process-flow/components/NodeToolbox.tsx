@@ -148,23 +148,64 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
     <div>
       <h3 className="text-lg font-semibold mb-4">Add Nodes</h3>
       <div className="space-y-2">
-        {nodeTypes.map((nodeType) => (
+        <div className="grid grid-cols-2 gap-2">
           <div
-            key={nodeType.type}
+            className="p-3 bg-blue-50 border-2 border-blue-200 rounded-md cursor-move hover:bg-blue-100"
+            onDragStart={(event) => onDragStart(event, 'task')}
             draggable
-            onDragStart={(event) => onDragStart(event, nodeType.type)}
-            onClick={() => addNode(nodeType.type)}
-            className="p-3 bg-white rounded-md shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow active:bg-gray-50"
           >
-            <div className="flex items-center space-x-2">
-              <span className="text-xl">{nodeType.icon}</span>
-              <div>
-                <div className="font-medium">{nodeType.label}</div>
-                <div className="text-xs text-gray-500">{nodeType.description}</div>
-              </div>
-            </div>
+            🔨 Task
           </div>
-        ))}
+          <div
+            className="p-3 bg-yellow-50 border-2 border-yellow-200 rounded-md cursor-move hover:bg-yellow-100"
+            onDragStart={(event) => onDragStart(event, 'note')}
+            draggable
+          >
+            📋 Note
+          </div>
+          <div
+            className="p-3 bg-purple-50 border-2 border-purple-200 rounded-md cursor-move hover:bg-purple-100"
+            onDragStart={(event) => onDragStart(event, 'process')}
+            draggable
+          >
+            🔄 Process
+          </div>
+          <div
+            className="p-3 bg-green-50 border-2 border-green-200 rounded-md cursor-move hover:bg-green-100"
+            onDragStart={(event) => onDragStart(event, 'skill')}
+            draggable
+          >
+            🎯 Skill
+          </div>
+          <div
+            className="p-3 bg-orange-50 border-2 border-orange-200 rounded-md cursor-move hover:bg-orange-100"
+            onDragStart={(event) => onDragStart(event, 'technique')}
+            draggable
+          >
+            ⚡ Technique
+          </div>
+          <div
+            className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-md cursor-move hover:bg-indigo-100"
+            onDragStart={(event) => onDragStart(event, 'analytics')}
+            draggable
+          >
+            📊 Analytics
+          </div>
+          <div
+            className="p-3 bg-blue-50 border-2 border-blue-200 rounded-md cursor-move hover:bg-blue-100"
+            onDragStart={(event) => onDragStart(event, 'link')}
+            draggable
+          >
+            🔗 Link
+          </div>
+          <div
+            className="p-3 bg-purple-50 border-2 border-purple-200 rounded-md cursor-move hover:bg-purple-100"
+            onDragStart={(event) => onDragStart(event, 'noteRef')}
+            draggable
+          >
+            📝 Note Reference
+          </div>
+        </div>
       </div>
       {showLinkModal && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">

@@ -35,6 +35,7 @@ import { TechniqueNode } from './nodes/TechniqueNode';
 import { AnalyticsNode } from './nodes/AnalyticsNode';
 import FlashcardReview from './components/FlashcardReview';
 import LinkNode from './nodes/LinkNode';
+import NoteReferenceNode from './nodes/NoteReferenceNode';
 
 interface ProcessFlow {
   id: string;
@@ -55,6 +56,7 @@ const nodeTypes = {
   technique: TechniqueNode,
   analytics: AnalyticsNode,
   link: LinkNode,
+  noteRef: NoteReferenceNode,
 };
 
 interface ProcessFlowEditorProps {

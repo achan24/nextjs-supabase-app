@@ -31,6 +31,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [tagInput, setTagInput] = useState('');
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [notes, setNotes] = useState<any[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // State for link node editing
   const HARDCODED_USER_ID = '875d44ba-8794-4d12-ba86-48e5e90dc796';
@@ -192,6 +193,40 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
       document.removeEventListener('click', handleClickOutside);
     };
   }, []);
+
+  // Fetch notes when editing a note reference node
+  useEffect(() => {
+    if (node?.type === 'noteRef') {
+      const fetchNotes = async () => {
+        const { data, error } = await supabase
+          .from('notes')
+          .select('id, title, content, created_at')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching notes:', error);
+          return;
+        }
+
+        setNotes(data || []);
+      };
+
+      fetchNotes();
+    }
+  }, [node?.type]);
+
+  const handleNoteSelect = async (noteId: string) => {
+    if (!node) return;
+    
+    const selectedNote = notes.find(n => n.id === noteId);
+    if (!selectedNote) return;
+
+    updateNode(node.id, {
+      noteId,
+      note: selectedNote,
+      label: selectedNote.title
+    });
+  };
 
   if (!node) {
     return (
@@ -713,6 +748,24 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
             </div>
           )}
         </>
+      )}
+
+      {node.type === 'noteRef' && (
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Note</label>
+          <select
+            value={node.data.noteId || ''}
+            onChange={(e) => handleNoteSelect(e.target.value)}
+            className="w-full px-2 py-1 border rounded text-sm"
+          >
+            <option value="">-- Select a note --</option>
+            {notes.map((note) => (
+              <option key={note.id} value={note.id}>
+                {note.title}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
     </div>
   );
