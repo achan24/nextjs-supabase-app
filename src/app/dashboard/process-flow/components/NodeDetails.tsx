@@ -18,9 +18,19 @@ interface NodeDetailsProps {
   updateNode: (nodeId: string, data: any) => void;
   onStartReview: () => void;
   jumpToNode?: (flowId: string, nodeId: string) => void;
+  currentFlow?: any;
+  nodes: Node[];
 }
 
-export default function NodeDetails({ node, setNodes, updateNode, onStartReview, jumpToNode }: NodeDetailsProps) {
+export default function NodeDetails({ 
+  node, 
+  setNodes, 
+  updateNode, 
+  onStartReview, 
+  jumpToNode,
+  currentFlow,
+  nodes 
+}: NodeDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<'desc' | 'asc'>('desc');
   const [newNote, setNewNote] = useState('');
@@ -28,6 +38,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [description, setDescription] = useState(node?.data?.description || '');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
+  const [newTag, setNewTag] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // State for link node editing
   const HARDCODED_USER_ID = '875d44ba-8794-4d12-ba86-48e5e90dc796';
@@ -122,6 +133,53 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
       });
     }
   }, [selectedFlowId, selectedNodeId]);
+
+  const handleAddTag = async (e: React.KeyboardEvent) => {
+    if (!node || e.key !== 'Enter' || !newTag.trim()) return;
+    
+    e.preventDefault();
+    const tag = newTag.trim().toLowerCase().replace(/\s+/g, '-');
+    const currentTags = node.data.tags || [];
+    if (!currentTags.includes(tag)) {
+      // Update the node with the new tag
+      const updatedData = {
+        ...node.data,
+        tags: [...currentTags, tag]
+      };
+      
+      // Update local state
+      updateNode(node.id, updatedData);
+      
+      // If we have a current flow, save it to the database
+      if (currentFlow?.id) {
+        try {
+          const { error } = await supabase
+            .from('process_flows')
+            .update({ 
+              nodes: nodes.map(n => n.id === node.id ? { ...n, data: updatedData } : n)
+            })
+            .eq('id', currentFlow.id);
+          
+          if (error) {
+            console.error('Error saving tag:', error);
+            // Optionally revert the change if save failed
+            updateNode(node.id, { tags: currentTags });
+          }
+        } catch (error) {
+          console.error('Error saving tag:', error);
+        }
+      }
+    }
+    setNewTag('');
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    if (!node) return;
+    const currentTags = node.data.tags || [];
+    updateNode(node.id, {
+      tags: currentTags.filter((tag: string) => tag !== tagToRemove)
+    });
+  };
 
   if (!node) {
     return (
@@ -291,74 +349,83 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
         </div>
       )}
       <div>
-        <label className="block text-sm font-medium text-gray-700">Label</label>
-        {isEditing ? (
-          <input
-            type="text"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            onKeyDown={(e) => handleKeyDown(e, 'label')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base p-2"
-            autoFocus
-          />
-        ) : (
-          <div 
-            className="mt-1 text-sm cursor-pointer hover:text-blue-600"
-            onClick={() => setIsEditing(true)}
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-lg font-semibold">Node Details</h3>
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="text-sm text-blue-600 hover:text-blue-800"
           >
-            {node.data.label || 'Untitled'}
-          </div>
-        )}
-      </div>
-      <div>
-        <div className="flex justify-between items-center">
-          <label className="block text-sm font-medium text-gray-700">Description</label>
-          <div className="flex space-x-2">
-            {node.data.description && (
-              <button
-                onClick={() => updateNode(node.id, { isTestMode: !node.data.isTestMode })}
-                className={`px-2 py-1 text-xs rounded ${
-                  node.data.isTestMode ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                }`}
-              >
-                {node.data.isTestMode ? 'Test Mode' : 'Reveal Mode'}
-              </button>
-            )}
-            {hasClozes && (
-              <button
-                onClick={onStartReview}
-                className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
-              >
-                Review Flashcards
-              </button>
-            )}
-          </div>
+            {isEditing ? 'Cancel' : 'Edit'}
+          </button>
         </div>
+
         {isEditing ? (
-          <textarea
-            ref={textareaRef}
-            value={description}
-            onChange={handleTextareaChange}
-            onKeyDown={(e) => handleKeyDown(e, 'description')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base p-2 min-h-[100px] overflow-hidden resize-none"
-            placeholder="Use {{...}} to create cloze deletions"
-          />
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, 'label')}
+              className="w-full px-2 py-1 border rounded"
+              placeholder="Node label"
+            />
+            <textarea
+              ref={textareaRef}
+              value={description}
+              onChange={handleTextareaChange}
+              onKeyDown={(e) => handleKeyDown(e, 'description')}
+              className="w-full px-2 py-1 border rounded min-h-[100px]"
+              placeholder="Node description"
+            />
+            <button
+              onClick={handleSave}
+              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Save
+            </button>
+          </div>
         ) : (
-          <div 
-            className="mt-1 text-sm text-black cursor-pointer hover:text-blue-600 whitespace-pre-wrap"
-            onClick={() => setIsEditing(true)}
-          >
-            {node.data.description ? (
-              <ClozeText 
-                text={node.data.description} 
-                isTestMode={!!node.data.isTestMode}
-                onReveal={(word: string) => console.log(`Revealed word: ${word}`)}
-              />
-            ) : (
-              'No description'
-            )}
+          <div>
+            <h4 className="font-medium">{label}</h4>
+            <div className="mt-1 text-gray-600 whitespace-pre-wrap">
+              <ClozeText text={description} isTestMode={false} />
+            </div>
           </div>
         )}
+
+        {/* Tags Section */}
+        <div className="mt-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Tags</h4>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {(node?.data?.tags || []).map((tag: string) => (
+              <span
+                key={tag}
+                className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center"
+              >
+                #{tag}
+                <button
+                  onClick={() => handleRemoveTag(tag)}
+                  className="ml-1 text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center">
+            <input
+              type="text"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={handleAddTag}
+              placeholder="Add a tag..."
+              className="w-full px-2 py-1 text-sm border rounded-md"
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Press Enter to add a tag
+          </p>
+        </div>
       </div>
       {isEditing && (
         <div className="flex justify-end space-x-2">

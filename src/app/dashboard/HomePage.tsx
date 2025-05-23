@@ -155,14 +155,16 @@ export default function HomePage({ user }: { user: User }) {
             <div className="text-gray-400 font-medium">Coming Soon</div>
           </div>
 
-          {/* Insights Card (Placeholder) */}
-          <div className="bg-white p-6 rounded-lg shadow opacity-75">
-            <h3 className="text-xl font-semibold mb-2">Insights</h3>
-            <p className="text-gray-600 mb-4">
-              Get personalized insights about your productivity patterns and progress.
-            </p>
-            <div className="text-gray-400 font-medium">Coming Soon</div>
-          </div>
+          {/* Insights Card */}
+          <Link href="/dashboard/insights" className="block">
+            <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <h3 className="text-xl font-semibold mb-2">Insights</h3>
+              <p className="text-gray-600 mb-4">
+                Get personalized insights about your productivity patterns and progress.
+              </p>
+              <div className="text-blue-600 font-medium">View Insights →</div>
+            </div>
+          </Link>
 
           {/* Settings Card (Placeholder) */}
           <div className="bg-white p-6 rounded-lg shadow opacity-75">

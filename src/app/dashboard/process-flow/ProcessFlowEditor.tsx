@@ -830,6 +830,8 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
                 updateNode={updateNode}
                 onStartReview={() => setIsReviewMode(true)}
                 jumpToNode={jumpToNode}
+                currentFlow={currentFlow}
+                nodes={nodes}
               />
             ) : (
               <div className="text-gray-500 text-center">

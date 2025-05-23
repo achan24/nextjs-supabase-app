@@ -21,6 +21,7 @@ export interface BaseNodeData {
   status?: 'ready' | 'active' | 'completed';
   isTestMode?: boolean;
   clozeStats?: Record<string, ClozeStats>;
+  tags?: string[];
 }
 
 const nodeTypeStyles = {
@@ -108,6 +109,18 @@ const BaseNode = ({
                 text={data.description} 
                 isTestMode={!!data.isTestMode}
               />
+            </div>
+          )}
+          {data.tags && data.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {data.tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs"
+                >
+                  #{tag}
+                </span>
+              ))}
             </div>
           )}
         </div>
