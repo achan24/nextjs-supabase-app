@@ -39,6 +39,8 @@ export default function NodeDetails({
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const [newTag, setNewTag] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // State for link node editing
   const HARDCODED_USER_ID = '875d44ba-8794-4d12-ba86-48e5e90dc796';
@@ -47,6 +49,8 @@ export default function NodeDetails({
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
   const supabase = createClient();
+  // Get unique tags from all nodes
+  const [allMapTags, setAllMapTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (node) {
@@ -134,23 +138,75 @@ export default function NodeDetails({
     }
   }, [selectedFlowId, selectedNodeId]);
 
-  const handleAddTag = async (e: React.KeyboardEvent) => {
-    if (!node || e.key !== 'Enter' || !newTag.trim()) return;
+  // Fetch tags from all maps when component mounts
+  useEffect(() => {
+    const fetchAllTags = async () => {
+      const { data: flows, error } = await supabase
+        .from('process_flows')
+        .select('nodes');
+      
+      if (error) {
+        console.error('Error fetching tags:', error);
+        return;
+      }
+
+      const allTags = new Set<string>();
+      flows?.forEach(flow => {
+        if (Array.isArray(flow.nodes)) {
+          flow.nodes.forEach((node: any) => {
+            if (Array.isArray(node.data?.tags)) {
+              node.data.tags.forEach((tag: string) => allTags.add(tag));
+            }
+          });
+        }
+      });
+      
+      setAllMapTags(Array.from(allTags));
+    };
+
+    fetchAllTags();
+  }, []);
+
+  // Update suggestions when typing
+  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toLowerCase();
+    setNewTag(value);
     
-    e.preventDefault();
-    const tag = newTag.trim().toLowerCase().replace(/\s+/g, '-');
-    const currentTags = node.data.tags || [];
+    if (value.trim()) {
+      const suggestions = allMapTags.filter(tag => 
+        tag.toLowerCase().includes(value) && 
+        !node?.data.tags?.includes(tag)
+      );
+      setTagSuggestions(suggestions);
+      setShowSuggestions(suggestions.length > 0);
+    } else {
+      setTagSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Handle suggestion click
+  const handleSuggestionClick = (tag: string) => {
+    handleAddTag(tag);
+    setShowSuggestions(false);
+  };
+
+  // Modified handleAddTag to work with both keyboard and click events
+  const handleAddTag = async (tagToAdd?: string) => {
+    if (!node) return;
+    
+    const tag = (tagToAdd || newTag).trim().toLowerCase().replace(/\s+/g, '-');
+    if (!tag) return;
+    
+    const currentTags: string[] = node.data.tags || [];
     if (!currentTags.includes(tag)) {
-      // Update the node with the new tag
       const updatedData = {
         ...node.data,
         tags: [...currentTags, tag]
       };
       
-      // Update local state
       updateNode(node.id, updatedData);
       
-      // If we have a current flow, save it to the database
       if (currentFlow?.id) {
         try {
           const { error } = await supabase
@@ -162,7 +218,6 @@ export default function NodeDetails({
           
           if (error) {
             console.error('Error saving tag:', error);
-            // Optionally revert the change if save failed
             updateNode(node.id, { tags: currentTags });
           }
         } catch (error) {
@@ -171,6 +226,16 @@ export default function NodeDetails({
       }
     }
     setNewTag('');
+    setShowSuggestions(false);
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddTag();
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
@@ -412,15 +477,30 @@ export default function NodeDetails({
               </span>
             ))}
           </div>
-          <div className="flex items-center">
+          <div className="relative">
             <input
               type="text"
               value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={handleAddTag}
+              onChange={handleTagInputChange}
+              onKeyDown={handleTagKeyDown}
+              onFocus={() => setShowSuggestions(tagSuggestions.length > 0)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               placeholder="Add a tag..."
               className="w-full px-2 py-1 text-sm border rounded-md"
             />
+            {showSuggestions && (
+              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg">
+                {tagSuggestions.map((tag) => (
+                  <div
+                    key={tag}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                    onClick={() => handleSuggestionClick(tag)}
+                  >
+                    #{tag}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <p className="text-xs text-gray-500 mt-1">
             Press Enter to add a tag
