@@ -114,10 +114,7 @@ const BaseNode = ({
           {data.tags && data.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
               {data.tags.map((tag, index) => (
-                <span
-                  key={index}
-                  className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs"
-                >
+                <span key={index} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
                   #{tag}
                 </span>
               ))}

@@ -1,39 +1,36 @@
-import webpush from 'web-push';
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import webPush from 'web-push';
 
-// VAPID keys should be generated only once and stored securely
-const vapidKeys = {
-  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  privateKey: process.env.VAPID_PRIVATE_KEY!,
-};
-
-webpush.setVapidDetails(
+// Configure web-push with your VAPID keys
+webPush.setVapidDetails(
   'mailto:your-email@example.com', // Replace with your email
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
 );
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
+    const supabase = createRouteHandlerClient({ cookies });
     
     // Verify user is authenticated
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get the push subscription object
     const subscription = await request.json();
 
-    // Store the subscription in your database
+    // Store the subscription in Supabase
     const { error: dbError } = await supabase
       .from('push_subscriptions')
       .upsert({
-        user_id: session.user.id,
+        user_id: user.id,
         subscription: subscription,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
 
     if (dbError) {
@@ -43,21 +40,22 @@ export async function POST(request: Request) {
 
     // Send a test notification
     try {
-      await webpush.sendNotification(
+      await webPush.sendNotification(
         subscription,
         JSON.stringify({
-          title: 'Test Notification',
-          body: 'Notifications are working!',
+          title: 'Push Notifications Enabled',
+          body: 'You will now receive notifications for your tasks and reminders!',
+          url: '/dashboard'
         })
       );
-    } catch (error) {
-      console.error('Error sending test notification:', error);
-      // Don't return error here as the subscription was still stored successfully
+    } catch (pushError) {
+      console.error('Error sending test notification:', pushError);
+      // Don't fail the subscription if the test notification fails
     }
 
-    return NextResponse.json({ message: 'Subscription added successfully' });
+    return NextResponse.json({ message: 'Subscription stored successfully' });
   } catch (error) {
     console.error('Error in push subscription handler:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

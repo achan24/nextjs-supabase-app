@@ -18,19 +18,9 @@ interface NodeDetailsProps {
   updateNode: (nodeId: string, data: any) => void;
   onStartReview: () => void;
   jumpToNode?: (flowId: string, nodeId: string) => void;
-  currentFlow?: any;
-  nodes: Node[];
 }
 
-export default function NodeDetails({ 
-  node, 
-  setNodes, 
-  updateNode, 
-  onStartReview, 
-  jumpToNode,
-  currentFlow,
-  nodes 
-}: NodeDetailsProps) {
+export default function NodeDetails({ node, setNodes, updateNode, onStartReview, jumpToNode }: NodeDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<'desc' | 'asc'>('desc');
   const [newNote, setNewNote] = useState('');
@@ -38,7 +28,7 @@ export default function NodeDetails({
   const [description, setDescription] = useState(node?.data?.description || '');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
-  const [newTag, setNewTag] = useState('');
+  const [tagInput, setTagInput] = useState('');
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -49,8 +39,6 @@ export default function NodeDetails({
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
   const supabase = createClient();
-  // Get unique tags from all nodes
-  const [allMapTags, setAllMapTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (node) {
@@ -138,113 +126,72 @@ export default function NodeDetails({
     }
   }, [selectedFlowId, selectedNodeId]);
 
-  // Fetch tags from all maps when component mounts
-  useEffect(() => {
-    const fetchAllTags = async () => {
+  // Fetch all unique tags from all flows
+  const fetchAllTags = async () => {
+    try {
       const { data: flows, error } = await supabase
         .from('process_flows')
         .select('nodes');
       
-      if (error) {
-        console.error('Error fetching tags:', error);
-        return;
-      }
+      if (error) throw error;
 
-      const allTags = new Set<string>();
+      const uniqueTags = new Set<string>();
       flows?.forEach(flow => {
-        if (Array.isArray(flow.nodes)) {
-          flow.nodes.forEach((node: any) => {
-            if (Array.isArray(node.data?.tags)) {
-              node.data.tags.forEach((tag: string) => allTags.add(tag));
-            }
+        flow.nodes?.forEach((node: any) => {
+          node.data?.tags?.forEach((tag: string) => {
+            uniqueTags.add(tag.toLowerCase());
           });
-        }
+        });
       });
-      
-      setAllMapTags(Array.from(allTags));
-    };
 
-    fetchAllTags();
-  }, []);
+      return Array.from(uniqueTags).sort();
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+      return [];
+    }
+  };
 
   // Update suggestions when typing
-  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.toLowerCase();
-    setNewTag(value);
-    
-    if (value.trim()) {
-      const suggestions = allMapTags.filter(tag => 
-        tag.toLowerCase().includes(value) && 
-        !node?.data.tags?.includes(tag)
-      );
-      setTagSuggestions(suggestions);
-      setShowSuggestions(suggestions.length > 0);
-    } else {
-      setTagSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  // Handle suggestion click
-  const handleSuggestionClick = (tag: string) => {
-    handleAddTag(tag);
-    setShowSuggestions(false);
-  };
-
-  // Modified handleAddTag to work with both keyboard and click events
-  const handleAddTag = async (tagToAdd?: string) => {
-    if (!node) return;
-    
-    const tag = (tagToAdd || newTag).trim().toLowerCase().replace(/\s+/g, '-');
-    if (!tag) return;
-    
-    const currentTags: string[] = node.data.tags || [];
-    if (!currentTags.includes(tag)) {
-      const updatedData = {
-        ...node.data,
-        tags: [...currentTags, tag]
-      };
-      
-      updateNode(node.id, updatedData);
-      
-      if (currentFlow?.id) {
-        try {
-          const { error } = await supabase
-            .from('process_flows')
-            .update({ 
-              nodes: nodes.map(n => n.id === node.id ? { ...n, data: updatedData } : n)
-            })
-            .eq('id', currentFlow.id);
-          
-          if (error) {
-            console.error('Error saving tag:', error);
-            updateNode(node.id, { tags: currentTags });
-          }
-        } catch (error) {
-          console.error('Error saving tag:', error);
-        }
+  useEffect(() => {
+    const updateSuggestions = async () => {
+      if (tagInput.trim() && node) {
+        const allTags = await fetchAllTags();
+        const filteredTags = allTags.filter(tag => 
+          tag.toLowerCase().includes(tagInput.toLowerCase()) && 
+          !node.data.tags?.includes(tag)
+        );
+        setTagSuggestions(filteredTags);
+        setShowSuggestions(true);
+      } else {
+        setTagSuggestions([]);
+        setShowSuggestions(false);
       }
-    }
-    setNewTag('');
-    setShowSuggestions(false);
-  };
+    };
+    updateSuggestions();
+  }, [tagInput, node?.data.tags]);
 
-  const handleTagKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddTag();
-    } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
+  const handleTagSelect = (tag: string) => {
     if (!node) return;
     const currentTags = node.data.tags || [];
-    updateNode(node.id, {
-      tags: currentTags.filter((tag: string) => tag !== tagToRemove)
-    });
+    if (!currentTags.includes(tag)) {
+      updateNode(node.id, {
+        tags: [...currentTags, tag]
+      });
+    }
+    setTagInput('');
+    setShowSuggestions(false);
   };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowSuggestions(false);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
 
   if (!node) {
     return (
@@ -343,6 +290,27 @@ export default function NodeDetails({
     alert('Jump to linked node!');
   };
 
+  const handleAddTag = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      e.preventDefault();
+      const newTag = tagInput.trim().toLowerCase();
+      const currentTags = node?.data?.tags || [];
+      if (!currentTags.includes(newTag)) {
+        updateNode(node.id, {
+          tags: [...currentTags, newTag]
+        });
+      }
+      setTagInput('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    const currentTags = node?.data?.tags || [];
+    updateNode(node.id, {
+      tags: currentTags.filter((tag: string) => tag !== tagToRemove)
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Show link reference if node is a link node */}
@@ -414,99 +382,139 @@ export default function NodeDetails({
         </div>
       )}
       <div>
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-lg font-semibold">Node Details</h3>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="text-sm text-blue-600 hover:text-blue-800"
-          >
-            {isEditing ? 'Cancel' : 'Edit'}
-          </button>
-        </div>
-
+        <label className="block text-sm font-medium text-gray-700">Label</label>
         {isEditing ? (
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, 'label')}
-              className="w-full px-2 py-1 border rounded"
-              placeholder="Node label"
-            />
-            <textarea
-              ref={textareaRef}
-              value={description}
-              onChange={handleTextareaChange}
-              onKeyDown={(e) => handleKeyDown(e, 'description')}
-              className="w-full px-2 py-1 border rounded min-h-[100px]"
-              placeholder="Node description"
-            />
-            <button
-              onClick={handleSave}
-              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Save
-            </button>
-          </div>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => handleKeyDown(e, 'label')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base p-2"
+            autoFocus
+          />
         ) : (
-          <div>
-            <h4 className="font-medium">{label}</h4>
-            <div className="mt-1 text-gray-600 whitespace-pre-wrap">
-              <ClozeText text={description} isTestMode={false} />
-            </div>
+          <div 
+            className="mt-1 text-sm cursor-pointer hover:text-blue-600"
+            onClick={() => setIsEditing(true)}
+          >
+            {node.data.label || 'Untitled'}
           </div>
         )}
-
-        {/* Tags Section */}
-        <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Tags</h4>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {(node?.data?.tags || []).map((tag: string) => (
-              <span
-                key={tag}
-                className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center"
+      </div>
+      <div>
+        <div className="flex justify-between items-center">
+          <label className="block text-sm font-medium text-gray-700">Description</label>
+          <div className="flex space-x-2">
+            {node.data.description && (
+              <button
+                onClick={() => updateNode(node.id, { isTestMode: !node.data.isTestMode })}
+                className={`px-2 py-1 text-xs rounded ${
+                  node.data.isTestMode ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                }`}
               >
-                #{tag}
-                <button
-                  onClick={() => handleRemoveTag(tag)}
-                  className="ml-1 text-gray-400 hover:text-gray-600"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="relative">
-            <input
-              type="text"
-              value={newTag}
-              onChange={handleTagInputChange}
-              onKeyDown={handleTagKeyDown}
-              onFocus={() => setShowSuggestions(tagSuggestions.length > 0)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              placeholder="Add a tag..."
-              className="w-full px-2 py-1 text-sm border rounded-md"
-            />
-            {showSuggestions && (
-              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg">
-                {tagSuggestions.map((tag) => (
-                  <div
-                    key={tag}
-                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                    onClick={() => handleSuggestionClick(tag)}
-                  >
-                    #{tag}
-                  </div>
-                ))}
-              </div>
+                {node.data.isTestMode ? 'Test Mode' : 'Reveal Mode'}
+              </button>
+            )}
+            {hasClozes && (
+              <button
+                onClick={onStartReview}
+                className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200"
+              >
+                Review Flashcards
+              </button>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Press Enter to add a tag
-          </p>
+        </div>
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={description}
+            onChange={handleTextareaChange}
+            onKeyDown={(e) => handleKeyDown(e, 'description')}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base p-2 min-h-[100px] overflow-hidden resize-none"
+            placeholder="Use {{...}} to create cloze deletions"
+          />
+        ) : (
+          <div 
+            className="mt-1 text-sm text-black cursor-pointer hover:text-blue-600 whitespace-pre-wrap"
+            onClick={() => setIsEditing(true)}
+          >
+            {node.data.description ? (
+              <ClozeText 
+                text={node.data.description} 
+                isTestMode={!!node.data.isTestMode}
+                onReveal={(word: string) => console.log(`Revealed word: ${word}`)}
+              />
+            ) : (
+              'No description'
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Add tags section */}
+      <div className="relative">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {node.data.tags?.map((tag: string) => (
+            <span 
+              key={tag} 
+              className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-sm flex items-center gap-1"
+            >
+              #{tag}
+              <button
+                onClick={() => handleRemoveTag(tag)}
+                className="hover:text-red-500 focus:outline-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="relative">
+          <input
+            type="text"
+            value={tagInput}
+            onChange={(e) => {
+              setTagInput(e.target.value);
+              e.stopPropagation(); // Prevent click from closing suggestions
+            }}
+            onKeyDown={(e) => {
+              e.stopPropagation(); // Prevent click from closing suggestions
+              if (e.key === 'Enter' && tagInput.trim()) {
+                e.preventDefault();
+                if (tagSuggestions.length > 0) {
+                  handleTagSelect(tagSuggestions[0]);
+                } else {
+                  handleAddTag(e);
+                }
+              }
+            }}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent click from closing suggestions
+              if (tagInput.trim()) {
+                setShowSuggestions(true);
+              }
+            }}
+            placeholder="Add tag and press Enter"
+            className="w-full px-2 py-1 border rounded text-sm"
+          />
+          {showSuggestions && tagSuggestions.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
+              {tagSuggestions.map((tag) => (
+                <div
+                  key={tag}
+                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                  onClick={() => handleTagSelect(tag)}
+                >
+                  #{tag}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
       {isEditing && (
         <div className="flex justify-end space-x-2">
           <button
