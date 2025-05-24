@@ -3,20 +3,21 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 // import HabitList from './HabitList';
 import AddHabitModal from './AddHabitModal';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase';
 import { addDays, subDays, format as formatDate, isSameDay } from 'date-fns';
 import { User } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
 
 export default function HabitTrackerPage() {
   const [habits, setHabits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const supabase = createClient();
+  const router = useRouter();
 
   // Get and monitor auth state
   useEffect(() => {
-    const supabase = createClientComponentClient();
-    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -42,13 +43,14 @@ export default function HabitTrackerPage() {
   const fetchHabits = async () => {
     if (!user) return;
     setLoading(true);
-    const supabase = createClientComponentClient();
-    // Get habits
+    
+    // Get habits with linked flow data
     const { data: habitsData, error: habitsError } = await supabase
       .from('habits')
-      .select('*')
+      .select('*, linked_flow_id, linked_node_id')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true });
+    
     // Get completions for the past 365 days
     const since = formatDate(subDays(new Date(), 364), 'yyyy-MM-dd');
     const { data: completionsData, error: completionsError } = await supabase
@@ -56,12 +58,14 @@ export default function HabitTrackerPage() {
       .select('habit_id, completed_at')
       .eq('user_id', user.id)
       .gte('completed_at', since);
+    
     // Map completions by habit
     const completionsByHabit: { [habitId: string]: string[] } = {};
     (completionsData || []).forEach((c: any) => {
       if (!completionsByHabit[c.habit_id]) completionsByHabit[c.habit_id] = [];
       completionsByHabit[c.habit_id].push(c.completed_at);
     });
+    
     // Calculate streaks and completed today
     const todayStr = formatDate(new Date(), 'yyyy-MM-dd');
     const merged = (habitsData || []).map((h: any) => {
@@ -104,14 +108,23 @@ export default function HabitTrackerPage() {
   // Mark Done handler
   const handleMarkDone = async (habitId: string) => {
     if (!user) return;
-    const supabase = createClientComponentClient();
+    console.log('Marking habit as done:', habitId);
     const todayStr = new Date().toISOString().slice(0, 10);
-    await supabase.from('habit_completions').insert({
+    const { error } = await supabase.from('habit_completions').insert({
       user_id: user.id,
       habit_id: habitId,
       completed_at: todayStr,
     });
-    fetchHabits();
+    if (error) {
+      console.error('Error marking habit as done:', error);
+    } else {
+      console.log('Successfully marked habit as done');
+      fetchHabits();
+    }
+  };
+
+  const handleJumpToNode = (flowId: string, nodeId: string) => {
+    router.push(`/dashboard/process-flow?flowId=${flowId}&nodeId=${nodeId}`);
   };
 
   return (
@@ -168,21 +181,31 @@ export default function HabitTrackerPage() {
                 'bg-teal-100',
               ][idx % 7]}`}
             >
-              {/* Icon placeholder (could use lucide or heroicons) */}
               <span className="text-2xl mr-2">
-                {[
+                {habit.icon || [
                   '💧', '🛏️', '🥤', '🧍', '🚶', '🧘', '🏃'
                 ][idx % 7]}
               </span>
               <span className="flex-1">{habit.name}</span>
-              <span className="text-orange-500 text-base font-normal flex items-center gap-1">🔥 {habit.streak ?? 0}</span>
-              <button
-                className={`ml-4 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${habit.completed ? 'bg-green-200 text-green-700' : 'bg-gray-200 text-gray-700 hover:bg-green-100'}`}
-                disabled={habit.completed}
-                onClick={() => handleMarkDone(habit.id)}
-              >
-                {habit.completed ? 'Done' : 'Mark Done'}
-              </button>
+              <div className="flex items-center gap-3">
+                {habit.linked_flow_id && habit.linked_node_id && (
+                  <button
+                    onClick={() => handleJumpToNode(habit.linked_flow_id, habit.linked_node_id)}
+                    className="text-blue-600 hover:text-blue-800 flex items-center"
+                    title="Jump to linked node in Process Flow"
+                  >
+                    <span role="img" aria-label="link">🔗</span>
+                  </button>
+                )}
+                <span className="text-orange-500 text-base font-normal flex items-center gap-1">🔥 {habit.streak ?? 0}</span>
+                <button
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${habit.completed ? 'bg-green-200 text-green-700' : 'bg-gray-200 text-gray-700 hover:bg-green-100'}`}
+                  disabled={habit.completed}
+                  onClick={() => handleMarkDone(habit.id)}
+                >
+                  {habit.completed ? 'Done' : 'Mark Done'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

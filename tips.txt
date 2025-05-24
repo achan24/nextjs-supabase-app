@@ -45,3 +45,91 @@ When asked to copy code "exactly like X", there's a tendency to:
 ### Remember
 "Exactly" means EXACTLY. Not "similarly", not "equivalently", not "essentially the same".
 If it works somewhere else in the codebase, copy it character by character first, then understand why it works later. 
+
+IMPORTANT FUNCTIONALITY - DO NOT REMOVE
+
+ProcessFlow Node Creation:
+------------------------
+1. The ProcessFlow editor MUST support both desktop AND mobile node creation:
+   - Desktop: Drag and drop from NodeToolbox
+   - Mobile: Direct click/tap on node types in NodeToolbox
+
+2. Critical Implementation Details:
+   - NodeToolbox components must have BOTH:
+     a) onDragStart handlers (for desktop drag-drop)
+     b) onClick handlers (for mobile tap-to-create)
+   
+3. Node Creation Logic:
+   - Uses viewport-aware positioning via getViewport()
+   - Calculates center position correctly:
+     centerX = (-x + window.innerWidth / 2) / zoom
+     centerY = (-y + window.innerHeight / 2) / zoom
+
+4. Why This Matters:
+   - Mobile users cannot drag-and-drop
+   - Click/tap support is essential for mobile accessibility
+   - Previous removals of this feature broke mobile functionality
+
+DO NOT REMOVE OR MODIFY THIS DUAL FUNCTIONALITY WITHOUT EXPLICIT APPROVAL.
+Keep both drag-and-drop AND click-to-create handlers in NodeToolbox components. 
+
+## Supabase Client Usage in Next.js
+
+### Client Component Setup
+When working with Supabase in client components:
+1. ALWAYS use the shared client from `@/lib/supabase` by importing `createClient`
+2. DO NOT use `createClientComponentClient` from `@supabase/auth-helpers-nextjs`
+3. DO NOT create new instances of `createBrowserClient` directly
+
+```typescript
+// ✅ CORRECT WAY
+import { createClient } from '@/lib/supabase';
+
+export default function MyComponent() {
+  const supabase = createClient();
+  // ... rest of component
+}
+
+// ❌ WRONG WAY - Don't use createClientComponentClient
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+// ❌ WRONG WAY - Don't create browser client directly
+import { createBrowserClient } from '@supabase/ssr';
+```
+
+### Server Component Setup
+For server components, use `createServerClient` from `@supabase/ssr`:
+
+```typescript
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+export default async function ServerComponent() {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+  // ... rest of component
+}
+```
+
+### Common Patterns
+1. Server components handle auth and pass user to client components
+2. Client components use the shared client for data operations
+3. Always filter data by user_id when querying
+4. Use RLS policies to enforce data access at the database level
+
+### Troubleshooting
+If you're seeing auth issues or empty data:
+1. Check you're using the correct client setup
+2. Verify user_id is being used in queries
+3. Confirm RLS policies are set up correctly
+4. Check the browser console for auth-related errors 
