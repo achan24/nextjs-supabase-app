@@ -133,3 +133,12 @@ If you're seeing auth issues or empty data:
 2. Verify user_id is being used in queries
 3. Confirm RLS policies are set up correctly
 4. Check the browser console for auth-related errors 
+
+KISS (Keep It Simple, Stupid) Principles:
+
+1. Node Linking: When linking to nodes in the process flow, just use the node ID directly in the URL query parameter.
+   - DO: `/dashboard/flows?nodeId=${nodeId}`
+   - DON'T: Try to track or pass around additional IDs (flowId, etc.) when the node ID is sufficient
+   - WHY: The node ID is unique and the system can find the right flow from just the node ID. Adding extra parameters adds complexity without benefit.
+
+Remember: If you find yourself adding extra fields/parameters to track relationships that already exist in the database, stop and think if you're overcomplicating things. 
