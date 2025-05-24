@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { ChevronDown, ChevronRight, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Link2, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 
 interface ProcessFlow {
@@ -61,6 +61,7 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
   const [tagMetrics, setTagMetrics] = useState<TagMetrics[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const supabase = createClient();
 
   const toggleTag = (tag: string) => {
@@ -127,20 +128,11 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
     return 0;
   };
 
-  const getNodeCompletionsToday = (node: NodeDetail) => {
-    const today = new Date().toISOString().split('T')[0];
-    const completions = node.completionHistory?.filter(record => {
-      const completionDate = new Date(record.completedAt).toISOString().split('T')[0];
-      console.log('Comparing dates:', {
-        nodeLabel: node.label,
-        today,
-        completionDate,
-        completionTimestamp: record.completedAt,
-        isToday: completionDate === today
-      });
-      return completionDate === today;
+  const getNodeCompletionsForDate = (node: NodeDetail, date: Date) => {
+    return node.completionHistory?.filter(record => {
+      const completionDate = new Date(record.completedAt);
+      return isSameDay(completionDate, date);
     }) || [];
-    return completions;
   };
 
   const formatTimeForDisplay = (ms: number): string => {
@@ -158,6 +150,20 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
       minute: 'numeric',
       hour12: true 
     });
+  };
+
+  const formatDateForDisplay = (date: Date): string => {
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const isSameDay = (date1: Date, date2: Date): boolean => {
+    return date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate();
   };
 
   const getHourSlots = () => {
@@ -348,15 +354,54 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
         <div className="space-y-6">
           {/* Day View Calendar */}
           <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Today's Timeline</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Timeline</h2>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center">
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedDate);
+                      newDate.setDate(newDate.getDate() - 1);
+                      setSelectedDate(newDate);
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded"
+                    title="Previous day"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <div className="px-4 font-medium">
+                    {formatDateForDisplay(selectedDate)}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedDate);
+                      newDate.setDate(newDate.getDate() + 1);
+                      setSelectedDate(newDate);
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded"
+                    title="Next day"
+                    disabled={isSameDay(selectedDate, new Date())}
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+                <button
+                  onClick={() => setSelectedDate(new Date())}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                  disabled={isSameDay(selectedDate, new Date())}
+                >
+                  Today
+                </button>
+              </div>
+            </div>
             <div className="space-y-1">
               {getHourSlots().map(slot => {
                 // Get all tasks completed in this hour across all tags
                 const hourTasks: Array<{ node: NodeDetail, completion: any }> = [];
                 tagMetrics.forEach(metric => {
                   metric.nodes.forEach(node => {
-                    const todayCompletions = getNodeCompletionsToday(node);
-                    todayCompletions.forEach(completion => {
+                    const dateCompletions = getNodeCompletionsForDate(node, selectedDate);
+                    dateCompletions.forEach(completion => {
                       const completionHour = new Date(completion.completedAt).getHours();
                       if (completionHour === slot.hour) {
                         hourTasks.push({ node, completion });
@@ -426,11 +471,11 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
             <div className="space-y-4">
               {tagMetrics
                 .filter(metric => {
-                  // Only show tags that have completions today
-                  const hasCompletionsToday = metric.nodes.some(node => 
-                    getNodeCompletionsToday(node).length > 0
+                  // Only show tags that have completions for selected date
+                  const hasCompletionsForDate = metric.nodes.some(node => 
+                    getNodeCompletionsForDate(node, selectedDate).length > 0
                   );
-                  return hasCompletionsToday;
+                  return hasCompletionsForDate;
                 })
                 .map(metric => (
                   <div key={metric.tag} className="border rounded-lg">
@@ -446,15 +491,15 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
                     </div>
                     <div className="p-4">
                       {metric.nodes
-                        .filter(node => getNodeCompletionsToday(node).length > 0)
+                        .filter(node => getNodeCompletionsForDate(node, selectedDate).length > 0)
                         // Sort nodes by their earliest completion time today
                         .sort((a, b) => {
-                          const aTime = Math.min(...getNodeCompletionsToday(a).map(c => c.completedAt));
-                          const bTime = Math.min(...getNodeCompletionsToday(b).map(c => c.completedAt));
+                          const aTime = Math.min(...getNodeCompletionsForDate(a, selectedDate).map(c => c.completedAt));
+                          const bTime = Math.min(...getNodeCompletionsForDate(b, selectedDate).map(c => c.completedAt));
                           return aTime - bTime;
                         })
                         .map(node => {
-                          const todayCompletions = getNodeCompletionsToday(node);
+                          const dateCompletions = getNodeCompletionsForDate(node, selectedDate);
                           return (
                             <div key={node.id} className="flex items-center justify-between py-2">
                               <div className="flex items-center gap-4 flex-1">
@@ -471,13 +516,13 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
                                   </button>
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                  {todayCompletions
+                                  {dateCompletions
                                     .sort((a, b) => a.completedAt - b.completedAt)
                                     .map((completion, idx) => (
                                       <span key={completion.completedAt}>
                                         {formatStartTime(completion.completedAt)} - {formatTimeForDisplay(completion.timeSpent)}
                                         {completion.note && ` - ${completion.note}`}
-                                        {idx < todayCompletions.length - 1 && ', '}
+                                        {idx < dateCompletions.length - 1 && ', '}
                                       </span>
                                     ))}
                                 </div>
@@ -522,8 +567,8 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
                     <div className="border-t">
                       <div className="grid gap-2 p-4">
                         {metric.nodes.map(node => {
-                          const todayCompletions = getNodeCompletionsToday(node);
-                          const hasCompletionsToday = todayCompletions.length > 0;
+                          const dateCompletions = getNodeCompletionsForDate(node, selectedDate);
+                          const hasCompletionsForDate = dateCompletions.length > 0;
                           
                           return (
                             <div key={node.id} className="flex items-center justify-between bg-gray-50 p-3 rounded">
@@ -540,13 +585,13 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
                                     <span role="img" aria-label="jump to node">🔗</span>
                                   </button>
                                 </div>
-                                {hasCompletionsToday && (
+                                {hasCompletionsForDate && (
                                   <div className="text-sm text-gray-600">
-                                    {todayCompletions.map((completion, idx) => (
+                                    {dateCompletions.map((completion, idx) => (
                                       <div key={completion.completedAt}>
                                         {formatTimeForDisplay(completion.timeSpent)}
                                         {completion.note && ` - ${completion.note}`}
-                                        {idx < todayCompletions.length - 1 && ', '}
+                                        {idx < dateCompletions.length - 1 && ', '}
                                       </div>
                                     ))}
                                   </div>
