@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import AddHabitModal from './AddHabitModal';
+import { User } from '@supabase/auth-helpers-nextjs';
 
 function MiniHeatmap({ days = 30 }: { days?: number }) {
   // Mock: random completion data
@@ -29,15 +30,40 @@ export default function AllHabitsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const supabase = createClientComponentClient();
+    
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+      }
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const fetchHabits = async () => {
+    if (!user) return;
     setLoading(true);
     const supabase = createClientComponentClient();
-    const userId = '875d44ba-8794-4d12-ba86-48e5e90dc796';
     const { data, error } = await supabase
       .from('habits')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: true });
     if (error) {
       setHabits([]);
@@ -48,8 +74,10 @@ export default function AllHabitsPage() {
   };
 
   useEffect(() => {
-    fetchHabits();
-  }, []);
+    if (user) {
+      fetchHabits();
+    }
+  }, [user]);
 
   const handleEdit = (habit: any) => {
     setEditingHabit(habit);
@@ -138,10 +166,11 @@ export default function AllHabitsPage() {
         </div>
       )}
       {/* Add Habit Modal */}
-      {showAddModal && (
+      {showAddModal && user && (
         <AddHabitModal
           onClose={() => setShowAddModal(false)}
           onHabitAdded={fetchHabits}
+          user={user}
         />
       )}
       {/* Edit Modal */}
