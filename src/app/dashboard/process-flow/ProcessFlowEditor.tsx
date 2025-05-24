@@ -265,9 +265,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
       let position;
       if (event.clientX === 0 && event.clientY === 0) {
         // Mobile click - center of viewport
-        const centerX = (-x + window.innerWidth / 2) / zoom;
-        const centerY = (-y + window.innerHeight / 2) / zoom;
-        position = { x: centerX - 75, y: centerY - 50 };
+        position = { x: (-x + window.innerWidth/2)/zoom, y: (-y + window.innerHeight/2)/zoom };
       } else {
         // Desktop drag and drop
         const reactFlowBounds = event.currentTarget.getBoundingClientRect();
