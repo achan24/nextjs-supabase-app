@@ -5,29 +5,56 @@ import Link from 'next/link';
 import AddHabitModal from './AddHabitModal';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { addDays, subDays, format as formatDate, isSameDay } from 'date-fns';
+import { User } from '@supabase/auth-helpers-nextjs';
 
 export default function HabitTrackerPage() {
   const [habits, setHabits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const userId = '875d44ba-8794-4d12-ba86-48e5e90dc796'; // Hardcoded for now
+  const [user, setUser] = useState<User | null>(null);
+
+  // Get and monitor auth state
+  useEffect(() => {
+    const supabase = createClientComponentClient();
+    
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+      }
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Fetch habits and completions for today and streaks
   const fetchHabits = async () => {
+    if (!user) return;
     setLoading(true);
     const supabase = createClientComponentClient();
     // Get habits
     const { data: habitsData, error: habitsError } = await supabase
       .from('habits')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: true });
     // Get completions for the past 365 days
     const since = formatDate(subDays(new Date(), 364), 'yyyy-MM-dd');
     const { data: completionsData, error: completionsError } = await supabase
       .from('habit_completions')
       .select('habit_id, completed_at')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .gte('completed_at', since);
     // Map completions by habit
     const completionsByHabit: { [habitId: string]: string[] } = {};
@@ -59,8 +86,10 @@ export default function HabitTrackerPage() {
   };
 
   useEffect(() => {
-    fetchHabits();
-  }, []);
+    if (user) {
+      fetchHabits();
+    }
+  }, [user]);
 
   // For day-of-week selector, start with Monday
   const daysOfWeek = ["M", "T", "W", "T", "F", "S", "S"];
@@ -74,10 +103,11 @@ export default function HabitTrackerPage() {
 
   // Mark Done handler
   const handleMarkDone = async (habitId: string) => {
+    if (!user) return;
     const supabase = createClientComponentClient();
     const todayStr = new Date().toISOString().slice(0, 10);
     await supabase.from('habit_completions').insert({
-      user_id: userId,
+      user_id: user.id,
       habit_id: habitId,
       completed_at: todayStr,
     });
@@ -157,10 +187,11 @@ export default function HabitTrackerPage() {
           ))}
         </div>
       )}
-      {showAddModal && (
+      {showAddModal && user && (
         <AddHabitModal
           onClose={() => setShowAddModal(false)}
           onHabitAdded={fetchHabits}
+          user={user}
         />
       )}
     </div>

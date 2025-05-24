@@ -2,7 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  transpilePackages: ['supports-color', 'debug'],
+  webpack: (config, { isServer }) => {
+    // Add support for ESM modules
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      'supports-color': false,
+    };
+    return config;
+  },
   images: {
     domains: ['localhost', 'gkigehbjdhsfxbwdqrkq.supabase.co'],
   },
