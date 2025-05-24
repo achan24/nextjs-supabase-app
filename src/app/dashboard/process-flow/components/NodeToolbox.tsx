@@ -150,57 +150,65 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
       <div className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <div
-            className="p-3 bg-blue-50 border-2 border-blue-200 rounded-md cursor-move hover:bg-blue-100"
+            className="p-3 bg-blue-50 border-2 border-blue-200 rounded-md cursor-pointer hover:bg-blue-100"
             onDragStart={(event) => onDragStart(event, 'task')}
+            onClick={() => addNode('task')}
             draggable
           >
             🔨 Task
           </div>
           <div
-            className="p-3 bg-yellow-50 border-2 border-yellow-200 rounded-md cursor-move hover:bg-yellow-100"
+            className="p-3 bg-yellow-50 border-2 border-yellow-200 rounded-md cursor-pointer hover:bg-yellow-100"
             onDragStart={(event) => onDragStart(event, 'note')}
+            onClick={() => addNode('note')}
             draggable
           >
             📋 Note
           </div>
           <div
-            className="p-3 bg-purple-50 border-2 border-purple-200 rounded-md cursor-move hover:bg-purple-100"
+            className="p-3 bg-purple-50 border-2 border-purple-200 rounded-md cursor-pointer hover:bg-purple-100"
             onDragStart={(event) => onDragStart(event, 'process')}
+            onClick={() => addNode('process')}
             draggable
           >
             🔄 Process
           </div>
           <div
-            className="p-3 bg-green-50 border-2 border-green-200 rounded-md cursor-move hover:bg-green-100"
+            className="p-3 bg-green-50 border-2 border-green-200 rounded-md cursor-pointer hover:bg-green-100"
             onDragStart={(event) => onDragStart(event, 'skill')}
+            onClick={() => addNode('skill')}
             draggable
           >
             🎯 Skill
           </div>
           <div
-            className="p-3 bg-orange-50 border-2 border-orange-200 rounded-md cursor-move hover:bg-orange-100"
+            className="p-3 bg-orange-50 border-2 border-orange-200 rounded-md cursor-pointer hover:bg-orange-100"
             onDragStart={(event) => onDragStart(event, 'technique')}
+            onClick={() => addNode('technique')}
             draggable
           >
             ⚡ Technique
           </div>
           <div
-            className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-md cursor-move hover:bg-indigo-100"
+            className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-md cursor-pointer hover:bg-indigo-100"
             onDragStart={(event) => onDragStart(event, 'analytics')}
+            onClick={() => addNode('analytics')}
             draggable
           >
             📊 Analytics
           </div>
           <div
-            className="p-3 bg-blue-50 border-2 border-blue-200 rounded-md cursor-move hover:bg-blue-100"
+            className="p-3 bg-blue-50 border-2 border-blue-200 rounded-md cursor-pointer hover:bg-blue-100"
             onDragStart={(event) => onDragStart(event, 'link')}
+            onClick={() => addNode('link')}
             draggable
           >
             🔗 Link
           </div>
           <div
-            className="p-3 bg-purple-50 border-2 border-purple-200 rounded-md cursor-move hover:bg-purple-100"
+            className="p-3 bg-purple-50 border-2 border-purple-200 rounded-md cursor-pointer hover:bg-purple-100"
             onDragStart={(event) => onDragStart(event, 'noteRef')}
+            onClick={() => addNode('noteRef')}
             draggable
           >
             📝 Note Reference
