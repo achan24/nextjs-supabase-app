@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { ChevronDown, ChevronRight, Link2, ChevronLeft } from 'lucide-react';
+import { ChevronDown, ChevronRight, Link2, ChevronLeft, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 interface ProcessFlow {
@@ -62,6 +62,16 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [suggestions, setSuggestions] = useState<Array<{
+    label: string,
+    flowId: string,
+    nodeId: string,
+    type: 'overdue_habit' | 'rare_task',
+    lastDone?: Date,
+    completionCount?: number,
+    daysBetweenCompletions?: number
+  }>>([]);
   const supabase = createClient();
 
   const toggleTag = (tag: string) => {
@@ -89,6 +99,128 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
       return () => clearInterval(intervalId);
     }
   }, [user]);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (!user?.id) return;
+      
+      const now = new Date();
+      const newSuggestions: Array<{
+        label: string,
+        flowId: string,
+        nodeId: string,
+        type: 'overdue_habit' | 'rare_task',
+        lastDone?: Date,
+        completionCount?: number,
+        daysBetweenCompletions?: number
+      }> = [];
+
+      // First get habits that are due
+      const { data: habits } = await supabase
+        .from('habits')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (habits) {
+        for (const habit of habits) {
+          if (habit.linked_flow_id && habit.linked_node_id) {
+            // Get the latest completion for this habit
+            const { data: completions } = await supabase
+              .from('habit_completions')
+              .select('completed_at')
+              .eq('habit_id', habit.id)
+              .order('completed_at', { ascending: false })
+              .limit(1);
+
+            const lastCompletion = completions?.[0]?.completed_at;
+            const daysSinceLastCompletion = lastCompletion 
+              ? Math.floor((now.getTime() - new Date(lastCompletion).getTime()) / (1000 * 60 * 60 * 24))
+              : Infinity;
+
+            // If it's been more than the habit's frequency in days, it's overdue
+            const frequencyInDays = habit.frequency === 'daily' ? 1 
+              : habit.frequency === 'weekly' ? 7 
+              : habit.frequency === 'monthly' ? 30 
+              : 1; // default to daily
+
+            if (daysSinceLastCompletion >= frequencyInDays) {
+              newSuggestions.push({
+                label: habit.name,
+                flowId: habit.linked_flow_id,
+                nodeId: habit.linked_node_id,
+                type: 'overdue_habit' as const,
+                lastDone: lastCompletion ? new Date(lastCompletion) : undefined
+              });
+            }
+          }
+        }
+      }
+      
+      // Then add rarely done tasks
+      tagMetrics.forEach(metric => {
+        metric.nodes.forEach(node => {
+          if (!node.completionHistory?.length) return;
+          
+          // Sort completions by date, most recent first
+          const sortedCompletions = [...node.completionHistory].sort((a, b) => b.completedAt - a.completedAt);
+          const lastCompletion = new Date(sortedCompletions[0].completedAt);
+          
+          // Get node creation date
+          const nodeCreatedAt = new Date(node.created_at);
+          const daysSinceCreation = Math.floor((now.getTime() - nodeCreatedAt.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Only consider tasks that are at least 2 weeks old
+          if (daysSinceCreation < 14) return;
+
+          // For completion rate, look at either the last 30 days or since creation, whichever is shorter
+          const daysToLookBack = Math.min(30, daysSinceCreation);
+          const cutoffDate = new Date(now.getTime() - (daysToLookBack * 24 * 60 * 60 * 1000));
+          
+          // Get completions in look-back period
+          const recentCompletions = sortedCompletions.filter(completion => 
+            new Date(completion.completedAt) > cutoffDate
+          );
+
+          // Calculate average days between completions over the node's entire history
+          let avgDaysBetween = 0;
+          if (sortedCompletions.length > 1) {
+            const timeSpans = sortedCompletions.slice(0, -1).map((completion, i) => {
+              const current = new Date(completion.completedAt);
+              const next = new Date(sortedCompletions[i + 1].completedAt);
+              return (current.getTime() - next.getTime()) / (1000 * 60 * 60 * 24);
+            });
+            avgDaysBetween = timeSpans.reduce((sum, span) => sum + span, 0) / timeSpans.length;
+          }
+
+          // Consider a task "rare" if:
+          // 1. Few completions relative to its age (less than once per 10 days on average)
+          // 2. Long average time between completions (more than 10 days)
+          const completionsPerDay = recentCompletions.length / daysToLookBack;
+          if (completionsPerDay < 0.1 || avgDaysBetween > 10) {
+            newSuggestions.push({
+              label: node.label,
+              flowId: node.flowId,
+              nodeId: node.id,
+              type: 'rare_task' as const,
+              completionCount: recentCompletions.length,
+              lastDone: lastCompletion,
+              daysBetweenCompletions: Math.round(avgDaysBetween)
+            });
+          }
+        });
+      });
+
+      // Sort suggestions - overdue habits first, then rare tasks
+      newSuggestions.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'overdue_habit' ? -1 : 1;
+        return ((b.lastDone?.getTime() || 0) - (a.lastDone?.getTime() || 0));
+      });
+
+      setSuggestions(newSuggestions.slice(0, 5));
+    };
+
+    fetchSuggestions();
+  }, [user, tagMetrics]);
 
   const getNodeTimeSpentToday = (node: NodeDetail): number => {
     const today = new Date().toISOString().split('T')[0];
@@ -192,6 +324,129 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
     const maxTime = 2 * 60 * 60 * 1000; // 2 hours in ms
     const percentage = Math.min((timeSpent / maxTime) * 100, 100);
     return `${percentage}%`;
+  };
+
+  const getTimeOfDay = (date: Date): string => {
+    const hour = date.getHours();
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
+  };
+
+  const getSuggestions = async () => {
+    const now = new Date();
+    const suggestions: Array<{
+      label: string,
+      flowId: string,
+      nodeId: string,
+      type: 'overdue_habit' | 'rare_task',
+      lastDone?: Date,
+      completionCount?: number,
+      daysBetweenCompletions?: number
+    }> = [];
+
+    // First get habits that are due
+    const { data: habits } = await supabase
+      .from('habits')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (habits) {
+      for (const habit of habits) {
+        if (habit.linked_flow_id && habit.linked_node_id) {
+          // Get the latest completion for this habit
+          const { data: completions } = await supabase
+            .from('habit_completions')
+            .select('completed_at')
+            .eq('habit_id', habit.id)
+            .order('completed_at', { ascending: false })
+            .limit(1);
+
+          const lastCompletion = completions?.[0]?.completed_at;
+          const daysSinceLastCompletion = lastCompletion 
+            ? Math.floor((now.getTime() - new Date(lastCompletion).getTime()) / (1000 * 60 * 60 * 24))
+            : Infinity;
+
+          // If it's been more than the habit's frequency in days, it's overdue
+          const frequencyInDays = habit.frequency === 'daily' ? 1 
+            : habit.frequency === 'weekly' ? 7 
+            : habit.frequency === 'monthly' ? 30 
+            : 1; // default to daily
+
+          if (daysSinceLastCompletion >= frequencyInDays) {
+            suggestions.push({
+              label: habit.name,
+              flowId: habit.linked_flow_id,
+              nodeId: habit.linked_node_id,
+              type: 'overdue_habit',
+              lastDone: lastCompletion ? new Date(lastCompletion) : undefined
+            });
+          }
+        }
+      }
+    }
+    
+    // Then add rarely done tasks
+    tagMetrics.forEach(metric => {
+      metric.nodes.forEach(node => {
+        if (!node.completionHistory?.length) return;
+        
+        // Sort completions by date, most recent first
+        const sortedCompletions = [...node.completionHistory].sort((a, b) => b.completedAt - a.completedAt);
+        const lastCompletion = new Date(sortedCompletions[0].completedAt);
+        
+        // Get node creation date
+        const nodeCreatedAt = new Date(node.created_at);
+        const daysSinceCreation = Math.floor((now.getTime() - nodeCreatedAt.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Only consider tasks that are at least 2 weeks old
+        if (daysSinceCreation < 14) return;
+
+        // For completion rate, look at either the last 30 days or since creation, whichever is shorter
+        const daysToLookBack = Math.min(30, daysSinceCreation);
+        const cutoffDate = new Date(now.getTime() - (daysToLookBack * 24 * 60 * 60 * 1000));
+        
+        // Get completions in look-back period
+        const recentCompletions = sortedCompletions.filter(completion => 
+          new Date(completion.completedAt) > cutoffDate
+        );
+
+        // Calculate average days between completions over the node's entire history
+        let avgDaysBetween = 0;
+        if (sortedCompletions.length > 1) {
+          const timeSpans = sortedCompletions.slice(0, -1).map((completion, i) => {
+            const current = new Date(completion.completedAt);
+            const next = new Date(sortedCompletions[i + 1].completedAt);
+            return (current.getTime() - next.getTime()) / (1000 * 60 * 60 * 24);
+          });
+          avgDaysBetween = timeSpans.reduce((sum, span) => sum + span, 0) / timeSpans.length;
+        }
+
+        // Consider a task "rare" if:
+        // 1. Few completions relative to its age (less than once per 10 days on average)
+        // 2. Long average time between completions (more than 10 days)
+        const completionsPerDay = recentCompletions.length / daysToLookBack;
+        if (completionsPerDay < 0.1 || avgDaysBetween > 10) {
+          suggestions.push({
+            label: node.label,
+            flowId: node.flowId,
+            nodeId: node.id,
+            type: 'rare_task' as const,
+            completionCount: recentCompletions.length,
+            lastDone: lastCompletion,
+            daysBetweenCompletions: Math.round(avgDaysBetween)
+          });
+        }
+      });
+    });
+
+    // Sort suggestions - overdue habits first, then rare tasks
+    return suggestions
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'overdue_habit' ? -1 : 1;
+        return ((b.lastDone?.getTime() || 0) - (a.lastDone?.getTime() || 0));
+      })
+      .slice(0, 5);
   };
 
   const fetchTagMetrics = async () => {
@@ -462,6 +717,76 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
                   </div>
                 );
               })}
+            </div>
+            
+            {/* Suggestions Section */}
+            <div className="mt-6 border-t pt-4">
+              <button
+                onClick={() => setShowSuggestions(!showSuggestions)}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+              >
+                {showSuggestions ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                <span className="font-medium">Suggestions for {getTimeOfDay(new Date())}</span>
+              </button>
+              
+              {showSuggestions && (
+                <div className="mt-3 space-y-2">
+                  {suggestions.map(suggestion => (
+                    <div 
+                      key={`${suggestion.flowId}-${suggestion.nodeId}`} 
+                      className={`flex items-center justify-between p-3 rounded ${
+                        suggestion.type === 'overdue_habit' ? 'bg-orange-50' : 'bg-blue-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">
+                          <span className="font-medium">{suggestion.label}</span>
+                          {' '}
+                          {suggestion.type === 'overdue_habit' ? (
+                            <>
+                              is overdue
+                              {suggestion.lastDone && (
+                                <span className="text-gray-500">
+                                  {' '}• Last done: {suggestion.lastDone.toLocaleDateString()}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {suggestion.completionCount === 0 ? (
+                                'hasn\'t been done recently'
+                              ) : (
+                                <>
+                                  only done {suggestion.completionCount} time{suggestion.completionCount !== 1 ? 's' : ''} recently
+                                  {suggestion.daysBetweenCompletions && suggestion.daysBetweenCompletions > 0 && 
+                                    ` (avg. ${suggestion.daysBetweenCompletions} days between)`
+                                  }
+                                </>
+                              )}
+                              {suggestion.lastDone && (
+                                <span className="text-gray-500">
+                                  {' '}• Last done: {suggestion.lastDone.toLocaleDateString()}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <Link
+                        href={`/dashboard/process-flow?flowId=${suggestion.flowId}&nodeId=${suggestion.nodeId}`}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        View Task
+                      </Link>
+                    </div>
+                  ))}
+                  {suggestions.length === 0 && (
+                    <div className="text-sm text-gray-500 italic">
+                      No overdue habits or rarely-done tasks found.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </Card>
 
