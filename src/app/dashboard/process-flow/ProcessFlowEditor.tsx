@@ -258,12 +258,24 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
       const type = event.dataTransfer.getData('application/reactflow');
       if (!type) return;
 
-      // FIX: Use mouse position for node placement
-      const reactFlowBounds = event.currentTarget.getBoundingClientRect();
-      const position = rf?.project({
-        x: event.clientX - reactFlowBounds.left,
-        y: event.clientY - reactFlowBounds.top,
-      }) || { x: 0, y: 0 };
+      // Get the viewport info
+      if (!rf) return;
+      const { x, y, zoom } = rf.getViewport();
+
+      let position;
+      if (event.clientX === 0 && event.clientY === 0) {
+        // Mobile click - center of viewport
+        const centerX = (-x + window.innerWidth / 2) / zoom;
+        const centerY = (-y + window.innerHeight / 2) / zoom;
+        position = { x: centerX - 75, y: centerY - 50 };
+      } else {
+        // Desktop drag and drop
+        const reactFlowBounds = event.currentTarget.getBoundingClientRect();
+        position = rf.project({
+          x: event.clientX - reactFlowBounds.left,
+          y: event.clientY - reactFlowBounds.top,
+        });
+      }
 
       // Default data for all node types
       const baseData = {

@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  transpilePackages: ['supports-color', 'debug'],
   images: {
     domains: ['localhost', 'gkigehbjdhsfxbwdqrkq.supabase.co'],
   },
