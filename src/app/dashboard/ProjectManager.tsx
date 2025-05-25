@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PlusCircle } from 'lucide-react';
 
 interface FormEvent extends React.FormEvent<HTMLFormElement> {
   target: HTMLFormElement & {
@@ -39,6 +41,22 @@ interface Task {
   priority: number;
 }
 
+interface Node {
+  id: string;
+  title: string;
+  description?: string;
+  created_at: string;
+}
+
+interface ProjectNodeLink {
+  id: string;
+  node_id: string;
+  project_id: string;
+  description?: string;
+  created_at: string;
+  node: Node;
+}
+
 interface ProjectWithTasks extends ProjectType {
   tasks?: Task[];
 }
@@ -48,6 +66,7 @@ export default function ProjectManager() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<ProjectWithTasks | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [newProject, setNewProject] = useState({
     title: '',
     description: '',
@@ -68,7 +87,7 @@ export default function ProjectManager() {
       .from('projects')
       .select(`
         *,
-        tasks:task_projects!inner(
+        tasks:task_projects(
           task:tasks(
             id,
             title,
@@ -85,10 +104,9 @@ export default function ProjectManager() {
       return;
     }
 
-    // Transform the data to flatten the tasks array
     const transformedProjects = projects.map(project => ({
       ...project,
-      tasks: project.tasks.map((t: { task: Task }) => t.task)
+      tasks: project.tasks?.map((t: { task: Task }) => t.task) || []
     }));
 
     setProjects(transformedProjects || []);
@@ -182,6 +200,27 @@ export default function ProjectManager() {
     setProjects(projects.filter((p) => p.id !== projectId));
   };
 
+  const handleArchiveProject = async (projectId: string, archive: boolean) => {
+    const { error } = await supabase
+      .from('projects')
+      .update({
+        archived: archive,
+        archived_at: archive ? new Date().toISOString() : null
+      })
+      .eq('id', projectId);
+
+    if (error) {
+      console.error('Error archiving project:', error);
+      return;
+    }
+
+    setProjects(projects.map(p => 
+      p.id === projectId 
+        ? { ...p, archived: archive, archived_at: archive ? new Date().toISOString() : null }
+        : p
+    ));
+  };
+
   const getPriorityColor = (priority: number) => {
     switch (priority) {
       case 3:
@@ -204,6 +243,8 @@ export default function ProjectManager() {
     }
   };
 
+  const filteredProjects = projects.filter(p => p.archived === showArchived);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation Bar */}
@@ -220,95 +261,136 @@ export default function ProjectManager() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8 flex items-center justify-end">
-          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">Create Project</Button>
-            </DialogTrigger>
-            <DialogContent className="bg-white">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">Create New Project</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-4">
-                <div>
-                  <Label htmlFor="title" className="text-sm font-medium text-gray-700">Title</Label>
-                  <Input
-                    id="title"
-                    value={newProject.title}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setNewProject({ ...newProject, title: e.target.value })
-                    }
-                    className="mt-1"
-                    placeholder="Enter project title"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description" className="text-sm font-medium text-gray-700">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newProject.description}
-                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-                      setNewProject({ ...newProject, description: e.target.value })
-                    }
-                    className="mt-1"
-                    placeholder="Enter project description"
-                    rows={4}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="priority" className="text-sm font-medium text-gray-700">Priority</Label>
-                  <Select
-                    value={String(newProject.priority)}
-                    onValueChange={(value: string) =>
-                      setNewProject({ ...newProject, priority: Number(value) })
-                    }
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowArchived(!showArchived)}
+              className={showArchived ? 'bg-gray-100' : ''}
+            >
+              {showArchived ? 'Show Active Projects' : 'Show Archived Projects'}
+            </Button>
+            {showArchived && (
+              <span className="text-sm text-gray-500">
+                Showing archived projects
+              </span>
+            )}
+          </div>
+          {!showArchived && (
+            <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">Create Project</Button>
+              </DialogTrigger>
+              <DialogContent className="bg-white">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-semibold">Create New Project</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <Label htmlFor="title" className="text-sm font-medium text-gray-700">Title</Label>
+                    <Input
+                      id="title"
+                      value={newProject.title}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setNewProject({ ...newProject, title: e.target.value })
+                      }
+                      className="mt-1"
+                      placeholder="Enter project title"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description" className="text-sm font-medium text-gray-700">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={newProject.description}
+                      onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                        setNewProject({ ...newProject, description: e.target.value })
+                      }
+                      className="mt-1"
+                      placeholder="Enter project description"
+                      rows={4}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="priority" className="text-sm font-medium text-gray-700">Priority</Label>
+                    <Select
+                      value={String(newProject.priority)}
+                      onValueChange={(value: string) =>
+                        setNewProject({ ...newProject, priority: Number(value) })
+                      }
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Low</SelectItem>
+                        <SelectItem value="2">Medium</SelectItem>
+                        <SelectItem value="3">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button 
+                    onClick={handleCreateProject}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    disabled={!newProject.title.trim()}
                   >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Low</SelectItem>
-                      <SelectItem value="2">Medium</SelectItem>
-                      <SelectItem value="3">High</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    Create Project
+                  </Button>
                 </div>
-                <Button 
-                  onClick={handleCreateProject}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  disabled={!newProject.title.trim()}
-                >
-                  Create Project
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <Card key={project.id} className="bg-white shadow-sm">
+          {filteredProjects.map((project) => (
+            <Card key={project.id} className={`bg-white shadow-sm ${project.archived ? 'opacity-75' : ''}`}>
               <CardHeader>
                 <CardTitle className="flex justify-between items-center">
-                  <span>{project.title}</span>
+                  <Link href={`/dashboard/projects/${project.id}`} className="text-blue-600 hover:text-blue-800">
+                    {project.title}
+                  </Link>
                   <div className="flex space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedProject(project);
-                        setIsEditModalOpen(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteProject(project.id)}
-                    >
-                      Delete
-                    </Button>
+                    {!project.archived && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setIsEditModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleArchiveProject(project.id, true)}
+                        >
+                          Archive
+                        </Button>
+                      </>
+                    )}
+                    {project.archived && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleArchiveProject(project.id, false)}
+                        >
+                          Unarchive
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-800"
+                          onClick={() => handleDeleteProject(project.id)}
+                        >
+                          Delete
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -324,9 +406,13 @@ export default function ProjectManager() {
                   }`}>
                     Priority {project.priority}
                   </span>
+                  {project.archived && (
+                    <span className="text-xs text-gray-500">
+                      Archived {project.archived_at ? new Date(project.archived_at).toLocaleDateString() : ''}
+                    </span>
+                  )}
                 </div>
                 
-                {/* Tasks Section */}
                 <div className="mt-4">
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Tasks</h3>
                   {project.tasks && project.tasks.length > 0 ? (

@@ -1,11 +1,12 @@
 export interface Project {
   id: string;
   title: string;
-  description?: string;
+  description: string;
   priority: number;
-  created_at: string;
-  updated_at: string;
   user_id: string;
+  created_at: string;
+  archived: boolean;
+  archived_at: string | null;
 }
 
 export interface Reminder {

@@ -1,0 +1,72 @@
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import ProjectView from './ProjectView';
+
+export default async function ProjectPage({ params }: { params: { id: string } }) {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    redirect('/login');
+  }
+
+  // Fetch initial project data
+  const { data: project } = await supabase
+    .from('projects')
+    .select(`
+      *,
+      tasks:task_projects(
+        task:tasks(
+          id,
+          title,
+          description,
+          status,
+          priority,
+          due_date,
+          time_spent
+        )
+      ),
+      goals(
+        id,
+        title,
+        description,
+        target_date,
+        status,
+        metrics
+      ),
+      project_node_links(
+        id,
+        project_id,
+        linked_flow_id,
+        linked_node_id,
+        description,
+        created_at,
+        user_id,
+        flow:process_flows(
+          id,
+          title,
+          nodes
+        )
+      )
+    `)
+    .eq('id', params.id)
+    .single();
+
+  if (!project) {
+    redirect('/dashboard/projects');
+  }
+
+  return <ProjectView project={project} user={user} />;
+} 
