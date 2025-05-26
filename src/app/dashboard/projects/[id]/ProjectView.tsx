@@ -41,6 +41,12 @@ interface Metrics {
   unit: string;
 }
 
+interface GoalTask {
+  task_id: string;
+  goal_id: string;
+  time_worth: number; // hours worth for this task
+}
+
 interface Goal {
   id: string;
   title: string;
@@ -48,6 +54,7 @@ interface Goal {
   target_date: string;
   metrics?: Metrics;
   status?: 'not_started' | 'in_progress' | 'completed';
+  goal_tasks?: GoalTask[];
 }
 
 interface Node {
@@ -143,6 +150,14 @@ interface ProjectViewProps {
   user: User;
 }
 
+interface NewTask {
+  title: string;
+  description: string;
+  priority: number;
+  status: 'todo' | 'in_progress' | 'completed';
+  due_date: string;
+}
+
 export default function ProjectView({ project: initialProject, user }: ProjectViewProps) {
   console.log('Initial Project Data:', initialProject);
   
@@ -199,16 +214,18 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const [availableNodes, setAvailableNodes] = useState<Node[]>([]);
   const [selectedNode, setSelectedNode] = useState<string>('');
   const [linkDescription, setLinkDescription] = useState('');
-  const [newTask, setNewTask] = useState<Partial<Task>>({
+  const [newTask, setNewTask] = useState<NewTask>({
     title: '',
     description: '',
     status: 'todo',
-    priority: 2
+    priority: 2,
+    due_date: new Date().toISOString().slice(0, 16)
   });
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: '',
     description: '',
     status: 'not_started',
+    target_date: new Date().toISOString().slice(0, 16),
     metrics: {
       target: 0,
       current: 0,
@@ -221,6 +238,11 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
   const [flows, setFlows] = useState<ProcessFlow[]>([]);
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
+  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  const [selectedGoalForTask, setSelectedGoalForTask] = useState<string | null>(null);
+  const [selectedTaskTimeWorth, setSelectedTaskTimeWorth] = useState<number>(1);
+  const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [isAttachingTask, setIsAttachingTask] = useState(false);
 
   const supabase = createClient();
 
@@ -286,71 +308,103 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const handleAddTask = async () => {
     if (!newTask.title) return;
 
-    const { data: task, error } = await supabase
-      .from('tasks')
-      .insert([{
-        ...newTask,
-        user_id: user.id
-      }])
-      .select()
-      .single();
+    try {
+      // Create the task
+      const { data: task, error: taskError } = await supabase
+        .from('tasks')
+        .insert([{
+          title: newTask.title,
+          description: newTask.description,
+          status: newTask.status,
+          priority: newTask.priority,
+          due_date: newTask.due_date,
+          user_id: user.id
+        }])
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error adding task:', error);
-      return;
+      if (taskError) {
+        console.error('Error creating task:', taskError);
+        return;
+      }
+
+      // Link the task to the project
+      const { error: linkError } = await supabase
+        .from('task_projects')
+        .insert([{
+          task_id: task.id,
+          project_id: project.id
+        }]);
+
+      if (linkError) {
+        console.error('Error linking task to project:', linkError);
+        return;
+      }
+
+      // Add the new task to the state
+      setTasks([...tasks, task]);
+      
+      // Reset form and close dialog
+      setNewTask({
+        title: '',
+        description: '',
+        status: 'todo',
+        priority: 2,
+        due_date: new Date().toISOString().slice(0, 16)
+      });
+      setIsAddingTask(false);
+    } catch (error) {
+      console.error('Error in handleAddTask:', error);
     }
-
-    // Link task to project
-    await supabase
-      .from('task_projects')
-      .insert([{
-        task_id: task.id,
-        project_id: project.id
-      }]);
-
-    setTasks([...tasks, task]);
-    setIsAddingTask(false);
-    setNewTask({
-      title: '',
-      description: '',
-      status: 'todo',
-      priority: 2
-    });
   };
 
   const handleAddGoal = async () => {
     if (!newGoal.title || !newGoal.target_date) return;
 
-    const { data: goal, error } = await supabase
-      .from('goals')
-      .insert([{
-        ...newGoal,
-        project_id: project.id,
-        user_id: user.id
-      }])
-      .select()
-      .single();
+    try {
+      const { data: goal, error } = await supabase
+        .from('goals')
+        .insert([{
+          title: newGoal.title,
+          description: newGoal.description || '',
+          target_date: newGoal.target_date,
+          status: newGoal.status || 'not_started',
+          metrics: newGoal.metrics,
+          project_id: project.id,
+          user_id: user.id
+        }])
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error adding goal:', error);
-      return;
-    }
-
-    setProject({
-      ...project,
-      goals: [...project.goals, goal]
-    });
-    setIsAddingGoal(false);
-    setNewGoal({
-      title: '',
-      description: '',
-      status: 'not_started',
-      metrics: {
-        target: 0,
-        current: 0,
-        unit: 'hours'
+      if (error) {
+        console.error('Error adding goal:', error);
+        return;
       }
-    });
+
+      // Update the project state with the new goal
+      setProject({
+        ...project,
+        goals: [...project.goals, goal]
+      });
+
+      // Reset the form
+      setNewGoal({
+        title: '',
+        description: '',
+        status: 'not_started',
+        target_date: new Date().toISOString().slice(0, 16),
+        metrics: {
+          target: 0,
+          current: 0,
+          unit: 'hours'
+        }
+      });
+      
+      // Close the dialog
+      setIsAddingGoal(false);
+    } catch (error) {
+      console.error('Error in handleAddGoal:', error);
+    }
   };
 
   const getTasksByStatus = (status: Task['status']) => {
@@ -565,6 +619,98 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     }
   }, [selectedFlowId]);
 
+  const getDaysRemaining = (targetDate: string) => {
+    const today = new Date();
+    const target = new Date(targetDate);
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const handleEditGoal = async (goalId: string, updatedGoal: Partial<Goal>) => {
+    try {
+      const { data: goal, error } = await supabase
+        .from('goals')
+        .update(updatedGoal)
+        .eq('id', goalId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setProject({
+        ...project,
+        goals: project.goals.map(g => g.id === goalId ? { ...g, ...goal } : g)
+      });
+      setEditingGoal(null);
+    } catch (error) {
+      console.error('Error updating goal:', error);
+    }
+  };
+
+  const handleAttachTaskToGoal = async (taskId: string, goalId: string, timeWorth: number) => {
+    try {
+      const { data: goalTask, error } = await supabase
+        .from('goal_tasks')
+        .insert([{
+          task_id: taskId,
+          goal_id: goalId,
+          time_worth: timeWorth
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update the project state with the new goal task
+      setProject({
+        ...project,
+        goals: project.goals.map(g => {
+          if (g.id === goalId) {
+            return {
+              ...g,
+              goal_tasks: [...(g.goal_tasks || []), goalTask]
+            };
+          }
+          return g;
+        })
+      });
+
+      // Update goal metrics if task is completed
+      const task = tasks.find(t => t.id === taskId);
+      if (task?.status === 'completed') {
+        const goal = project.goals.find(g => g.id === goalId);
+        if (goal?.metrics) {
+          const updatedMetrics = {
+            ...goal.metrics,
+            current: goal.metrics.current + timeWorth
+          };
+          await handleEditGoal(goalId, { metrics: updatedMetrics });
+        }
+      }
+    } catch (error) {
+      console.error('Error attaching task to goal:', error);
+    }
+  };
+
+  const handleEditTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      const { data: task, error } = await supabase
+        .from('tasks')
+        .update(updates)
+        .eq('id', taskId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTasks(tasks.map(t => t.id === taskId ? { ...t, ...task } : t));
+      setEditingTask(null);
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white p-6">
       <div className="max-w-7xl mx-auto">
@@ -584,6 +730,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                 onClick={() => setIsAddingTask(true)}
                 className="font-medium"
               >
+                <PlusCircle className="h-4 w-4 mr-2" />
                 Add Task
               </Button>
               <Button 
@@ -610,6 +757,195 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
             <p className="text-gray-600 mt-2">{project.description}</p>
           )}
         </div>
+
+        {/* Task Creation Dialog */}
+        <Dialog open={isAddingTask} onOpenChange={setIsAddingTask}>
+          <DialogContent className="bg-white p-6 rounded-lg shadow-lg max-w-lg">
+            <DialogHeader className="mb-4">
+              <DialogTitle className="text-xl font-semibold">Add New Task</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="title" className="text-sm font-medium text-gray-700">Title</Label>
+                <Input
+                  id="title"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  placeholder="Task title"
+                  className="mt-1 w-full"
+                />
+              </div>
+              <div>
+                <Label htmlFor="description" className="text-sm font-medium text-gray-700">Description</Label>
+                <Textarea
+                  id="description"
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                  placeholder="Task description"
+                  className="mt-1 w-full h-24"
+                />
+              </div>
+              <div>
+                <Label htmlFor="priority" className="text-sm font-medium text-gray-700">Priority</Label>
+                <Select
+                  value={newTask.priority.toString()}
+                  onValueChange={(value) => setNewTask({ ...newTask, priority: parseInt(value) })}
+                >
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Low</SelectItem>
+                    <SelectItem value="2">Medium</SelectItem>
+                    <SelectItem value="3">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="due_date" className="text-sm font-medium text-gray-700">Due Date</Label>
+                <Input
+                  id="due_date"
+                  type="datetime-local"
+                  value={newTask.due_date}
+                  onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
+                  className="mt-1 w-full"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <Button variant="outline" onClick={() => setIsAddingTask(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddTask} disabled={!newTask.title}>
+                Add Task
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Goal Creation Dialog */}
+        <Dialog open={isAddingGoal} onOpenChange={setIsAddingGoal}>
+          <DialogContent className="bg-white rounded-lg shadow-lg max-w-lg max-h-[90vh] flex flex-col">
+            <DialogHeader className="p-6 pb-2">
+              <DialogTitle className="text-xl font-semibold">Add New Goal</DialogTitle>
+            </DialogHeader>
+            
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 pt-2">
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">SMART Goal Guidelines</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• <strong>Specific:</strong> Clear and precise objective</li>
+                  <li>• <strong>Measurable:</strong> Quantifiable progress and outcome</li>
+                  <li>• <strong>Achievable:</strong> Realistic and attainable</li>
+                  <li>• <strong>Relevant:</strong> Aligned with project objectives</li>
+                  <li>• <strong>Time-bound:</strong> Clear deadline or timeframe</li>
+                </ul>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="goal-title" className="text-sm font-medium text-gray-700">Title</Label>
+                  <Input
+                    id="goal-title"
+                    value={newGoal.title}
+                    onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
+                    placeholder="e.g., Increase user engagement by 25%"
+                    className="mt-1 w-full"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="goal-description" className="text-sm font-medium text-gray-700">Description</Label>
+                  <Textarea
+                    id="goal-description"
+                    value={newGoal.description}
+                    onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
+                    placeholder="Describe the specific actions and steps needed to achieve this goal"
+                    className="mt-1 w-full h-24"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="goal-target" className="text-sm font-medium text-gray-700">Target Metric</Label>
+                  <div className="flex gap-4 mt-1">
+                    <Input
+                      type="number"
+                      value={newGoal.metrics?.target || 0}
+                      onChange={(e) => setNewGoal({
+                        ...newGoal,
+                        metrics: {
+                          target: parseFloat(e.target.value) || 0,
+                          current: 0,
+                          unit: newGoal.metrics?.unit || 'hours'
+                        }
+                      })}
+                      placeholder="Target value"
+                      className="w-1/3"
+                    />
+                    <Select
+                      value={newGoal.metrics?.unit || 'hours'}
+                      onValueChange={(value) => setNewGoal({
+                        ...newGoal,
+                        metrics: {
+                          target: newGoal.metrics?.target || 0,
+                          current: newGoal.metrics?.current || 0,
+                          unit: value
+                        }
+                      })}
+                    >
+                      <SelectTrigger className="w-1/3">
+                        <SelectValue placeholder="Unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hours">Hours</SelectItem>
+                        <SelectItem value="percent">Percent</SelectItem>
+                        <SelectItem value="tasks">Tasks</SelectItem>
+                        <SelectItem value="points">Points</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="goal-target-date" className="text-sm font-medium text-gray-700">Target Date</Label>
+                  <Input
+                    id="goal-target-date"
+                    type="datetime-local"
+                    value={newGoal.target_date}
+                    onChange={(e) => setNewGoal({ ...newGoal, target_date: e.target.value })}
+                    className="mt-1 w-full"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="goal-status" className="text-sm font-medium text-gray-700">Initial Status</Label>
+                  <Select
+                    value={newGoal.status || 'not_started'}
+                    onValueChange={(value) => setNewGoal({ ...newGoal, status: value as Goal['status'] })}
+                  >
+                    <SelectTrigger className="mt-1 w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not_started">Not Started</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Fixed Footer */}
+            <div className="border-t p-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsAddingGoal(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAddGoal} 
+                disabled={!newGoal.title || !newGoal.target_date}
+              >
+                Add Goal
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Main Content */}
         <Tabs.Root defaultValue="kanban" className="space-y-6">
@@ -661,24 +997,156 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                 {...provided.dragHandleProps}
                                 className="bg-white rounded-lg p-4 mb-2 shadow-sm"
                               >
-                                <h4 className="font-medium">{task.title}</h4>
-                                {task.description && (
-                                  <p className="text-sm text-gray-600 mt-1">{task.description}</p>
+                                <div className="flex justify-between items-start">
+                                  {editingTask === task.id ? (
+                                    <Input
+                                      value={task.title}
+                                      onChange={(e) => handleEditTask(task.id, { title: e.target.value })}
+                                      className="mb-2"
+                                    />
+                                  ) : (
+                                    <h4 className="font-medium">{task.title}</h4>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setEditingTask(editingTask === task.id ? null : task.id)}
+                                    >
+                                      {editingTask === task.id ? 'Save' : 'Edit'}
+                                    </Button>
+                                    <Dialog open={isAttachingTask} onOpenChange={setIsAttachingTask}>
+                                      <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm">
+                                          <PlusCircle className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="bg-white border shadow-lg">
+                                        <DialogHeader>
+                                          <DialogTitle className="text-xl font-semibold text-gray-900">Attach Task to Goal</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="space-y-4 py-4">
+                                          <div className="space-y-2">
+                                            <Label className="text-sm font-medium text-gray-700">Select Goal</Label>
+                                            <Select
+                                              value={selectedGoalForTask || ''}
+                                              onValueChange={(value) => setSelectedGoalForTask(value)}
+                                            >
+                                              <SelectTrigger className="w-full bg-white border-gray-200">
+                                                <SelectValue placeholder="Choose a goal" />
+                                              </SelectTrigger>
+                                              <SelectContent className="bg-white">
+                                                {project.goals.map(goal => (
+                                                  <SelectItem key={goal.id} value={goal.id} className="text-gray-900">
+                                                    {goal.title}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label className="text-sm font-medium text-gray-700">Time Worth (hours)</Label>
+                                            <Input
+                                              type="number"
+                                              min="0.1"
+                                              step="0.1"
+                                              value={selectedTaskTimeWorth}
+                                              onChange={(e) => setSelectedTaskTimeWorth(parseFloat(e.target.value))}
+                                              className="w-full bg-white border-gray-200 text-gray-900"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                              setSelectedGoalForTask(null);
+                                              setSelectedTaskTimeWorth(1);
+                                              setIsAttachingTask(false);
+                                            }}
+                                            className="bg-white text-gray-700 hover:bg-gray-50"
+                                          >
+                                            Cancel
+                                          </Button>
+                                          <Button
+                                            onClick={() => {
+                                              if (selectedGoalForTask) {
+                                                handleAttachTaskToGoal(task.id, selectedGoalForTask, selectedTaskTimeWorth);
+                                                setSelectedGoalForTask(null);
+                                                setSelectedTaskTimeWorth(1);
+                                                setIsAttachingTask(false);
+                                              }
+                                            }}
+                                            disabled={!selectedGoalForTask}
+                                            className="bg-blue-600 text-white hover:bg-blue-700"
+                                          >
+                                            Attach to Goal
+                                          </Button>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+                                  </div>
+                                </div>
+                                {editingTask === task.id ? (
+                                  <Textarea
+                                    value={task.description || ''}
+                                    onChange={(e) => handleEditTask(task.id, { description: e.target.value })}
+                                    placeholder="Task description"
+                                    className="mb-2 min-h-[60px]"
+                                  />
+                                ) : (
+                                  task.description && (
+                                    <p className="text-sm text-gray-600 mt-1">{task.description}</p>
+                                  )
                                 )}
                                 <div className="flex items-center gap-2 mt-2">
-                                  <span className={`px-2 py-1 rounded text-xs ${
-                                    task.priority === 3 ? 'bg-red-100 text-red-800' :
-                                    task.priority === 2 ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-green-100 text-green-800'
-                                  }`}>
-                                    {task.priority === 3 ? 'High' : task.priority === 2 ? 'Medium' : 'Low'}
-                                  </span>
-                                  {task.due_date && (
-                                    <span className="text-xs text-gray-500">
-                                      Due: {new Date(task.due_date).toLocaleDateString()}
+                                  {editingTask === task.id ? (
+                                    <Select
+                                      value={task.priority.toString()}
+                                      onValueChange={(value) => handleEditTask(task.id, { priority: parseInt(value) })}
+                                    >
+                                      <SelectTrigger className="w-32">
+                                        <SelectValue placeholder="Priority" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="1">Low</SelectItem>
+                                        <SelectItem value="2">Medium</SelectItem>
+                                        <SelectItem value="3">High</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <span className={`px-2 py-1 rounded text-xs ${
+                                      task.priority === 3 ? 'bg-red-100 text-red-800' :
+                                      task.priority === 2 ? 'bg-yellow-100 text-yellow-800' :
+                                      'bg-green-100 text-green-800'
+                                    }`}>
+                                      {task.priority === 3 ? 'High' : task.priority === 2 ? 'Medium' : 'Low'}
                                     </span>
                                   )}
+                                  {editingTask === task.id ? (
+                                    <Input
+                                      type="datetime-local"
+                                      value={task.due_date?.slice(0, 16) || ''}
+                                      onChange={(e) => handleEditTask(task.id, { due_date: e.target.value })}
+                                      className="w-auto"
+                                    />
+                                  ) : (
+                                    task.due_date && (
+                                      <span className="text-xs text-gray-500">
+                                        Due: {new Date(task.due_date).toLocaleDateString()}
+                                      </span>
+                                    )
+                                  )}
                                 </div>
+                                {/* Show attached goals */}
+                                {project.goals.map(goal => 
+                                  goal.goal_tasks?.some(gt => gt.task_id === task.id) && (
+                                    <div key={goal.id} className="mt-2 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded flex items-center justify-between">
+                                      <span>🎯 {goal.title}</span>
+                                      <span>{goal.goal_tasks.find(gt => gt.task_id === task.id)?.time_worth}h</span>
+                                    </div>
+                                  )
+                                )}
                               </div>
                             )}
                           </Draggable>
@@ -696,12 +1164,39 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {project.goals.map(goal => (
                 <Card key={goal.id}>
-                  <CardHeader>
-                    <CardTitle>{goal.title}</CardTitle>
+                  <CardHeader className="flex flex-row justify-between items-start">
+                    <CardTitle>
+                      {editingGoal === goal.id ? (
+                        <Input
+                          value={goal.title}
+                          onChange={(e) => handleEditGoal(goal.id, { title: e.target.value })}
+                          className="mt-[-4px]"
+                        />
+                      ) : (
+                        goal.title
+                      )}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingGoal(editingGoal === goal.id ? null : goal.id)}
+                    >
+                      {editingGoal === goal.id ? 'Save' : 'Edit'}
+                    </Button>
                   </CardHeader>
                   <CardContent>
                     {goal.description && (
-                      <p className="text-gray-600 mb-4">{goal.description}</p>
+                      <div className="mb-4">
+                        {editingGoal === goal.id ? (
+                          <Textarea
+                            value={goal.description}
+                            onChange={(e) => handleEditGoal(goal.id, { description: e.target.value })}
+                            className="min-h-[100px]"
+                          />
+                        ) : (
+                          <p className="text-gray-600 whitespace-pre-wrap">{goal.description}</p>
+                        )}
+                      </div>
                     )}
                     {goal.metrics && (
                       <div className="space-y-2">
@@ -712,8 +1207,25 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                         <Progress value={getGoalProgress(goal)} />
                       </div>
                     )}
-                    <div className="mt-4 text-sm text-gray-500">
-                      Target Date: {new Date(goal.target_date).toLocaleDateString()}
+                    <div className="mt-4 space-y-2">
+                      <div className="flex justify-between text-sm text-gray-500">
+                        <span>Target Date: {new Date(goal.target_date).toLocaleDateString()}</span>
+                        <span className={`font-medium ${
+                          getDaysRemaining(goal.target_date) < 0 ? 'text-red-500' :
+                          getDaysRemaining(goal.target_date) < 7 ? 'text-yellow-500' :
+                          'text-green-500'
+                        }`}>
+                          {getDaysRemaining(goal.target_date)} days remaining
+                        </span>
+                      </div>
+                      {editingGoal === goal.id && (
+                        <Input
+                          type="datetime-local"
+                          value={goal.target_date.slice(0, 16)}
+                          onChange={(e) => handleEditGoal(goal.id, { target_date: e.target.value })}
+                          className="mt-2"
+                        />
+                      )}
                     </div>
                   </CardContent>
                 </Card>

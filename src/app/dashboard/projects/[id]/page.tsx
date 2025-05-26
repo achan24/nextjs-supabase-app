@@ -44,7 +44,12 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         description,
         target_date,
         status,
-        metrics
+        metrics,
+        goal_tasks(
+          id,
+          task_id,
+          time_worth
+        )
       ),
       project_node_links(
         id,

@@ -142,3 +142,121 @@ KISS (Keep It Simple, Stupid) Principles:
    - WHY: The node ID is unique and the system can find the right flow from just the node ID. Adding extra parameters adds complexity without benefit.
 
 Remember: If you find yourself adding extra fields/parameters to track relationships that already exist in the database, stop and think if you're overcomplicating things. 
+
+# Node Linking System - Issues & Prevention Tips
+
+## Issues Encountered
+
+1. Data Structure Mismatch
+   - Problem: Mismatch between database structure (nodes stored in JSONB array) and frontend expectations
+   - Impact: Links saved but not displayed in UI
+   - Root Cause: Foreign key relationships in Supabase return arrays for one-to-many relationships
+
+2. Type Definition Issues
+   - Problem: TypeScript interfaces didn't match actual data structure from database
+   - Impact: Runtime errors and incorrect data transformation
+   - Root Cause: Not accounting for Supabase's data return format
+
+3. Data Transformation Gaps
+   - Problem: Missing proper transformation of database response to UI-ready format
+   - Impact: Node data not properly extracted from flow's JSONB array
+   - Root Cause: Incomplete understanding of data flow from DB to UI
+
+## Prevention Strategies
+
+1. Database Schema Design
+   - Document foreign key relationship return formats
+   - Add comments in migrations explaining data structures
+   - Use database constraints to enforce data integrity
+   - Consider adding database views for complex data structures
+
+2. Type Safety
+   - Create separate interfaces for DB responses vs UI models
+   - Use discriminated unions for different data states
+   - Add runtime type checks for critical data transformations
+   - Document type transformation requirements
+
+3. Data Flow
+   - Implement proper data transformation layers
+   - Add logging for development environments
+   - Create data validation utilities
+   - Write integration tests for data flow
+
+4. Development Process
+   - Create end-to-end tests for critical features
+   - Add monitoring for runtime errors
+   - Document expected data structures
+   - Review database query results during development
+
+5. Code Organization
+   - Separate data transformation logic
+   - Create utility functions for common transformations
+   - Add type guards for runtime checks
+   - Document complex data relationships
+
+## Best Practices
+
+1. Database
+   - Always test foreign key relationship return formats
+   - Document JSONB structure requirements
+   - Add appropriate indexes for performance
+   - Use database constraints for data integrity
+
+2. TypeScript
+   - Create separate types for raw DB data
+   - Use type guards for runtime safety
+   - Document type transformations
+   - Add proper error handling
+
+3. Testing
+   - Add unit tests for transformations
+   - Create integration tests for data flow
+   - Test edge cases and error conditions
+   - Validate data at each layer
+
+4. Documentation
+   - Document data structures
+   - Add comments for complex transformations
+   - Create examples of expected data formats
+   - Maintain up-to-date API documentation
+
+## Quick Reference
+
+```typescript
+// DB Response Type
+interface DBResponse {
+  flow: ProcessFlowWithNodes[];  // Note: Array from foreign key
+}
+
+// UI Model Type
+interface UIModel {
+  flow: {
+    id: string;
+    title: string;
+  }
+}
+
+// Type Guard Example
+function isValidFlowData(data: unknown): data is ProcessFlowWithNodes {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'nodes' in data &&
+    Array.isArray((data as any).nodes)
+  );
+}
+
+// Data Transformation Example
+function transformDBToUI(dbData: DBResponse): UIModel {
+  const flowData = Array.isArray(dbData.flow) ? dbData.flow[0] : dbData.flow;
+  if (!isValidFlowData(flowData)) {
+    throw new Error('Invalid flow data structure');
+  }
+  return {
+    flow: {
+      id: flowData.id,
+      title: flowData.title
+    }
+  };
+}
+```
