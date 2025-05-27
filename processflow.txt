@@ -326,3 +326,53 @@ Technical Considerations
 Parser splits text using regex: /(\{\{.*?\}\})/g
 Blanks replace {{...}} with underscores or styled spans
 No backend change required if {{}} format is used directly in existing note content
+
+
+
+
+
+## 🧠 Cloze Flashcard System – Node-Based Specification (Finalized)
+
+### 1. **Node-Based Architecture**
+- Each **node** contains its own text and clozes.
+- Flashcards are generated from clozes in the node's content using `{{...}}` syntax.
+- Nodes operate **independently**: clozes and their flashcard stats are scoped to the node.
+
+---
+
+### 2. **Incremental Cloze Management**
+- Clozes can be **added**, **edited**, or **removed** over time.
+- When a cloze is added, a new flashcard is created.
+- **Existing clozes retain their performance stats**.
+- Flashcard stats are not reset when:
+  - The node is edited
+  - New clozes are added
+  - Other clozes are removed
+
+---
+
+### 3. **Flashcard Testing Behavior**
+- Entering Flashcard Mode within a node activates all its clozes as flashcards.
+- Each flashcard:
+  - Presents the surrounding context with a blank
+  - Requires user input or mental recall
+  - Allows reveal and marking as correct/incorrect
+
+---
+
+### 4. **Performance Tracking**
+- Each flashcard tracks performance over time, including:
+  - Correct and incorrect attempts
+  - Last reviewed time
+  - Optional metrics for spaced repetition (e.g., difficulty or priority)
+
+---
+
+### 5. **Persistence and Uniqueness**
+- Each cloze flashcard is uniquely identified within its node.
+- Flashcard stats persist across sessions and are not affected by changes to unrelated clozes.
+- Matching is done by stable identifiers derived from the cloze content and its position in context.
+
+---
+
+Would you like a parser plan or implementation strategy next?

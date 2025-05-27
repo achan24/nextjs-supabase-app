@@ -10,18 +10,30 @@ interface CompletionRecord {
   note?: string;
 }
 
+interface CueRecord {
+  id: string;
+  text: string;
+  createdAt: number;
+  lastUsed?: number;
+  useCount: number;
+  archived: boolean;
+}
+
 interface TaskNodeData extends BaseNodeData {
   timeSpent?: number;
   startTime?: number;
   isRunning?: boolean;
   completionHistory?: CompletionRecord[];
   videoUrl?: string;
+  cues?: CueRecord[];
+  activeCueId?: string;
 }
 
 export const TaskNode = (props: NodeProps<TaskNodeData>) => {
   const { data, id } = props;
   const [currentTime, setCurrentTime] = useState(data.timeSpent || 0);
   const [eta, setEta] = useState<string | null>(null);
+  const [showCue, setShowCue] = useState(false);
   
   useEffect(() => {
     // Load persisted state from localStorage
@@ -77,6 +89,18 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
     };
   }, [data.isRunning, data.startTime, data.timeSpent, id, data.completionHistory]);
 
+  useEffect(() => {
+    // Show cue when timer starts
+    if (data.isRunning && data.activeCueId && data.cues) {
+      const activeCue = data.cues.find(c => c.id === data.activeCueId);
+      if (activeCue && !activeCue.archived) {
+        setShowCue(true);
+      }
+    } else {
+      setShowCue(false);
+    }
+  }, [data.isRunning, data.activeCueId, data.cues]);
+
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -91,8 +115,10 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
     avgTime = total / data.completionHistory.length;
   }
 
+  const activeCue = data.cues?.find(c => c.id === data.activeCueId);
+
   return (
-    <div className="task-node">
+    <div className="task-node relative">
       <BaseNode {...props} />
       <div className="mt-2 text-xs text-gray-500 flex items-center justify-between w-full">
         <span>⏱ {formatTime(currentTime)}</span>
@@ -125,6 +151,12 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
             <source src={data.videoUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
+        </div>
+      )}
+      {showCue && activeCue && (
+        <div className="absolute -right-64 top-0 w-60 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-lg">
+          <div className="font-medium text-yellow-800 mb-1">Task Cue</div>
+          <div className="text-sm text-yellow-700">{activeCue.text}</div>
         </div>
       )}
     </div>

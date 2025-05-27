@@ -12,6 +12,15 @@ interface CompletionRecord {
   note?: string;
 }
 
+interface CueRecord {
+  id: string;
+  text: string;
+  createdAt: number;
+  lastUsed?: number;
+  useCount: number;
+  archived: boolean;
+}
+
 interface NodeDetailsProps {
   node: Node | null;
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
@@ -26,6 +35,9 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [newNote, setNewNote] = useState('');
   const [label, setLabel] = useState(node?.data?.label || '');
   const [description, setDescription] = useState(node?.data?.description || '');
+  const [newCueText, setNewCueText] = useState('');
+  const [showArchivedCues, setShowArchivedCues] = useState(false);
+  const [showCueHistory, setShowCueHistory] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const [tagInput, setTagInput] = useState('');
@@ -346,6 +358,49 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
     });
   };
 
+  const handleAddCue = () => {
+    if (!node || !newCueText.trim()) return;
+    const newCue = {
+      id: Date.now().toString(),
+      text: newCueText.trim(),
+      createdAt: Date.now(),
+      useCount: 0,
+      archived: false,
+    };
+    const currentCues = node.data.cues || [];
+    updateNode(node.id, {
+      cues: [...currentCues, newCue],
+      activeCueId: newCue.id, // Make the new cue active
+    });
+    setNewCueText('');
+  };
+
+  const handleActivateCue = (cueId: string) => {
+    if (!node) return;
+    const cues = node.data.cues || [];
+    const updatedCues = cues.map((cue: CueRecord) => 
+      cue.id === cueId 
+        ? { ...cue, lastUsed: Date.now(), useCount: cue.useCount + 1 }
+        : cue
+    );
+    updateNode(node.id, {
+      cues: updatedCues,
+      activeCueId: cueId,
+    });
+  };
+
+  const handleArchiveCue = (cueId: string) => {
+    if (!node) return;
+    const cues = node.data.cues || [];
+    const updatedCues = cues.map((cue: CueRecord) => 
+      cue.id === cueId ? { ...cue, archived: !cue.archived } : cue
+    );
+    updateNode(node.id, {
+      cues: updatedCues,
+      activeCueId: node.data.activeCueId === cueId ? undefined : node.data.activeCueId,
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Show link reference if node is a link node */}
@@ -436,6 +491,130 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
           </div>
         )}
       </div>
+
+      {node.type === 'task' && (
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <label className="block text-sm font-medium text-gray-700">Task Cues</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCueHistory(!showCueHistory)}
+                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                {showCueHistory ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                    Hide History
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    Show History
+                  </>
+                )}
+              </button>
+              {showCueHistory && (
+                <button
+                  onClick={() => setShowArchivedCues(!showArchivedCues)}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  {showArchivedCues ? 'Hide Archived' : 'Show Archived'}
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Add new cue */}
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              value={newCueText}
+              onChange={(e) => setNewCueText(e.target.value)}
+              placeholder="Add a new cue..."
+              className="flex-1 px-2 py-1 text-sm border rounded"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAddCue();
+                }
+              }}
+            />
+            <button
+              onClick={handleAddCue}
+              disabled={!newCueText.trim()}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              Add Cue
+            </button>
+          </div>
+
+          {/* Cues history */}
+          {showCueHistory && (
+            <div className="space-y-2 transition-all duration-200">
+              {(node.data.cues || [])
+                .filter((cue: CueRecord) => showArchivedCues || !cue.archived)
+                .sort((a: CueRecord, b: CueRecord) => (b.lastUsed || b.createdAt) - (a.lastUsed || a.createdAt))
+                .map((cue: CueRecord) => {
+                  // Get the cue's number based on creation order
+                  const cueNumber = (node.data.cues || [])
+                    .sort((a: CueRecord, b: CueRecord) => a.createdAt - b.createdAt)
+                    .findIndex((c: CueRecord) => c.id === cue.id) + 1;
+                  
+                  return (
+                    <div 
+                      key={cue.id}
+                      className={`p-3 rounded-lg border ${
+                        cue.archived 
+                          ? 'bg-gray-50 border-gray-200'
+                          : node.data.activeCueId === cue.id
+                            ? 'bg-yellow-50 border-yellow-200'
+                            : 'bg-white border-gray-200'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1">
+                          <div className="text-sm">
+                            <span className="font-medium text-gray-500 mr-2">#{cueNumber}</span>
+                            {cue.text}
+                          </div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            Used {cue.useCount} times · Last used {cue.lastUsed ? new Date(cue.lastUsed).toLocaleDateString() : 'never'}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {!cue.archived && (
+                            <button
+                              onClick={() => handleActivateCue(cue.id)}
+                              disabled={node.data.activeCueId === cue.id}
+                              className={`px-2 py-1 text-xs rounded ${
+                                node.data.activeCueId === cue.id
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                              }`}
+                            >
+                              {node.data.activeCueId === cue.id ? 'Active' : 'Activate'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleArchiveCue(cue.id)}
+                            className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                          >
+                            {cue.archived ? 'Unarchive' : 'Archive'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         <div className="flex justify-between items-center">
           <label className="block text-sm font-medium text-gray-700">Description</label>
