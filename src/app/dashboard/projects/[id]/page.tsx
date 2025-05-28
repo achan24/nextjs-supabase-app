@@ -74,6 +74,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         note_id,
         created_at,
         user_id,
+        display_order,
         note:notes(
           id,
           title,

@@ -906,23 +906,45 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
+    // Update local state immediately for smooth UI
     setNoteOrder(items);
     
     // Update display_order in the database for all affected notes
     try {
-      const updates = items.map((noteId, index) => ({
-        id: noteId,
-        display_order: index
-      }));
+      // Get the project note links that correspond to the note IDs
+      const updates = items.map((noteId, index) => {
+        const link = project.project_notes.find(n => n.id === noteId);
+        if (!link) return null;
+        
+        return {
+          id: link.id,
+          project_id: project.id,
+          note_id: link.note_id,
+          user_id: user.id,  // Add user_id to satisfy RLS policy
+          display_order: index
+        };
+      }).filter(Boolean);
 
       const { error } = await supabase
         .from('project_note_links')
-        .upsert(updates, { onConflict: 'id' });
+        .upsert(updates);
 
       if (error) {
         console.error('Error updating note order:', error);
         // Revert the state if the database update fails
         setNoteOrder(noteOrder);
+      } else {
+        // Update the project state to reflect the new order
+        setProject(prev => ({
+          ...prev,
+          project_notes: prev.project_notes.map(note => {
+            const index = items.indexOf(note.id);
+            return {
+              ...note,
+              display_order: index
+            };
+          })
+        }));
       }
     } catch (error) {
       console.error('Error in handleNoteReorder:', error);
@@ -1541,80 +1563,83 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                   <div
                     {...provided.droppableProps}
                     ref={provided.innerRef}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[calc(100vh-200px)] overflow-y-auto p-1"
+                    className="flex flex-col gap-4 max-h-[calc(100vh-200px)] overflow-y-auto p-1"
                   >
-                    {noteOrder
-                      .map((noteId, index) => {
-                        const link = project.project_notes?.find(n => n.id === noteId);
-                        if (!link) return null;
-                        
-                        return (
-                          <Draggable key={link.id} draggableId={link.id} index={index}>
-                            {(provided) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                              >
-                                <Card className="h-fit">
-                                  <CardHeader className="p-4">
-                                    <CardTitle className="flex justify-between items-start">
-                                      <div className="flex flex-col">
-                                        <Link
-                                          href={`/dashboard/notes/${link.note.id}`}
-                                          className="text-xl font-semibold text-gray-900 hover:text-blue-600 line-clamp-2"
-                                        >
-                                          {link.note.title}
-                                        </Link>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleUnlinkNote(link.id)}
-                                        className="text-red-600 hover:text-red-800 ml-2"
-                                      >
-                                        Unlink
-                                      </Button>
-                                    </CardTitle>
-                                  </CardHeader>
-                                  <CardContent className="p-4 pt-0">
-                                    <div className="relative mb-4">
-                                      <p className={`text-gray-600 whitespace-pre-wrap ${showFullContent === link.note.id ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}>
-                                        {link.note.content}
-                                      </p>
-                                      {link.note.content && link.note.content.length > 150 && (
-                                        <div className="flex justify-end mt-2">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setShowFullContent(showFullContent === link.note.id ? null : link.note.id)}
-                                            className="text-blue-600 hover:text-blue-800 text-sm"
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {noteOrder
+                        .map((noteId, index) => {
+                          const link = project.project_notes?.find(n => n.id === noteId);
+                          if (!link) return null;
+                          
+                          return (
+                            <Draggable key={link.id} draggableId={link.id} index={index}>
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className="h-fit"
+                                >
+                                  <Card>
+                                    <CardHeader className="p-4">
+                                      <CardTitle className="flex justify-between items-start">
+                                        <div className="flex flex-col">
+                                          <Link
+                                            href={`/dashboard/notes/${link.note.id}`}
+                                            className="text-xl font-semibold text-gray-900 hover:text-blue-600 line-clamp-2"
                                           >
-                                            {showFullContent === link.note.id ? '← Show less' : 'Show more →'}
-                                          </Button>
+                                            {link.note.title}
+                                          </Link>
                                         </div>
-                                      )}
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                      {link.note.tags?.map(tag => (
-                                        <span
-                                          key={tag}
-                                          className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleUnlinkNote(link.id)}
+                                          className="text-red-600 hover:text-red-800 ml-2"
                                         >
-                                          {tag}
-                                        </span>
-                                      ))}
-                                    </div>
-                                    <p className="text-sm text-gray-500">
-                                      Created on {format(new Date(link.note.created_at), 'MMM d, yyyy')}
-                                    </p>
-                                  </CardContent>
-                                </Card>
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
+                                          Unlink
+                                        </Button>
+                                      </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-4 pt-0">
+                                      <div className="relative mb-4">
+                                        <p className={`text-gray-600 whitespace-pre-wrap ${showFullContent === link.note.id ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}>
+                                          {link.note.content}
+                                        </p>
+                                        {link.note.content && link.note.content.length > 150 && (
+                                          <div className="flex justify-end mt-2">
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => setShowFullContent(showFullContent === link.note.id ? null : link.note.id)}
+                                              className="text-blue-600 hover:text-blue-800 text-sm"
+                                            >
+                                              {showFullContent === link.note.id ? '← Show less' : 'Show more →'}
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-wrap gap-2 mb-4">
+                                        {link.note.tags?.map(tag => (
+                                          <span
+                                            key={tag}
+                                            className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                                          >
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <p className="text-sm text-gray-500">
+                                        Created on {format(new Date(link.note.created_at), 'MMM d, yyyy')}
+                                      </p>
+                                    </CardContent>
+                                  </Card>
+                                </div>
+                              )}
+                            </Draggable>
+                          );
+                        })}
+                    </div>
                     {provided.placeholder}
                     {(!project.project_notes || project.project_notes.length === 0) && (
                       <p className="text-gray-500">No notes linked to this project yet.</p>
