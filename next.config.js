@@ -6,7 +6,7 @@ const nextConfig = {
     // Add support for ESM modules
     config.resolve.fallback = {
       ...config.resolve.fallback,
-      'supports-color': false,
+      "supports-color": require.resolve("supports-color"),
     };
     return config;
   },
@@ -37,7 +37,8 @@ const nextConfig = {
         ]
       }
     ]
-  }
+  },
+  transpilePackages: ['supports-color'],
 }
 
 module.exports = nextConfig 
