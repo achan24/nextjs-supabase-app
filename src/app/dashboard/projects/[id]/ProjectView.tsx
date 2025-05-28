@@ -131,6 +131,7 @@ interface ProjectWithNodesAndTasksFromDB extends Omit<Project, 'tasks' | 'projec
     note_id: string;
     created_at: string;
     user_id: string;
+    display_order: number;
     note: Note;
   }[];
 }
@@ -193,6 +194,7 @@ interface ProjectNoteLink {
   note: Note;
   created_at: string;
   user_id: string;
+  display_order: number;
 }
 
 interface SupabaseNoteLink {
@@ -251,12 +253,13 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           title: noteData.title,
           content: noteData.content,
           created_at: noteData.created_at,
-          updated_at: noteData.updated_at || noteData.created_at, // Fallback to created_at if updated_at is missing
+          updated_at: noteData.updated_at || noteData.created_at,
           tags: noteData.tags || [],
           user_id: noteData.user_id
         },
         created_at: link.created_at,
-        user_id: link.user_id
+        user_id: link.user_id,
+        display_order: link.display_order || 0
       };
     }).filter((link): link is ProjectNoteLink => link !== null) || []) as ProjectNoteLink[]
   };
@@ -842,7 +845,8 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
             note_id: link.note_id,
             note: noteData,
             created_at: link.created_at,
-            user_id: link.user_id
+            user_id: link.user_id,
+            display_order: project.project_notes.length
           };
 
           setProject(prev => ({
@@ -884,11 +888,17 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   // Initialize note order when project changes
   useEffect(() => {
     if (project.project_notes) {
-      setNoteOrder(project.project_notes.map(note => note.id));
+      // Sort notes by display_order
+      const sortedNotes = [...project.project_notes].sort((a, b) => {
+        const orderA = a.display_order || 0;
+        const orderB = b.display_order || 0;
+        return orderA - orderB;
+      });
+      setNoteOrder(sortedNotes.map(note => note.id));
     }
   }, [project.project_notes]);
 
-  // Add this function to handle note reordering
+  // Update handleNoteReorder function to persist the order
   const handleNoteReorder = async (result: any) => {
     if (!result.destination) return;
 
@@ -898,11 +908,27 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
 
     setNoteOrder(items);
     
-    // You can add database persistence here if needed
-    // await supabase
-    //   .from('project_note_links')
-    //   .update({ display_order: result.destination.index })
-    //   .eq('id', reorderedItem);
+    // Update display_order in the database for all affected notes
+    try {
+      const updates = items.map((noteId, index) => ({
+        id: noteId,
+        display_order: index
+      }));
+
+      const { error } = await supabase
+        .from('project_note_links')
+        .upsert(updates, { onConflict: 'id' });
+
+      if (error) {
+        console.error('Error updating note order:', error);
+        // Revert the state if the database update fails
+        setNoteOrder(noteOrder);
+      }
+    } catch (error) {
+      console.error('Error in handleNoteReorder:', error);
+      // Revert the state if there's an error
+      setNoteOrder(noteOrder);
+    }
   };
 
   return (
