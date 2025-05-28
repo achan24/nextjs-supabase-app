@@ -16,14 +16,24 @@ import Link from 'next/link';
 import { PlusCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { format } from 'date-fns';
+
+interface ProjectNote {
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface Project {
   id: string;
   title: string;
   description?: string;
   goals: Goal[];
-  tasks?: Task[];
+  tasks: Task[];
   nodes: Node[];
+  project_node_links: ProjectNodeLink[];
+  project_notes: ProjectNoteLink[];
 }
 
 interface Task {
@@ -112,9 +122,17 @@ interface ProjectNodeLinkFromDB extends Omit<ProjectNodeLink, 'flow' | 'node'> {
   flow: ProcessFlowWithNodes | ProcessFlowWithNodes[];
 }
 
-interface ProjectWithNodesAndTasksFromDB extends Omit<Project, 'tasks' | 'project_node_links'> {
+interface ProjectWithNodesAndTasksFromDB extends Omit<Project, 'tasks' | 'project_node_links' | 'project_notes'> {
   tasks: TaskWithWrapper[];
   project_node_links: ProjectNodeLinkFromDB[];
+  project_notes: {
+    id: string;
+    project_id: string;
+    note_id: string;
+    created_at: string;
+    user_id: string;
+    note: Note;
+  }[];
 }
 
 interface ProcessFlow {
@@ -158,29 +176,44 @@ interface NewTask {
   due_date: string;
 }
 
+interface Note {
+  id: string;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  tags: string[];
+  user_id: string;
+}
+
+interface ProjectNoteLink {
+  id: string;
+  project_id: string;
+  note_id: string;
+  note: Note;
+  created_at: string;
+  user_id: string;
+}
+
+interface SupabaseNoteLink {
+  id: string;
+  note: Note[];
+}
+
 export default function ProjectView({ project: initialProject, user }: ProjectViewProps) {
   console.log('Initial Project Data:', initialProject);
+  console.log('Initial Project Notes:', initialProject.project_notes);
   
   // Transform the initial project data to include properly formatted node links
-  const transformedProject = {
+  const transformedProject: Project = {
     ...initialProject,
-    tasks: initialProject.tasks?.map((t: TaskWithWrapper) => t.task) || [],
-    project_node_links: (initialProject.project_node_links || []).map(link => {
-      console.log('Processing link:', link);
-      // Get the flow data - it comes as an array from the foreign key relationship
-      const flowData = Array.isArray(link.flow) ? link.flow[0] : link.flow;
-      console.log('Flow data:', flowData);
-      
-      if (!flowData || !flowData.nodes) {
-        console.error('Missing flow data or nodes for link:', link);
-        return null;
-      }
+    tasks: initialProject.tasks?.map((wrapper: any) => wrapper.task) || [],
+    project_node_links: initialProject.project_node_links?.map(link => {
+      const flow = Array.isArray(link.flow) ? link.flow[0] : link.flow;
+      if (!flow || !flow.nodes) return null;
 
-      const nodeData = flowData.nodes.find((n: any) => n.id === link.linked_node_id);
-      if (!nodeData) {
-        console.error('Could not find node data for link:', link);
-        return null;
-      }
+      const nodeData = flow.nodes.find((n: any) => n.id === link.linked_node_id);
+      if (!nodeData) return null;
 
       return {
         id: link.id,
@@ -191,8 +224,8 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
         created_at: link.created_at,
         user_id: link.user_id,
         flow: {
-          id: flowData.id,
-          title: flowData.title
+          id: flow.id,
+          title: flow.title
         },
         node: {
           id: link.linked_node_id,
@@ -201,12 +234,36 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           }
         }
       } as ProjectNodeLink;
-    }).filter((link): link is ProjectNodeLink => link !== null) || []
+    }).filter((link): link is ProjectNodeLink => link !== null) || [],
+    project_notes: (initialProject.project_notes?.map(link => {
+      if (!link || !link.note) return null;
+      
+      // Handle both array and single object cases for note
+      const noteData = Array.isArray(link.note) ? link.note[0] : link.note;
+      if (!noteData) return null;
+
+      return {
+        id: link.id,
+        project_id: link.project_id,
+        note_id: link.note_id,
+        note: {
+          id: noteData.id,
+          title: noteData.title,
+          content: noteData.content,
+          created_at: noteData.created_at,
+          updated_at: noteData.updated_at || noteData.created_at, // Fallback to created_at if updated_at is missing
+          tags: noteData.tags || [],
+          user_id: noteData.user_id
+        },
+        created_at: link.created_at,
+        user_id: link.user_id
+      };
+    }).filter((link): link is ProjectNoteLink => link !== null) || []) as ProjectNoteLink[]
   };
 
   console.log('Transformed Project:', transformedProject);
 
-  const [project, setProject] = useState(transformedProject);
+  const [project, setProject] = useState<Project>(transformedProject);
   const [tasks, setTasks] = useState<Task[]>(transformedProject.tasks || []);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isAddingGoal, setIsAddingGoal] = useState(false);
@@ -243,6 +300,16 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const [selectedTaskTimeWorth, setSelectedTaskTimeWorth] = useState<number>(1);
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [isAttachingTask, setIsAttachingTask] = useState(false);
+
+  // Add new state for note linking
+  const [isLinkingNote, setIsLinkingNote] = useState(false);
+  const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
+  const [selectedNoteId, setSelectedNoteId] = useState<string>('');
+
+  // Add new state for note content preview
+  const [showFullContent, setShowFullContent] = useState<string | null>(null);
+
+  const [noteOrder, setNoteOrder] = useState<string[]>([]);  // Add this state for note order
 
   const supabase = createClient();
 
@@ -711,6 +778,133 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     }
   };
 
+  // Add fetchAvailableNotes function
+  const fetchAvailableNotes = async () => {
+    const { data: notes, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notes:', error);
+      return;
+    }
+
+    setAvailableNotes(notes || []);
+  };
+
+  // Update handleLinkNote function
+  const handleLinkNote = async () => {
+    if (!selectedNoteId) return;
+
+    try {
+      const { data: link, error } = await supabase
+        .from('project_note_links')
+        .insert([{
+          project_id: project.id,
+          note_id: selectedNoteId,
+          user_id: user.id
+        }])
+        .select(`
+          id,
+          project_id,
+          note_id,
+          created_at,
+          user_id,
+          note:notes(
+            id,
+            title,
+            content,
+            created_at,
+            updated_at,
+            tags,
+            user_id
+          )
+        `)
+        .single();
+
+      if (error) {
+        if (error.code === '23505') { // Unique violation
+          console.error('This note is already linked to this project');
+        } else {
+          console.error('Error linking note:', error);
+        }
+        return;
+      }
+
+      if (link && link.note) {
+        const noteData = Array.isArray(link.note) ? link.note[0] : link.note;
+        if (noteData) {
+          const formattedLink: ProjectNoteLink = {
+            id: link.id,
+            project_id: link.project_id,
+            note_id: link.note_id,
+            note: noteData,
+            created_at: link.created_at,
+            user_id: link.user_id
+          };
+
+          setProject(prev => ({
+            ...prev,
+            project_notes: [...(prev.project_notes || []), formattedLink]
+          }));
+        }
+      }
+
+      setIsLinkingNote(false);
+      setSelectedNoteId('');
+    } catch (error) {
+      console.error('Error in handleLinkNote:', error);
+    }
+  };
+
+  // Add handleUnlinkNote function
+  const handleUnlinkNote = async (linkId: string) => {
+    try {
+      const { error } = await supabase
+        .from('project_note_links')
+        .delete()
+        .eq('id', linkId);
+
+      if (error) {
+        console.error('Error unlinking note:', error);
+        return;
+      }
+
+      setProject(prev => ({
+        ...prev,
+        project_notes: prev.project_notes.filter(link => link.id !== linkId)
+      }));
+    } catch (error) {
+      console.error('Error in handleUnlinkNote:', error);
+    }
+  };
+
+  // Initialize note order when project changes
+  useEffect(() => {
+    if (project.project_notes) {
+      setNoteOrder(project.project_notes.map(note => note.id));
+    }
+  }, [project.project_notes]);
+
+  // Add this function to handle note reordering
+  const handleNoteReorder = async (result: any) => {
+    if (!result.destination) return;
+
+    const items = Array.from(noteOrder);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    setNoteOrder(items);
+    
+    // You can add database persistence here if needed
+    // await supabase
+    //   .from('project_note_links')
+    //   .update({ display_order: result.destination.index })
+    //   .eq('id', reorderedItem);
+  };
+
   return (
     <div className="min-h-screen bg-white p-6">
       <div className="max-w-7xl mx-auto">
@@ -750,6 +944,17 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
               >
                 <PlusCircle className="h-4 w-4" />
                 Link Node
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  fetchAvailableNotes();
+                  setIsLinkingNote(true);
+                }}
+                className="font-medium flex items-center gap-2"
+              >
+                <PlusCircle className="h-4 w-4" />
+                Link Note
               </Button>
             </div>
           </div>
@@ -948,31 +1153,37 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
         </Dialog>
 
         {/* Main Content */}
-        <Tabs.Root defaultValue="kanban" className="space-y-6">
-          <Tabs.List className="bg-gray-100 p-1 rounded-lg">
+        <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
+          <Tabs.List className="flex border-b mb-4">
             <Tabs.Trigger 
               value="kanban"
-              className="rounded px-4 py-2 text-sm font-medium data-[state=active]:bg-white"
+              className="px-4 py-2 -mb-px text-sm font-medium data-[state=active]:bg-white"
             >
               Kanban Board
             </Tabs.Trigger>
             <Tabs.Trigger 
               value="goals"
-              className="rounded px-4 py-2 text-sm font-medium data-[state=active]:bg-white"
+              className="px-4 py-2 -mb-px text-sm font-medium data-[state=active]:bg-white"
             >
               Goals
             </Tabs.Trigger>
             <Tabs.Trigger 
               value="metrics"
-              className="rounded px-4 py-2 text-sm font-medium data-[state=active]:bg-white"
+              className="px-4 py-2 -mb-px text-sm font-medium data-[state=active]:bg-white"
             >
               Metrics
             </Tabs.Trigger>
             <Tabs.Trigger 
               value="nodes"
-              className="rounded px-4 py-2 text-sm font-medium data-[state=active]:bg-white"
+              className="px-4 py-2 -mb-px text-sm font-medium data-[state=active]:bg-white"
             >
               Linked Nodes
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="notes"
+              className="px-4 py-2 -mb-px text-sm font-medium data-[state=active]:bg-white"
+            >
+              Notes
             </Tabs.Trigger>
           </Tabs.List>
 
@@ -1296,6 +1507,97 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
               )}
             </div>
           </Tabs.Content>
+
+          <Tabs.Content value="notes" className="space-y-4">
+            <DragDropContext onDragEnd={handleNoteReorder}>
+              <Droppable droppableId="notes">
+                {(provided) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[calc(100vh-200px)] overflow-y-auto p-1"
+                  >
+                    {noteOrder
+                      .map((noteId, index) => {
+                        const link = project.project_notes?.find(n => n.id === noteId);
+                        if (!link) return null;
+                        
+                        return (
+                          <Draggable key={link.id} draggableId={link.id} index={index}>
+                            {(provided) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                              >
+                                <Card className="h-fit">
+                                  <CardHeader className="p-4">
+                                    <CardTitle className="flex justify-between items-start">
+                                      <div className="flex flex-col">
+                                        <Link
+                                          href={`/dashboard/notes/${link.note.id}`}
+                                          className="text-xl font-semibold text-gray-900 hover:text-blue-600 line-clamp-2"
+                                        >
+                                          {link.note.title}
+                                        </Link>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleUnlinkNote(link.id)}
+                                        className="text-red-600 hover:text-red-800 ml-2"
+                                      >
+                                        Unlink
+                                      </Button>
+                                    </CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="p-4 pt-0">
+                                    <div className="relative mb-4">
+                                      <p className={`text-gray-600 whitespace-pre-wrap ${showFullContent === link.note.id ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}>
+                                        {link.note.content}
+                                      </p>
+                                      {link.note.content && link.note.content.length > 150 && (
+                                        <div className="flex justify-end mt-2">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowFullContent(showFullContent === link.note.id ? null : link.note.id)}
+                                            className="text-blue-600 hover:text-blue-800 text-sm"
+                                          >
+                                            {showFullContent === link.note.id ? '← Show less' : 'Show more →'}
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                      {link.note.tags?.map(tag => (
+                                        <span
+                                          key={tag}
+                                          className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                                        >
+                                          {tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <p className="text-sm text-gray-500">
+                                      Created on {format(new Date(link.note.created_at), 'MMM d, yyyy')}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              </div>
+                            )}
+                          </Draggable>
+                        );
+                      })}
+                    {provided.placeholder}
+                    {(!project.project_notes || project.project_notes.length === 0) && (
+                      <p className="text-gray-500">No notes linked to this project yet.</p>
+                    )}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          </Tabs.Content>
         </Tabs.Root>
 
         {/* Node Linking Dialog */}
@@ -1364,6 +1666,68 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                   Link Node
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Note Linking Dialog */}
+        <Dialog open={isLinkingNote} onOpenChange={setIsLinkingNote}>
+          <DialogContent className="fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] bg-white rounded-lg p-6 w-[90vw] max-w-[500px] max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <DialogTitle className="text-2xl font-semibold">Link Note to Project</DialogTitle>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                onClick={() => setIsLinkingNote(false)}
+              >
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-medium mb-4">Select Note</h3>
+              <div className="relative">
+                <Select
+                  value={selectedNoteId}
+                  onValueChange={setSelectedNoteId}
+                >
+                  <SelectTrigger className="w-full bg-white border-2 border-gray-200 rounded-lg p-3 text-left">
+                    <SelectValue placeholder="Select a note..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-2 border-gray-200 rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+                    {availableNotes.map(note => (
+                      <SelectItem 
+                        key={note.id} 
+                        value={note.id}
+                        className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{note.title}</span>
+                          <span className="text-sm text-gray-500 line-clamp-1">{note.content}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsLinkingNote(false)}
+                className="px-6"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleLinkNote} 
+                disabled={!selectedNoteId}
+                className={`px-6 ${!selectedNoteId ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                Link Note
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

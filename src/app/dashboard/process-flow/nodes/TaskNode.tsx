@@ -155,7 +155,6 @@ export const TaskNode = (props: NodeProps<TaskNodeData>) => {
       )}
       {showCue && activeCue && (
         <div className="absolute -right-64 top-0 w-60 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-lg">
-          <div className="font-medium text-yellow-800 mb-1">Task Cue</div>
           <div className="text-sm text-yellow-700">{activeCue.text}</div>
         </div>
       )}

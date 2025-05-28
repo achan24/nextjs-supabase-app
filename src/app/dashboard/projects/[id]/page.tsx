@@ -35,7 +35,10 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           status,
           priority,
           due_date,
-          time_spent
+          time_spent,
+          created_at,
+          updated_at,
+          user_id
         )
       ),
       goals(
@@ -63,6 +66,22 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           id,
           title,
           nodes
+        )
+      ),
+      project_notes:project_note_links(
+        id,
+        project_id,
+        note_id,
+        created_at,
+        user_id,
+        note:notes(
+          id,
+          title,
+          content,
+          created_at,
+          updated_at,
+          tags,
+          user_id
         )
       )
     `)
