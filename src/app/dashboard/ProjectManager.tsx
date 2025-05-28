@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PlusCircle } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 interface FormEvent extends React.FormEvent<HTMLFormElement> {
   target: HTMLFormElement & {
@@ -57,8 +58,17 @@ interface ProjectNodeLink {
   node: Node;
 }
 
-interface ProjectWithTasks extends ProjectType {
-  tasks?: Task[];
+interface ProjectWithTasks {
+  id: string;
+  title: string;
+  description?: string;
+  priority: number;
+  user_id: string;
+  created_at: string;
+  archived?: boolean;
+  archived_at?: string | null;
+  tasks: Task[];
+  display_order: number;
 }
 
 export default function ProjectManager() {
@@ -72,6 +82,7 @@ export default function ProjectManager() {
     description: '',
     priority: 1,
   });
+  const [projectOrder, setProjectOrder] = useState<string[]>([]);
 
   const supabase = createClient();
 
@@ -97,7 +108,7 @@ export default function ProjectManager() {
         )
       `)
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .order('display_order', { ascending: true });
 
     if (error) {
       console.error('Error fetching projects:', error);
@@ -110,6 +121,7 @@ export default function ProjectManager() {
     }));
 
     setProjects(transformedProjects || []);
+    setProjectOrder(transformedProjects.map(p => p.id));
   };
 
   const handleCreateProject = async () => {
@@ -243,7 +255,60 @@ export default function ProjectManager() {
     }
   };
 
+  const handleProjectReorder = async (result: any) => {
+    if (!result.destination) return;
+
+    // Get current filtered and ordered projects
+    const currentProjects = [...projects]
+      .filter(p => p.archived === showArchived)
+      .sort((a, b) => a.display_order - b.display_order);
+
+    // Get the project being moved
+    const [movedProject] = currentProjects.splice(result.source.index, 1);
+    // Insert it at the new position
+    currentProjects.splice(result.destination.index, 0, movedProject);
+
+    // Update local state immediately for smooth UI
+    const newOrder = currentProjects.map(p => p.id);
+    setProjectOrder(newOrder);
+
+    try {
+      // Create updates with new display_order values
+      const updates = currentProjects.map((project, index) => ({
+        id: project.id,
+        title: project.title,
+        description: project.description,
+        priority: project.priority,
+        user_id: project.user_id,
+        display_order: index,
+        archived: project.archived || false,
+        archived_at: project.archived_at
+      }));
+
+      const { error } = await supabase
+        .from('projects')
+        .upsert(updates);
+
+      if (error) {
+        console.error('Error updating project order:', error);
+        await fetchProjects(); // Reload the original state on error
+      } else {
+        // Update all projects with their new display_order
+        setProjects(prev => 
+          prev.map(project => {
+            const updatedProject = updates.find(u => u.id === project.id);
+            return updatedProject ? { ...project, display_order: updatedProject.display_order } : project;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error in handleProjectReorder:', error);
+      await fetchProjects(); // Reload the original state on error
+    }
+  };
+
   const filteredProjects = projects.filter(p => p.archived === showArchived);
+  const orderedProjects = [...filteredProjects].sort((a, b) => a.display_order - b.display_order);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -342,107 +407,133 @@ export default function ProjectManager() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects.map((project) => (
-            <Card key={project.id} className={`bg-white shadow-sm ${project.archived ? 'opacity-75' : ''}`}>
-              <CardHeader>
-                <CardTitle className="flex justify-between items-center">
-                  <Link href={`/dashboard/projects/${project.id}`} className="text-blue-600 hover:text-blue-800">
-                    {project.title}
-                  </Link>
-                  <div className="flex space-x-2">
-                    {!project.archived && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedProject(project);
-                            setIsEditModalOpen(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleArchiveProject(project.id, true)}
-                        >
-                          Archive
-                        </Button>
-                      </>
+        <DragDropContext onDragEnd={handleProjectReorder}>
+          <Droppable droppableId="projects">
+            {(provided) => (
+              <div
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              >
+                {orderedProjects.map((project, index) => (
+                  <Draggable 
+                    key={project.id} 
+                    draggableId={project.id} 
+                    index={index}
+                    isDragDisabled={project.archived}
+                  >
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                      >
+                        <Card className={`bg-white shadow-sm ${project.archived ? 'opacity-75' : ''}`}>
+                          <CardHeader>
+                            <CardTitle className="flex justify-between items-center">
+                              <Link href={`/dashboard/projects/${project.id}`} className="text-blue-600 hover:text-blue-800">
+                                {project.title}
+                              </Link>
+                              <div className="flex space-x-2">
+                                {!project.archived && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedProject(project);
+                                        setIsEditModalOpen(true);
+                                      }}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleArchiveProject(project.id, true)}
+                                    >
+                                      Archive
+                                    </Button>
+                                  </>
+                                )}
+                                {project.archived && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleArchiveProject(project.id, false)}
+                                    >
+                                      Unarchive
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-red-600 hover:text-red-800"
+                                      onClick={() => handleDeleteProject(project.id)}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-gray-600 mb-4">{project.description}</p>
+                            <div className="flex items-center space-x-2 mb-4">
+                              <span className={`px-2 py-1 rounded text-sm ${
+                                project.priority === 1 ? 'bg-red-100 text-red-800' :
+                                project.priority === 2 ? 'bg-orange-100 text-orange-800' :
+                                project.priority === 3 ? 'bg-yellow-100 text-yellow-800' :
+                                project.priority === 4 ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                Priority {project.priority}
+                              </span>
+                              {project.archived && (
+                                <span className="text-xs text-gray-500">
+                                  Archived {project.archived_at ? new Date(project.archived_at).toLocaleDateString() : ''}
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="mt-4">
+                              <h3 className="text-sm font-medium text-gray-700 mb-2">Tasks</h3>
+                              {project.tasks && project.tasks.length > 0 ? (
+                                <div className="space-y-2">
+                                  {project.tasks.map(task => (
+                                    <div
+                                      key={task.id}
+                                      className="p-2 bg-gray-50 rounded border border-gray-200"
+                                    >
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm">{task.title}</span>
+                                        <span className={`text-xs px-2 py-1 rounded ${
+                                          task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                          task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                          'bg-gray-100 text-gray-800'
+                                        }`}>
+                                          {task.status}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-gray-500">No tasks assigned to this project</p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
                     )}
-                    {project.archived && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleArchiveProject(project.id, false)}
-                        >
-                          Unarchive
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-800"
-                          onClick={() => handleDeleteProject(project.id)}
-                        >
-                          Delete
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">{project.description}</p>
-                <div className="flex items-center space-x-2 mb-4">
-                  <span className={`px-2 py-1 rounded text-sm ${
-                    project.priority === 1 ? 'bg-red-100 text-red-800' :
-                    project.priority === 2 ? 'bg-orange-100 text-orange-800' :
-                    project.priority === 3 ? 'bg-yellow-100 text-yellow-800' :
-                    project.priority === 4 ? 'bg-blue-100 text-blue-800' :
-                    'bg-green-100 text-green-800'
-                  }`}>
-                    Priority {project.priority}
-                  </span>
-                  {project.archived && (
-                    <span className="text-xs text-gray-500">
-                      Archived {project.archived_at ? new Date(project.archived_at).toLocaleDateString() : ''}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">Tasks</h3>
-                  {project.tasks && project.tasks.length > 0 ? (
-                    <div className="space-y-2">
-                      {project.tasks.map(task => (
-                        <div
-                          key={task.id}
-                          className="p-2 bg-gray-50 rounded border border-gray-200"
-                        >
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm">{task.title}</span>
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                              task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {task.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No tasks assigned to this project</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
 
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
           <DialogContent className="bg-white">

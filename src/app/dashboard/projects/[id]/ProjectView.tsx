@@ -84,6 +84,7 @@ interface ProjectNodeLink {
   description?: string;
   created_at: string;
   user_id: string;
+  display_order: number;
   flow: {
     id: string;
     title: string;
@@ -225,6 +226,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
         description: link.description,
         created_at: link.created_at,
         user_id: link.user_id,
+        display_order: link.display_order || 0,
         flow: {
           id: flow.id,
           title: flow.title
@@ -313,6 +315,9 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const [showFullContent, setShowFullContent] = useState<string | null>(null);
 
   const [noteOrder, setNoteOrder] = useState<string[]>([]);  // Add this state for note order
+
+  // Add nodeOrder state
+  const [nodeOrder, setNodeOrder] = useState<string[]>([]);
 
   const supabase = createClient();
 
@@ -504,31 +509,11 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     if (!selectedFlowId || !selectedNodeId) return;
 
     try {
-      // First check if the node exists in the selected flow
-      const { data: flowData, error: flowError } = await supabase
-        .from('process_flows')
-        .select('nodes')
-        .eq('id', selectedFlowId)
-        .single();
+      // Get the current max display_order
+      const currentMaxOrder = project.project_node_links.reduce((max, link) => 
+        Math.max(max, link.display_order || 0), -1);
 
-      if (flowError) {
-        console.error('Error checking flow:', flowError);
-        return;
-      }
-
-      const nodeExists = flowData.nodes.some((node: any) => node.id === selectedNodeId);
-      if (!nodeExists) {
-        console.error('Selected node does not exist in this flow');
-        return;
-      }
-
-      const selectedNode = flowData.nodes.find((node: any) => node.id === selectedNodeId);
-      if (!selectedNode) {
-        console.error('Could not find node data');
-        return;
-      }
-
-      // Try to insert the link
+      // Try to insert the link with the next display_order
       const { data: newLink, error: insertError } = await supabase
         .from('project_node_links')
         .insert([{
@@ -536,7 +521,8 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           linked_flow_id: selectedFlowId,
           linked_node_id: selectedNodeId,
           description: linkDescription,
-          user_id: user.id
+          user_id: user.id,
+          display_order: currentMaxOrder + 1
         }])
         .select(`
           id,
@@ -546,6 +532,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           description,
           created_at,
           user_id,
+          display_order,
           flow:process_flows(
             id,
             title,
@@ -556,33 +543,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
 
       if (insertError) {
         if (insertError.code === '23505') { // Unique violation
-          // Get the existing link to show it to the user
-          const { data: existingLink, error: fetchError } = await supabase
-            .from('project_node_links')
-            .select(`
-              id,
-              project_id,
-              linked_flow_id,
-              linked_node_id,
-              description,
-              created_at,
-              user_id,
-              flow:process_flows(
-                id,
-                title,
-                nodes
-              )
-            `)
-            .eq('project_id', project.id)
-            .eq('linked_flow_id', selectedFlowId)
-            .eq('linked_node_id', selectedNodeId)
-            .single();
-
-          if (fetchError) {
-            console.error('Error fetching existing link:', fetchError);
-          } else if (existingLink) {
-            console.error('This node is already linked to this project:', existingLink);
-          }
+          console.error('This node is already linked to this project');
         } else {
           console.error('Error linking node:', insertError);
         }
@@ -605,6 +566,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           description: newLink.description || undefined,
           created_at: newLink.created_at,
           user_id: newLink.user_id,
+          display_order: newLink.display_order,
           flow: {
             id: newLink.flow[0].id,
             title: newLink.flow[0].title
@@ -619,6 +581,9 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           ...prev,
           project_node_links: [...(prev.project_node_links || []), formattedLink]
         }));
+
+        // Update nodeOrder state
+        setNodeOrder(prev => [...prev, formattedLink.id]);
       }
 
       setIsLinkingNode(false);
@@ -950,6 +915,80 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
       console.error('Error in handleNoteReorder:', error);
       // Revert the state if there's an error
       setNoteOrder(noteOrder);
+    }
+  };
+
+  // Initialize node order when project changes
+  useEffect(() => {
+    if (project.project_node_links) {
+      // Sort nodes by display_order
+      const sortedNodes = [...project.project_node_links].sort((a, b) => {
+        const orderA = a.display_order || 0;
+        const orderB = b.display_order || 0;
+        return orderA - orderB;
+      });
+      setNodeOrder(sortedNodes.map(node => node.id));
+    }
+  }, [project.project_node_links]);
+
+  // Add handleNodeReorder function
+  const handleNodeReorder = async (result: any) => {
+    if (!result.destination) return;
+
+    const items = Array.from(nodeOrder);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    // Update local state immediately for smooth UI
+    setNodeOrder(items);
+    
+    try {
+      // Create updates with new display_order values
+      const updates = items.map((nodeId, index) => {
+        const link = project.project_node_links.find(n => n.id === nodeId);
+        if (!link) return null;
+        
+        return {
+          id: link.id,
+          project_id: project.id,
+          linked_flow_id: link.linked_flow_id,
+          linked_node_id: link.linked_node_id,
+          description: link.description || null,
+          created_at: link.created_at,
+          user_id: user.id,  // Add user_id to satisfy RLS policy
+          display_order: index
+        };
+      }).filter(Boolean);
+
+      console.log('Updating node order with:', updates);  // Debug log
+
+      const { data, error } = await supabase
+        .from('project_node_links')
+        .upsert(updates, {
+          onConflict: 'id'
+        })
+        .select();
+
+      if (error) {
+        console.error('Error updating node order:', error);
+        setNodeOrder(nodeOrder);  // Revert on error
+      } else {
+        console.log('Update successful:', data);  // Debug log
+        // Update the project state with new display_order values
+        setProject(prev => ({
+          ...prev,
+          project_node_links: prev.project_node_links.map(node => {
+            const index = items.indexOf(node.id);
+            return {
+              ...node,
+              display_order: index
+            };
+          }).sort((a, b) => a.display_order - b.display_order)
+        }));
+      }
+    } catch (error) {
+      console.error('Error in handleNodeReorder:', error);
+      setNodeOrder(nodeOrder);  // Revert on error
     }
   };
 
@@ -1516,44 +1555,70 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           </Tabs.Content>
 
           <Tabs.Content value="nodes" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {project.project_node_links?.map(link => (
-                <Card key={link.id}>
-                  <CardHeader>
-                    <CardTitle className="flex justify-between items-center">
-                      <div className="flex flex-col">
-                        <span className="text-sm text-gray-500">{link.flow.title}</span>
-                        <a 
-                          href={`/dashboard/process-flow?flowId=${link.linked_flow_id}&nodeId=${link.linked_node_id}`}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          {link.node.data?.label || 'Untitled Node'}
-                        </a>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleUnlinkNode(link.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Unlink
-                      </Button>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {link.description && (
-                      <p className="text-gray-600">{link.description}</p>
+            <DragDropContext onDragEnd={handleNodeReorder}>
+              <Droppable droppableId="nodes">
+                {(provided) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                  >
+                    {nodeOrder.map((nodeId, index) => {
+                      const link = project.project_node_links?.find(n => n.id === nodeId);
+                      if (!link) return null;
+
+                      return (
+                        <Draggable key={link.id} draggableId={link.id} index={index}>
+                          {(provided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                            >
+                              <Card>
+                                <CardHeader>
+                                  <CardTitle className="flex justify-between items-center">
+                                    <div className="flex flex-col">
+                                      <span className="text-sm text-gray-500">{link.flow.title}</span>
+                                      <a 
+                                        href={`/dashboard/process-flow?flowId=${link.linked_flow_id}&nodeId=${link.linked_node_id}`}
+                                        className="text-blue-600 hover:text-blue-800"
+                                      >
+                                        {link.node.data?.label || 'Untitled Node'}
+                                      </a>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUnlinkNode(link.id)}
+                                      className="text-red-600 hover:text-red-800"
+                                    >
+                                      Unlink
+                                    </Button>
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  {link.description && (
+                                    <p className="text-gray-600">{link.description}</p>
+                                  )}
+                                  <p className="text-sm text-gray-500 mt-2">
+                                    Linked on {new Date(link.created_at).toLocaleDateString()}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
+                    {provided.placeholder}
+                    {(!project.project_node_links || project.project_node_links.length === 0) && (
+                      <p className="text-gray-500">No nodes linked to this project yet.</p>
                     )}
-                    <p className="text-sm text-gray-500 mt-2">
-                      Linked on {new Date(link.created_at).toLocaleDateString()}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-              {(!project.project_node_links || project.project_node_links.length === 0) && (
-                <p className="text-gray-500">No nodes linked to this project yet.</p>
-              )}
-            </div>
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
           </Tabs.Content>
 
           <Tabs.Content value="notes" className="space-y-4">
@@ -1667,7 +1732,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                   <SelectTrigger className="w-full bg-white border rounded-md p-2">
                     <SelectValue placeholder="Select a flow..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-white border rounded-md shadow-lg">
+                  <SelectContent className="bg-white border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
                     {flows.map(flow => (
                       <SelectItem key={flow.id} value={flow.id} className="p-2 hover:bg-gray-100">
                         {flow.title}
@@ -1687,7 +1752,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                     <SelectTrigger className="w-full bg-white border rounded-md p-2">
                       <SelectValue placeholder="Select a node..." />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border rounded-md shadow-lg">
+                    <SelectContent className="bg-white border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
                       {nodesInFlow.map(node => (
                         <SelectItem key={node.id} value={node.id} className="p-2 hover:bg-gray-100">
                           {node.data?.label || 'Untitled Node'}
