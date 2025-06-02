@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase';
 import { User } from '@supabase/auth-helpers-nextjs';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -17,285 +17,37 @@ import { PlusCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
-
-interface ProjectNote {
-  id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Project {
-  id: string;
-  title: string;
-  description?: string;
-  goals: Goal[];
-  tasks: Task[];
-  nodes: Node[];
-  project_node_links: ProjectNodeLink[];
-  project_notes: ProjectNoteLink[];
-  created_at: string;
-  updated_at: string;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  priority: number;
-  due_date: string;
-  status: string;
-}
-
-interface Metrics {
-  id: string;
-  title: string;
-  description?: string;
-  target_value: number;
-  current_value: number;
-  unit: string;
-  metric_type: 'count' | 'percentage' | 'time' | 'custom';
-  created_at: string;
-  updated_at: string;
-  metric_tasks?: MetricTask[];
-}
-
-interface GoalTask {
-  task_id: string;
-  goal_id: string;
-  time_worth: number; // hours worth for this task
-}
-
-interface Goal {
-  id: string;
-  title: string;
-  description?: string;
-  target_date: string;
-  metrics: Metrics[];
-  status?: 'not_started' | 'in_progress' | 'completed';
-  goal_tasks?: GoalTask[];
-}
-
-interface Node {
-  id: string;
-  type: string;
-  data: {
-    label: string;
-    description?: string;
-  };
-}
-
-interface ProjectNodeLink {
-  id: string;
-  project_id: string;
-  linked_flow_id: string;
-  linked_node_id: string;
-  description?: string;
-  created_at: string;
-  user_id: string;
-  display_order: number;
-  flow: {
-    id: string;
-    title: string;
-  };
-  node: {
-    id: string;
-    data: {
-      label: string;
-      description?: string;
-    };
-  };
-}
-
-interface ProjectNodeLinkResponse {
-  id: string;
-  project_id: string;
-  linked_flow_id: string;
-  linked_node_id: string;
-  description: string | null;
-  created_at: string;
-  user_id: string;
-  flow: {
-    id: string;
-    title: string;
-  };
-  node: {
-    id: string;
-    data: {
-      label: string;
-      description?: string;
-    };
-  };
-}
-
-interface ProjectNodeLinkFromDB extends Omit<ProjectNodeLink, 'flow' | 'node'> {
-  flow: ProcessFlowWithNodes | ProcessFlowWithNodes[];
-}
-
-interface ProjectWithNodesAndTasksFromDB extends Omit<Project, 'tasks' | 'project_node_links' | 'project_notes'> {
-  tasks: TaskWithWrapper[];
-  project_node_links: ProjectNodeLinkFromDB[];
-  project_notes: {
-    id: string;
-    project_id: string;
-    note_id: string;
-    created_at: string;
-    user_id: string;
-    display_order: number;
-    note: Note;
-  }[];
-}
-
-interface ProcessFlow {
-  id: string;
-  title: string;
-  description?: string;
-  nodes: ProcessFlowNode[];
-}
-
-interface ProcessFlowNode {
-  id: string;
-  type: string;
-  data: {
-    label: string;
-    description?: string;
-  };
-}
-
-interface Flow extends ProcessFlow {}
-
-interface TaskWithWrapper {
-  task: Task;
-}
-
-interface ProcessFlowWithNodes {
-  id: string;
-  title: string;
-  nodes: ProcessFlowNode[];
-}
+import { 
+  Project, 
+  Task, 
+  Goal, 
+  Target, 
+  ProjectTargetLink, 
+  ProjectNodeLink, 
+  ProjectNoteLink, 
+  Note,
+  NewTask,
+  ProcessFlow,
+  EditedGoalData,
+  ProcessFlowNode
+} from './types';
 
 interface ProjectViewProps {
   project: Project;
   user: User;
 }
 
-interface NewTask {
-  title: string;
-  description: string;
-  priority: number;
-  status: 'todo' | 'in_progress' | 'completed';
-  due_date: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-  tags: string[];
-  user_id: string;
-}
-
-interface ProjectNoteLink {
-  id: string;
-  project_id: string;
-  note_id: string;
-  note: Note;
-  created_at: string;
-  user_id: string;
-  display_order: number;
-}
-
-interface SupabaseNoteLink {
-  id: string;
-  note: Note[];
-}
-
-// Add interface for edited goal data
-interface EditedGoalData {
-  title: string;
-  description?: string;
-  target_date: string;
-}
-
-// Add interface for metric tasks
-interface MetricTask {
-  id: string;
-  metric_id: string;
-  task_id: string;
-  contribution_value: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export default function ProjectView({ project: initialProject, user }: ProjectViewProps) {
   console.log('Initial Project Data:', initialProject);
   console.log('Initial Project Notes:', initialProject.project_notes);
   
-  // Transform the initial project data to include properly formatted node links
-  const transformedProject: Project = {
+  // Move state initialization to useEffect
+  const [project, setProject] = useState<Project>(() => ({
     ...initialProject,
-    tasks: initialProject.tasks?.map((wrapper: any) => wrapper.task) || [],
-    project_node_links: initialProject.project_node_links?.map(link => {
-      const flow = Array.isArray(link.flow) ? link.flow[0] : link.flow;
-      if (!flow || !flow.nodes) return null;
+    project_targets: initialProject.project_targets || []
+  }));
 
-      const nodeData = flow.nodes.find((n: any) => n.id === link.linked_node_id);
-      if (!nodeData) return null;
-
-      return {
-        id: link.id,
-        project_id: link.project_id,
-        linked_flow_id: link.linked_flow_id,
-        linked_node_id: link.linked_node_id,
-        description: link.description,
-        created_at: link.created_at,
-        user_id: link.user_id,
-        display_order: link.display_order || 0,
-        flow: {
-          id: flow.id,
-          title: flow.title
-        },
-        node: {
-          id: link.linked_node_id,
-          data: nodeData.data || {
-            label: 'Untitled Node'
-          }
-        }
-      } as ProjectNodeLink;
-    }).filter((link): link is ProjectNodeLink => link !== null) || [],
-    project_notes: (initialProject.project_notes?.map(link => {
-      if (!link || !link.note) return null;
-      
-      // Handle both array and single object cases for note
-      const noteData = Array.isArray(link.note) ? link.note[0] : link.note;
-      if (!noteData) return null;
-
-      return {
-        id: link.id,
-        project_id: link.project_id,
-        note_id: link.note_id,
-        note: {
-          id: noteData.id,
-          title: noteData.title,
-          content: noteData.content,
-          created_at: noteData.created_at,
-          updated_at: noteData.updated_at || noteData.created_at,
-          tags: noteData.tags || [],
-          user_id: noteData.user_id
-        },
-        created_at: link.created_at,
-        user_id: link.user_id,
-        display_order: link.display_order || 0
-      };
-    }).filter((link): link is ProjectNoteLink => link !== null) || []) as ProjectNoteLink[]
-  };
-
-  console.log('Transformed Project:', transformedProject);
-
-  const [project, setProject] = useState<Project>(transformedProject);
-  const [tasks, setTasks] = useState<Task[]>(transformedProject.tasks || []);
+  const [tasks, setTasks] = useState<Task[]>(initialProject.tasks || []);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [isLinkingNode, setIsLinkingNode] = useState(false);
@@ -314,7 +66,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     description: '',
     status: 'not_started',
     target_date: new Date().toISOString().slice(0, 16),
-    metrics: []
+    goal_target_links: []
   });
   const [activeTab, setActiveTab] = useState('kanban');
   const [timeData, setTimeData] = useState<any[]>([]);
@@ -344,24 +96,27 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const [editedGoalData, setEditedGoalData] = useState<EditedGoalData | null>(null);
 
   // Add new state for metric management
-  const [isAddingMetric, setIsAddingMetric] = useState(false);
-  const [selectedMetricId, setSelectedMetricId] = useState<string | null>(null);
-  const [newMetric, setNewMetric] = useState<{
+  const [isAddingTarget, setIsAddingTarget] = useState(false);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const [newTarget, setNewTarget] = useState<{
     title: string;
     description: string;
     target_value: number;
     unit: string;
-    metric_type: 'count' | 'percentage' | 'time' | 'custom';
+    target_type: 'count' | 'percentage' | 'time' | 'custom';
   }>({
     title: '',
     description: '',
     target_value: 0,
     unit: 'count',
-    metric_type: 'count'
+    target_type: 'count'
   });
 
   // Add new state for task selection
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  // Add new state for linking goals
+  const [isLinkingGoal, setIsLinkingGoal] = useState(false);
 
   const supabase = createClient();
 
@@ -375,10 +130,22 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 7);
 
+    // Only proceed if we have tasks
+    if (!tasks?.length) {
+      setTimeData([]);
+      return;
+    }
+
+    const taskIds = tasks.map(t => t?.id).filter(Boolean);
+    if (!taskIds.length) {
+      setTimeData([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('task_time_entries')
       .select('duration, created_at')
-      .in('task_id', tasks.map(t => t.id))
+      .in('task_id', taskIds)
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString());
 
@@ -388,7 +155,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     }
 
     // Group by day
-    const timeByDay = data.reduce((acc: any, entry: any) => {
+    const timeByDay = (data || []).reduce((acc: any, entry: any) => {
       const date = new Date(entry.created_at).toISOString().split('T')[0];
       if (!acc[date]) acc[date] = 0;
       acc[date] += entry.duration;
@@ -481,7 +248,6 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     if (!newGoal.title || !newGoal.target_date) return;
 
     try {
-      // First create the goal without metrics
       const { data: goal, error } = await supabase
         .from('goals')
         .insert([{
@@ -503,7 +269,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
       // Update the project state with the new goal
       setProject({
         ...project,
-        goals: [...project.goals, { ...goal, metrics: [] }]
+        goals: [...project.goals, { ...goal, goal_target_links: [] }]
       });
 
       // Reset the form
@@ -512,7 +278,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
         description: '',
         status: 'not_started',
         target_date: new Date().toISOString().slice(0, 16),
-        metrics: []
+        goal_target_links: []
       });
       
       // Close the dialog
@@ -523,11 +289,12 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   };
 
   const getTasksByStatus = (status: Task['status']) => {
-    return tasks.filter(task => task.status === status);
+    if (!tasks?.length) return [];
+    return tasks.filter(task => task && task.status === status);
   };
 
-  const getMetricProgress = (metric: Metrics) => {
-    return (metric.current_value / metric.target_value) * 100;
+  const getTargetProgress = (target: Target) => {
+    return (target.current_value / target.target_value) * 100;
   };
 
   const fetchAvailableNodes = async () => {
@@ -756,19 +523,20 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   };
 
   const handleEditTask = async (taskId: string, updates: Partial<Task>) => {
-    try {
-      const { data: task, error } = await supabase
-        .from('tasks')
-        .update(updates)
-        .eq('id', taskId)
-        .select()
-        .single();
+    setProject((prev: Project) => ({
+      ...prev,
+      tasks: prev.tasks.map(t => 
+        t.id === taskId ? { ...t, ...updates } : t
+      )
+    }));
 
-      if (error) throw error;
+    // Update in database
+    const { error } = await supabase
+      .from('tasks')
+      .update(updates)
+      .eq('id', taskId);
 
-      setTasks(tasks.map(t => t.id === taskId ? { ...t, ...task } : t));
-      setEditingTask(null);
-    } catch (error) {
+    if (error) {
       console.error('Error updating task:', error);
     }
   };
@@ -894,54 +662,35 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const handleNoteReorder = async (result: any) => {
     if (!result.destination) return;
 
-    const items = Array.from(noteOrder);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    const { source, destination } = result;
+    const newOrder = Array.from(noteOrder);
+    const [removed] = newOrder.splice(source.index, 1);
+    newOrder.splice(destination.index, 0, removed);
 
-    // Update local state immediately for smooth UI
-    setNoteOrder(items);
-    
-    // Update display_order in the database for all affected notes
+    // Update the state
+    setNoteOrder(newOrder);
+
+    // Update the project state
+    setProject((prev: Project) => ({
+      ...prev,
+      project_notes: newOrder.map((id, index) => {
+        const note = prev.project_notes.find(n => n.id === id);
+        return note ? { ...note, display_order: index } : note!;
+      }).filter(Boolean)
+    }));
+
+    // Update in database
     try {
-      // Get the project note links that correspond to the note IDs
-      const updates = items.map((noteId, index) => {
-        const link = project.project_notes.find(n => n.id === noteId);
-        if (!link) return null;
-        
-        return {
-          id: link.id,
-          project_id: project.id,
-          note_id: link.note_id,
-          user_id: user.id,  // Add user_id to satisfy RLS policy
-          display_order: index
-        };
-      }).filter(Boolean);
-
-      const { error } = await supabase
-        .from('project_note_links')
-        .upsert(updates);
-
-      if (error) {
-        console.error('Error updating note order:', error);
-        // Revert the state if the database update fails
-        setNoteOrder(noteOrder);
-      } else {
-        // Update the project state to reflect the new order
-        setProject(prev => ({
-          ...prev,
-          project_notes: prev.project_notes.map(note => {
-            const index = items.indexOf(note.id);
-            return {
-              ...note,
-              display_order: index
-            };
-          })
-        }));
-      }
+      await Promise.all(
+        newOrder.map((id, index) =>
+          supabase
+            .from('project_note_links')
+            .update({ display_order: index })
+            .eq('id', id)
+        )
+      );
     } catch (error) {
-      console.error('Error in handleNoteReorder:', error);
-      // Revert the state if there's an error
-      setNoteOrder(noteOrder);
+      console.error('Error updating note order:', error);
     }
   };
 
@@ -962,116 +711,106 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
   const handleNodeReorder = async (result: any) => {
     if (!result.destination) return;
 
-    const items = Array.from(nodeOrder);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    const { source, destination } = result;
+    const newOrder = Array.from(nodeOrder);
+    const [removed] = newOrder.splice(source.index, 1);
+    newOrder.splice(destination.index, 0, removed);
 
-    // Update local state immediately for smooth UI
-    setNodeOrder(items);
-    
+    // Update the state
+    setNodeOrder(newOrder);
+
+    // Update the project state
+    setProject((prev: Project) => ({
+      ...prev,
+      project_node_links: newOrder.map((id, index) => {
+        const link = prev.project_node_links.find(l => l.id === id);
+        return link ? { ...link, display_order: index } : link!;
+      }).filter(Boolean)
+    }));
+
+    // Update in database
     try {
-      // Create updates with new display_order values
-      const updates = items.map((nodeId, index) => {
-        const link = project.project_node_links.find(n => n.id === nodeId);
-        if (!link) return null;
-        
-        return {
-          id: link.id,
-          project_id: project.id,
-          linked_flow_id: link.linked_flow_id,
-          linked_node_id: link.linked_node_id,
-          description: link.description || null,
-          created_at: link.created_at,
-          user_id: user.id,  // Add user_id to satisfy RLS policy
-          display_order: index
-        };
-      }).filter(Boolean);
-
-      console.log('Updating node order with:', updates);  // Debug log
-
-      const { data, error } = await supabase
-        .from('project_node_links')
-        .upsert(updates, {
-          onConflict: 'id'
-        })
-        .select();
-
-      if (error) {
-        console.error('Error updating node order:', error);
-        setNodeOrder(nodeOrder);  // Revert on error
-      } else {
-        console.log('Update successful:', data);  // Debug log
-        // Update the project state with new display_order values
-        setProject(prev => ({
-          ...prev,
-          project_node_links: prev.project_node_links.map(node => {
-            const index = items.indexOf(node.id);
-            return {
-              ...node,
-              display_order: index
-            };
-          }).sort((a, b) => a.display_order - b.display_order)
-        }));
-      }
+      await Promise.all(
+        newOrder.map((id, index) =>
+          supabase
+            .from('project_node_links')
+            .update({ display_order: index })
+            .eq('id', id)
+        )
+      );
     } catch (error) {
-      console.error('Error in handleNodeReorder:', error);
-      setNodeOrder(nodeOrder);  // Revert on error
+      console.error('Error updating node order:', error);
     }
   };
 
-  // Add function to handle metric creation
-  const handleAddMetric = async (goalId: string) => {
+  // Add function to handle target creation
+  const handleAddTarget = async (goalId: string) => {
     try {
-      const { data: metric, error } = await supabase
-        .from('goal_metrics')
+      const { data: target, error } = await supabase
+        .from('targets')
         .insert([{
-          goal_id: goalId,
-          title: newMetric.title,
-          description: newMetric.description,
-          target_value: newMetric.target_value,
-          unit: newMetric.unit,
-          metric_type: newMetric.metric_type
+          title: newTarget.title,
+          description: newTarget.description,
+          target_value: newTarget.target_value,
+          current_value: 0,
+          unit: newTarget.unit,
+          target_type: newTarget.target_type,
+          user_id: user.id
         }])
         .select()
         .single();
 
       if (error) throw error;
 
-      // Update the project state with the new metric
-      setProject({
-        ...project,
-        goals: project.goals.map(g => {
+      // Create the goal-target link
+      const { data: link, error: linkError } = await supabase
+        .from('goal_target_links')
+        .insert([{
+          goal_id: goalId,
+          target_id: target.id,
+          user_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (linkError) throw linkError;
+
+      // Update the project state with the new target and link
+      setProject(prev => ({
+        ...prev,
+        project_targets: [...(prev.project_targets || []), { ...link, target }],
+        goals: prev.goals.map(g => {
           if (g.id === goalId) {
             return {
               ...g,
-              metrics: [...(g.metrics || []), metric]
+              goal_target_links: [...(g.goal_target_links || []), { ...link, target }]
             };
           }
           return g;
         })
-      });
+      }));
 
       // Reset form and close dialog
-      setNewMetric({
+      setNewTarget({
         title: '',
         description: '',
         target_value: 0,
         unit: 'count',
-        metric_type: 'count'
+        target_type: 'count'
       });
-      setIsAddingMetric(false);
+      setIsAddingTarget(false);
     } catch (error) {
-      console.error('Error adding metric:', error);
+      console.error('Error adding target:', error);
     }
   };
 
-  // Update the handleAddMetricTask function to handle the new metrics structure
-  const handleAddMetricTask = async (metricId: string, taskId: string, contributionValue: number) => {
+  // Add handleAddTargetTask function
+  const handleAddTargetTask = async (targetId: string, taskId: string, contributionValue: number) => {
     try {
-      const { data: metricTask, error } = await supabase
-        .from('goal_metric_tasks')
+      const { data: targetTask, error } = await supabase
+        .from('target_tasks')
         .insert([{
-          metric_id: metricId,
+          target_id: targetId,
           task_id: taskId,
           contribution_value: contributionValue
         }])
@@ -1083,21 +822,18 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
       // Update local state
       setProject(prev => ({
         ...prev,
-        goals: prev.goals.map(g => ({
-          ...g,
-          metrics: g.metrics.map(m => 
-            m.id === metricId && tasks.find(t => t.id === taskId)?.status === 'completed'
-              ? { ...m, current_value: m.current_value + contributionValue }
-              : m
-          )
-        }))
+        project_targets: prev.project_targets.map(t => 
+          t.id === targetId && tasks.find(task => task.id === taskId)?.status === 'completed'
+            ? { ...t, target: { ...t.target, current_value: t.target.current_value + contributionValue } }
+            : t
+        )
       }));
     } catch (error) {
-      console.error('Error adding metric task:', error);
+      console.error('Error adding target task:', error);
     }
   };
 
-  // Add this function to fetch project data with metrics
+  // Update fetchProjectData function
   const fetchProjectData = async () => {
     const { data: projectData, error: projectError } = await supabase
       .from('projects')
@@ -1109,18 +845,32 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           description,
           target_date,
           status,
-          metrics:goal_metrics (
+          goal_tasks (
             id,
-            title,
-            description,
-            target_value,
-            current_value,
-            unit,
-            metric_type,
-            metric_tasks:goal_metric_tasks (
+            task_id,
+            time_worth
+          ),
+          goal_target_links (
+            id,
+            target:targets (
               id,
-              task_id,
-              contribution_value
+              title,
+              description,
+              target_value,
+              current_value,
+              unit,
+              target_type,
+              created_at,
+              updated_at,
+              target_tasks (
+                id,
+                task_id,
+                contribution_value
+              ),
+              goal_target_links (
+                id,
+                goal_id
+              )
             )
           )
         ),
@@ -1133,6 +883,38 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
             due_date,
             status
           )
+        ),
+        project_node_links (
+          id,
+          project_id,
+          linked_flow_id,
+          linked_node_id,
+          description,
+          created_at,
+          user_id,
+          display_order,
+          flow:process_flows (
+            id,
+            title,
+            nodes
+          )
+        ),
+        project_notes:project_note_links (
+          id,
+          project_id,
+          note_id,
+          created_at,
+          user_id,
+          display_order,
+          note:notes (
+            id,
+            title,
+            content,
+            created_at,
+            updated_at,
+            tags,
+            user_id
+          )
         )
       `)
       .eq('id', project.id)
@@ -1143,24 +925,138 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
       return;
     }
 
+    // Create a map of all unique targets from goal_target_links
+    const targetsMap = new Map<string, ProjectTargetLink>();
+    projectData.goals.forEach((goal: any) => {
+      goal.goal_target_links?.forEach((link: any) => {
+        if (link.target && !targetsMap.has(link.target.id)) {
+          targetsMap.set(link.target.id, {
+            id: link.id,
+            target: {
+              ...link.target,
+              goal_target_links: link.target.goal_target_links || []
+            }
+          });
+        }
+      });
+    });
+
     // Transform the data to match our interfaces
-    const transformedProject = {
+    const transformedProject: Project = {
       ...projectData,
       goals: projectData.goals.map((goal: any) => ({
         ...goal,
-        metrics: goal.metrics || []
+        goal_target_links: goal.goal_target_links || []
       })),
-      tasks: projectData.tasks.map((t: any) => t.task)
+      tasks: projectData.tasks.map((t: any) => t.task),
+      project_targets: Array.from(targetsMap.values()),
+      project_node_links: (projectData.project_node_links || []).map((link: any) => {
+        const nodeData = link.flow?.nodes?.find((n: any) => n.id === link.linked_node_id);
+        return {
+          ...link,
+          flow: {
+            id: link.flow?.id,
+            title: link.flow?.title
+          },
+          node: nodeData ? {
+            id: nodeData.id,
+            data: nodeData.data
+          } : null
+        };
+      }).filter((link: any) => link.node !== null),
+      project_notes: (projectData.project_notes || []).map((link: any) => ({
+        ...link,
+        note: link.note
+      }))
     };
 
+    console.log('Transformed project data:', transformedProject);
     setProject(transformedProject);
     setTasks(transformedProject.tasks);
+
+    // Update the node and note orders
+    if (transformedProject.project_node_links?.length) {
+      const sortedNodes = [...transformedProject.project_node_links].sort((a, b) => {
+        const orderA = a.display_order || 0;
+        const orderB = b.display_order || 0;
+        return orderA - orderB;
+      });
+      setNodeOrder(sortedNodes.map(node => node.id));
+    }
+
+    if (transformedProject.project_notes?.length) {
+      const sortedNotes = [...transformedProject.project_notes].sort((a, b) => {
+        const orderA = a.display_order || 0;
+        const orderB = b.display_order || 0;
+        return orderA - orderB;
+      });
+      setNoteOrder(sortedNotes.map(note => note.id));
+    }
   };
 
   // Call fetchProjectData when component mounts
   useEffect(() => {
     fetchProjectData();
   }, []);
+
+  // Move state initialization to useEffect
+  useEffect(() => {
+    if (initialProject) {
+      // Transform the initial project data to include properly formatted node links
+      const transformedProject: Project = {
+        ...initialProject,
+        tasks: initialProject.tasks || [],
+        goals: initialProject.goals || [],
+        project_targets: initialProject.project_targets || [],
+        project_node_links: initialProject.project_node_links || [],
+        project_notes: initialProject.project_notes || []
+      };
+
+      setProject(transformedProject);
+      setTasks(transformedProject.tasks || []);
+    }
+  }, [initialProject]);
+
+  // Add memoization for project data to prevent unnecessary re-renders
+  const memoizedProject = useMemo(() => project, [project]);
+
+  // Move the target finding logic to a memoized function
+  const findTargetById = useCallback((targetId: string): Target | undefined => {
+    return (project?.project_targets || []).find(link => link.id === targetId)?.target;
+  }, [project?.project_targets]);
+
+  // Update setProject usage to always maintain project_targets as an array
+  const updateProject = useCallback((updater: Project | ((prev: Project) => Project)) => {
+    setProject(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      return {
+        ...next,
+        project_targets: next.project_targets || []
+      };
+    });
+  }, []);
+
+  // Update the goals filtering logic to handle empty project_targets
+  const availableGoals = useMemo(() => {
+    // If no target is selected, return all goals
+    if (!selectedTargetId) return project.goals || [];
+    
+    // If project_targets is undefined or empty, return all goals
+    if (!project?.project_targets?.length) return project.goals || [];
+    
+    const selectedTarget = project.project_targets.find(t => t.id === selectedTargetId);
+    if (!selectedTarget?.target) return project.goals || [];
+    
+    return (project.goals || []).filter(goal => {
+      if (!selectedTarget.target.goal_target_links?.length) return true;
+      return !selectedTarget.target.goal_target_links.some(link => link.goal_id === goal.id);
+    });
+  }, [project?.goals, selectedTargetId, project?.project_targets]);
+
+  // Add a consistent date formatting function
+  const formatDate = (date: string | Date) => {
+    return format(new Date(date), 'MMM d, yyyy');
+  };
 
   return (
     <div className="min-h-screen bg-white p-6">
@@ -1385,6 +1281,12 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
               Goals
             </Tabs.Trigger>
             <Tabs.Trigger 
+              value="targets"
+              className="px-4 py-2 -mb-px text-sm font-medium data-[state=active]:bg-white"
+            >
+              Targets
+            </Tabs.Trigger>
+            <Tabs.Trigger 
               value="metrics"
               className="px-4 py-2 -mb-px text-sm font-medium data-[state=active]:bg-white"
             >
@@ -1416,7 +1318,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                         className="bg-gray-100 rounded-lg p-4"
                       >
                         <h3 className="font-semibold mb-4 capitalize">{status.replace('_', ' ')}</h3>
-                        {getTasksByStatus(status).map((task, index) => (
+                        {getTasksByStatus(status).map((task, index) => task && (
                           <Draggable key={task.id} draggableId={task.id} index={index}>
                             {(provided) => (
                               <div
@@ -1450,7 +1352,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                       } else {
                                         setSelectedTaskId(null);
                                         setSelectedGoalForTask(null);
-                                        setSelectedMetricId(null);
+                                        setSelectedTargetId(null);
                                         setSelectedTaskTimeWorth(1);
                                       }
                                     }}>
@@ -1473,7 +1375,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                               <SelectTrigger className="w-full bg-white border-gray-200">
                                                 <SelectValue placeholder="Choose a goal" />
                                               </SelectTrigger>
-                                              <SelectContent className="bg-white">
+                                              <SelectContent>
                                                 {project.goals.map(currentGoal => (
                                                   <SelectItem key={currentGoal.id} value={currentGoal.id} className="text-gray-900">
                                                     {currentGoal.title}
@@ -1484,20 +1386,22 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                           </div>
                                           {selectedGoalForTask && (
                                             <div className="space-y-2">
-                                              <Label className="text-sm font-medium text-gray-700">Select Metric</Label>
+                                              <Label className="text-sm font-medium text-gray-700">Select Target</Label>
                                               <Select
-                                                value={selectedMetricId || ''}
-                                                onValueChange={setSelectedMetricId}
+                                                value={selectedTargetId || ''}
+                                                onValueChange={setSelectedTargetId}
                                               >
                                                 <SelectTrigger className="w-full bg-white border-gray-200">
-                                                  <SelectValue placeholder="Choose a metric" />
+                                                  <SelectValue placeholder="Choose a target" />
                                                 </SelectTrigger>
-                                                <SelectContent className="bg-white">
-                                                  {project.goals
-                                                    .find(g => g.id === selectedGoalForTask)
-                                                    ?.metrics.map(metric => (
-                                                      <SelectItem key={metric.id} value={metric.id} className="text-gray-900">
-                                                        {metric.title} ({metric.current_value} / {metric.target_value} {metric.unit})
+                                                <SelectContent>
+                                                  {(project.project_targets || [])
+                                                    .filter(link => 
+                                                      !link.target.goal_target_links?.some(gtLink => gtLink.goal_id === selectedGoalForTask)
+                                                    )
+                                                    .map(link => (
+                                                      <SelectItem key={link.id} value={link.id} className="text-gray-900">
+                                                        {link.target.title}
                                                       </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -1522,7 +1426,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                             onClick={() => {
                                               setSelectedTaskId(null);
                                               setSelectedGoalForTask(null);
-                                              setSelectedMetricId(null);
+                                              setSelectedTargetId(null);
                                               setSelectedTaskTimeWorth(1);
                                               setIsAttachingTask(false);
                                             }}
@@ -1532,16 +1436,16 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                           </Button>
                                           <Button
                                             onClick={() => {
-                                              if (selectedTaskId && selectedGoalForTask && selectedMetricId) {
-                                                handleAddMetricTask(selectedMetricId, selectedTaskId, selectedTaskTimeWorth);
+                                              if (selectedTaskId && selectedGoalForTask && selectedTargetId) {
+                                                handleAddTargetTask(selectedTargetId, selectedTaskId, selectedTaskTimeWorth);
                                                 setSelectedTaskId(null);
                                                 setSelectedGoalForTask(null);
-                                                setSelectedMetricId(null);
+                                                setSelectedTargetId(null);
                                                 setSelectedTaskTimeWorth(1);
                                                 setIsAttachingTask(false);
                                               }
                                             }}
-                                            disabled={!selectedGoalForTask || !selectedMetricId}
+                                            disabled={!selectedGoalForTask || !selectedTargetId}
                                             className="bg-blue-600 text-white hover:bg-blue-700"
                                           >
                                             Attach to Goal
@@ -1602,18 +1506,6 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                     )
                                   )}
                                 </div>
-                                {/* Show attached metrics */}
-                                {project.goals.map(currentGoal => 
-                                  currentGoal.metrics.map(metric => {
-                                    const metricTask = metric.metric_tasks?.find(mt => mt.task_id === task.id);
-                                    return metricTask && (
-                                      <div key={metric.id} className="mt-2 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded flex items-center justify-between">
-                                        <span>📊 {currentGoal.title} - {metric.title}</span>
-                                        <span>{metricTask.contribution_value} {metric.unit}</span>
-                                      </div>
-                                    );
-                                  })
-                                )}
                               </div>
                             )}
                           </Draggable>
@@ -1709,43 +1601,43 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                       </div>
                     )}
                     
-                    {/* Metrics Section */}
+                    {/* Linked Targets Section */}
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <h3 className="font-medium">Metrics</h3>
+                        <h3 className="font-medium">Linked Targets</h3>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setSelectedMetricId(null);
-                            setIsAddingMetric(true);
+                            setSelectedGoalForTask(currentGoal.id);
+                            setIsLinkingGoal(true);
                           }}
                         >
-                          Add Metric
+                          Link Target
                         </Button>
                       </div>
                       
-                      {currentGoal.metrics?.map(metric => (
-                        <div key={metric.id} className="bg-gray-50 rounded-lg p-4">
+                      {currentGoal.goal_target_links?.map(link => (
+                        <div key={link.id} className="bg-gray-50 rounded-lg p-4">
                           <div className="flex justify-between items-start mb-2">
                             <div>
-                              <h4 className="font-medium">{metric.title}</h4>
-                              {metric.description && (
-                                <p className="text-sm text-gray-600">{metric.description}</p>
+                              <h4 className="font-medium">{link.target.title}</h4>
+                              {link.target.description && (
+                                <p className="text-sm text-gray-600">{link.target.description}</p>
                               )}
                             </div>
                             <span className="text-sm font-medium">
-                              {metric.current_value} / {metric.target_value} {metric.unit}
+                              {link.target.current_value} / {link.target.target_value} {link.target.unit}
                             </span>
                           </div>
-                          <Progress value={getMetricProgress(metric)} />
+                          <Progress value={(link.target.current_value / link.target.target_value) * 100} />
                         </div>
                       ))}
                     </div>
 
                     <div className="mt-4 space-y-2">
                       <div className="flex justify-between text-sm text-gray-500">
-                        <span>Target Date: {new Date(currentGoal.target_date).toLocaleDateString()}</span>
+                        <span>Target Date: {formatDate(currentGoal.target_date)}</span>
                         <span className={`font-medium ${
                           getDaysRemaining(currentGoal.target_date) < 0 ? 'text-red-500' :
                           getDaysRemaining(currentGoal.target_date) < 7 ? 'text-yellow-500' :
@@ -1766,6 +1658,113 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                         />
                       )}
                     </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </Tabs.Content>
+
+          <Tabs.Content value="targets" className="space-y-4">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold">Targets</h2>
+              <Button
+                onClick={() => {
+                  setNewTarget({
+                    title: '',
+                    description: '',
+                    target_value: 0,
+                    unit: 'count',
+                    target_type: 'count'
+                  });
+                  setSelectedGoalForTask(null);
+                  setIsAddingTarget(true);
+                }}
+              >
+                Add Target
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {project.project_targets?.map(target => (
+                <Card key={target.id}>
+                  <CardHeader>
+                    <CardTitle className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-lg font-semibold">{target.target.title}</h3>
+                        <p className="text-sm text-gray-500">{target.target.target_type}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-medium">
+                          {target.target.current_value} / {target.target.target_value} {target.target.unit}
+                        </p>
+                        <Progress value={(target.target.current_value / target.target.target_value) * 100} className="mt-2" />
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {target.target.description && (
+                      <p className="text-gray-600 mb-4">{target.target.description}</p>
+                    )}
+                    
+                    {/* Linked Goals */}
+                    {target.target.goal_target_links && target.target.goal_target_links.length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="font-medium mb-2">Linked Goals:</h4>
+                        <div className="space-y-2">
+                          {target.target.goal_target_links.map(gtLink => {
+                            const goal = project.goals.find(g => g.id === gtLink.goal_id);
+                            return goal ? (
+                              <div key={gtLink.id} className="flex justify-between items-center">
+                                <span className="text-sm">{goal.title}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    const { error } = await supabase
+                                      .from('goal_target_links')
+                                      .delete()
+                                      .eq('id', gtLink.id);
+                                    
+                                    if (!error) {
+                                      setProject({
+                                        ...project,
+                                        project_targets: project.project_targets.map(t =>
+                                          t.id === target.id
+                                            ? {
+                                                ...t,
+                                                target: {
+                                                  ...t.target,
+                                                  goal_target_links: t.target.goal_target_links?.filter(l => l.id !== gtLink.id)
+                                                }
+                                              }
+                                            : t
+                                        )
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Unlink
+                                </Button>
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Link to Goal Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedTargetId(target.id);
+                        setSelectedGoalForTask(null);
+                        setIsLinkingGoal(true);
+                      }}
+                      className="w-full mt-2"
+                    >
+                      Link to Goal
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -1822,10 +1821,10 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                     <div className="flex flex-col">
                                       <span className="text-sm text-gray-500">{link.flow.title}</span>
                                       <a 
-                                        href={`/dashboard/process-flow?flowId=${link.linked_flow_id}&nodeId=${link.linked_node_id}`}
+                                        href={`/dashboard/process-flows/${link.linked_flow_id}?nodeId=${link.linked_node_id}`}
                                         className="text-blue-600 hover:text-blue-800"
                                       >
-                                        {link.node.data?.label || 'Untitled Node'}
+                                        {link.node?.data?.label || 'Untitled Node'}
                                       </a>
                                     </div>
                                     <Button
@@ -1843,7 +1842,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                     <p className="text-gray-600">{link.description}</p>
                                   )}
                                   <p className="text-sm text-gray-500 mt-2">
-                                    Linked on {new Date(link.created_at).toLocaleDateString()}
+                                    Linked on {formatDate(link.created_at)}
                                   </p>
                                 </CardContent>
                               </Card>
@@ -1936,7 +1935,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                         ))}
                                       </div>
                                       <p className="text-sm text-gray-500">
-                                        Created on {format(new Date(link.note.created_at), 'MMM d, yyyy')}
+                                        Created on {formatDate(link.note.created_at)}
                                       </p>
                                     </CardContent>
                                   </Card>
@@ -2089,55 +2088,73 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           </DialogContent>
         </Dialog>
 
-        {/* Add Metric Dialog */}
-        <Dialog open={isAddingMetric} onOpenChange={setIsAddingMetric}>
+        {/* Add Target Dialog */}
+        <Dialog open={isAddingTarget} onOpenChange={setIsAddingTarget}>
           <DialogContent className="bg-white rounded-lg shadow-lg max-w-lg">
             <DialogHeader>
-              <DialogTitle>Add New Metric</DialogTitle>
+              <DialogTitle>Add New Target</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 p-4">
               <div>
-                <Label htmlFor="metric-title">Title</Label>
+                <Label>Select Goal</Label>
+                <Select
+                  value={selectedGoalForTask || ''}
+                  onValueChange={setSelectedGoalForTask}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a goal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {project.goals.map(goal => (
+                      <SelectItem key={goal.id} value={goal.id}>
+                        {goal.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="target-title">Title</Label>
                 <Input
-                  id="metric-title"
-                  value={newMetric.title}
-                  onChange={(e) => setNewMetric({ ...newMetric, title: e.target.value })}
+                  id="target-title"
+                  value={newTarget.title}
+                  onChange={(e) => setNewTarget({ ...newTarget, title: e.target.value })}
                   placeholder="e.g., Tasks Completed"
                 />
               </div>
               <div>
-                <Label htmlFor="metric-description">Description (Optional)</Label>
+                <Label htmlFor="target-description">Description (Optional)</Label>
                 <Textarea
-                  id="metric-description"
-                  value={newMetric.description}
-                  onChange={(e) => setNewMetric({ ...newMetric, description: e.target.value })}
-                  placeholder="Describe what this metric measures"
+                  id="target-description"
+                  value={newTarget.description}
+                  onChange={(e) => setNewTarget({ ...newTarget, description: e.target.value })}
+                  placeholder="Describe what this target measures"
                 />
               </div>
               <div>
-                <Label htmlFor="metric-target">Target Value</Label>
+                <Label htmlFor="target-target">Target Value</Label>
                 <Input
-                  id="metric-target"
+                  id="target-target"
                   type="number"
-                  value={newMetric.target_value}
-                  onChange={(e) => setNewMetric({ ...newMetric, target_value: parseFloat(e.target.value) })}
+                  value={newTarget.target_value}
+                  onChange={(e) => setNewTarget({ ...newTarget, target_value: parseFloat(e.target.value) })}
                   min="0"
                   step="1"
                 />
               </div>
               <div>
-                <Label htmlFor="metric-type">Type</Label>
+                <Label htmlFor="target-type">Type</Label>
                 <Select
-                  value={newMetric.metric_type}
+                  value={newTarget.target_type}
                   onValueChange={(value: 'count' | 'percentage' | 'time' | 'custom') => {
                     const unit = value === 'time' ? 'hours' : 
                                 value === 'percentage' ? '%' : 
                                 value === 'count' ? 'items' : '';
-                    setNewMetric({ ...newMetric, metric_type: value, unit });
+                    setNewTarget({ ...newTarget, target_type: value, unit });
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select metric type" />
+                    <SelectValue placeholder="Select target type" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="count">Count</SelectItem>
@@ -2147,33 +2164,62 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                   </SelectContent>
                 </Select>
               </div>
-              {newMetric.metric_type === 'custom' && (
+              {newTarget.target_type === 'custom' && (
                 <div>
-                  <Label htmlFor="metric-unit">Unit</Label>
+                  <Label htmlFor="target-unit">Unit</Label>
                   <Input
-                    id="metric-unit"
-                    value={newMetric.unit}
-                    onChange={(e) => setNewMetric({ ...newMetric, unit: e.target.value })}
+                    id="target-unit"
+                    value={newTarget.unit}
+                    onChange={(e) => setNewTarget({ ...newTarget, unit: e.target.value })}
                     placeholder="e.g., points, items, etc."
                   />
                 </div>
               )}
             </div>
             <div className="flex justify-end gap-3 p-4 border-t">
-              <Button variant="outline" onClick={() => setIsAddingMetric(false)}>
+              <Button variant="outline" onClick={() => setIsAddingTarget(false)}>
                 Cancel
               </Button>
               <Button
                 onClick={() => {
                   const selectedGoal = project.goals.find(g => g.id === selectedGoalForTask);
                   if (selectedGoal) {
-                    handleAddMetric(selectedGoal.id);
+                    handleAddTarget(selectedGoal.id);
                   }
                 }}
-                disabled={!newMetric.title || newMetric.target_value <= 0 || !selectedGoalForTask}
+                disabled={!newTarget.title || newTarget.target_value <= 0 || !selectedGoalForTask}
               >
-                Add Metric
+                Add Target
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Link Goal Dialog */}
+        <Dialog open={isLinkingGoal} onOpenChange={setIsLinkingGoal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Link Target to Goal</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 p-4">
+              <div>
+                <Label>Select Goal</Label>
+                <Select
+                  value={selectedGoalForTask || ''}
+                  onValueChange={setSelectedGoalForTask}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a goal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {project.goals.map(goal => (
+                      <SelectItem key={goal.id} value={goal.id}>
+                        {goal.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
