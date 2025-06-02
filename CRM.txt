@@ -1,0 +1,194 @@
+Title: Relationship Conveyor Belt CRM App - Requirements Document
+
+Objective:
+To build a personal CRM app that helps manage and grow relationships by tracking preferences, emotional milestones, planned actions, and progression through customized relationship tracks (aka conveyor belts).
+
+1. Core Features
+
+1.1 Person Profile
+
+Each person added to the app has a rich profile with:
+
+Name / Nickname
+
+Role (Friend, Romantic, Acquaintance, etc.)
+
+Relationship Status
+
+First Met Date & Context
+
+Location (optional map-based)
+
+Birthday (optional reminders)
+
+Photo / Avatar
+
+1.2 Deep Profile Metadata
+
+Interests (taggable: food, hobbies, media, etc.)
+
+Personality (introvert/extrovert, humor type, tempo)
+
+Values (independence, honesty, ambition, etc.)
+
+Emotional Hooks (gets excited by X, shuts down from Y)
+
+Conversation Starters (custom notes and hooks)
+
+1.3 Tracks (Conveyor Belts)
+
+Each person is assigned a relationship track which defines their progression path.
+
+1.4 Stages and Actions
+
+Each track has:
+
+Defined stages (sequential relationship phases)
+
+A set of example actions for each stage
+
+Milestone goals to determine stage completion
+
+1.5 Action Feedback Loop
+
+Each action completed includes a feedback entry:
+
+What was done
+
+What went right
+
+What went wrong
+
+Their reaction
+
+Emotional response triggered
+
+Self rating (1–5)
+
+Adjustment for future
+
+1.6 Planning and Scheduling
+
+Future plans per person (dates, goals, activities)
+
+Recurring or queued actions
+
+Notifications/reminders
+
+1.7 Search & Filter
+
+Search by traits, location, time since contact
+
+Filter by track stage, relationship status, tags
+
+1.8 Map View (Optional)
+
+Show where people are or where shared moments happened
+
+1.9 Insights & Relationship Health
+
+Time since last meaningful interaction
+
+Progress through track
+
+Heatmap of emotional/connection spikes
+
+2. Default Tracks & Stages
+
+2.1 Romantic Track
+
+Open - Spark curiosity
+
+Connect - Build comfort & shared reality
+
+Spike - Create attraction/tension
+
+Qualify - Test compatibility
+
+Bond - Build emotional closeness
+
+Decide - Define relationship/next step
+
+2.2 Friendship Track
+
+Contact - Initial connection
+
+Activity - Shared experiences
+
+Trust - Emotional openness
+
+Shared Identity - Rituals and bonding
+
+Loyalty - Mutual support
+
+2.3 Acquaintance / Social Expansion Track
+
+Spot - Notice potential
+
+Ping - Send social signals
+
+Test - Low-stakes interaction
+
+Hook - Create next meeting context
+
+Recur - Reinforce presence
+
+2.4 Mentor / Networking Track
+
+Intro - Get on radar
+
+Value - Provide insight or curiosity
+
+Conversation - One-on-one depth
+
+Relationship - Build trust, show growth
+
+Mutuality - Give back, deepen respect
+
+
+
+
+3. MVP Milestones
+
+Phase 1 - Core CRM
+
+Person profiles
+
+Track system with static actions
+
+Manual logging of notes and feedback
+
+Phase 2 - Progression System
+
+Stage transitions
+
+Scheduled actions & reminders
+
+Feedback journaling per action
+
+Phase 3 - Intelligence & Insight
+
+Relationship insights dashboard
+
+Emotion tagging
+
+Action suggestions based on past data
+
+Phase 4 - Visuals & Experience
+
+Timeline view per person
+
+Map view
+
+UI polish & mobile responsiveness
+
+Next Steps:
+
+Build relational schema for profiles, tracks, stages, actions, and feedback
+
+Prototype relationship conveyor UI
+
+Create default action bank for each stage
+
+Connect scheduling/reminders system
+

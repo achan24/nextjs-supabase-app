@@ -22,7 +22,18 @@ create policy "Users can create their own project note links"
 
 create policy "Users can delete their own project note links"
   on project_note_links for delete
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id);[Error] Failed to load resource: the server responded with a status of 400 () (projects, line 0)
+[Error] Error updating project order: – Object
+Object
+	(anonymous function) (app-index.js:32)
+	(anonymous function) (hydration-error-info.js:41)
+	(anonymous function) (ProjectManager.tsx:194)
+[Error] Failed to load resource: the server responded with a status of 400 () (projects, line 0)
+[Error] Error updating project order: – Object
+Object
+	(anonymous function) (app-index.js:32)
+	(anonymous function) (hydration-error-info.js:41)
+	(anonymous function) (ProjectManager.tsx:194)
 
 -- Add indexes
 create index project_note_links_project_id_idx on project_note_links(project_id);

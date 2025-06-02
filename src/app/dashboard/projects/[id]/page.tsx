@@ -47,7 +47,20 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         description,
         target_date,
         status,
-        metrics,
+        metrics:goal_metrics(
+          id,
+          title,
+          description,
+          target_value,
+          current_value,
+          unit,
+          metric_type,
+          metric_tasks:goal_metric_tasks(
+            id,
+            task_id,
+            contribution_value
+          )
+        ),
         goal_tasks(
           id,
           task_id,

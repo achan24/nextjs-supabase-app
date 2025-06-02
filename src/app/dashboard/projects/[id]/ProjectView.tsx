@@ -34,6 +34,8 @@ interface Project {
   nodes: Node[];
   project_node_links: ProjectNodeLink[];
   project_notes: ProjectNoteLink[];
+  created_at: string;
+  updated_at: string;
 }
 
 interface Task {
@@ -46,9 +48,16 @@ interface Task {
 }
 
 interface Metrics {
-  target: number;
-  current: number;
+  id: string;
+  title: string;
+  description?: string;
+  target_value: number;
+  current_value: number;
   unit: string;
+  metric_type: 'count' | 'percentage' | 'time' | 'custom';
+  created_at: string;
+  updated_at: string;
+  metric_tasks?: MetricTask[];
 }
 
 interface GoalTask {
@@ -62,7 +71,7 @@ interface Goal {
   title: string;
   description?: string;
   target_date: string;
-  metrics?: Metrics;
+  metrics: Metrics[];
   status?: 'not_started' | 'in_progress' | 'completed';
   goal_tasks?: GoalTask[];
 }
@@ -166,7 +175,7 @@ interface ProcessFlowWithNodes {
 }
 
 interface ProjectViewProps {
-  project: ProjectWithNodesAndTasksFromDB;
+  project: Project;
   user: User;
 }
 
@@ -201,6 +210,23 @@ interface ProjectNoteLink {
 interface SupabaseNoteLink {
   id: string;
   note: Note[];
+}
+
+// Add interface for edited goal data
+interface EditedGoalData {
+  title: string;
+  description?: string;
+  target_date: string;
+}
+
+// Add interface for metric tasks
+interface MetricTask {
+  id: string;
+  metric_id: string;
+  task_id: string;
+  contribution_value: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function ProjectView({ project: initialProject, user }: ProjectViewProps) {
@@ -288,11 +314,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     description: '',
     status: 'not_started',
     target_date: new Date().toISOString().slice(0, 16),
-    metrics: {
-      target: 0,
-      current: 0,
-      unit: 'hours'
-    }
+    metrics: []
   });
   const [activeTab, setActiveTab] = useState('kanban');
   const [timeData, setTimeData] = useState<any[]>([]);
@@ -318,6 +340,28 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
 
   // Add nodeOrder state
   const [nodeOrder, setNodeOrder] = useState<string[]>([]);
+
+  const [editedGoalData, setEditedGoalData] = useState<EditedGoalData | null>(null);
+
+  // Add new state for metric management
+  const [isAddingMetric, setIsAddingMetric] = useState(false);
+  const [selectedMetricId, setSelectedMetricId] = useState<string | null>(null);
+  const [newMetric, setNewMetric] = useState<{
+    title: string;
+    description: string;
+    target_value: number;
+    unit: string;
+    metric_type: 'count' | 'percentage' | 'time' | 'custom';
+  }>({
+    title: '',
+    description: '',
+    target_value: 0,
+    unit: 'count',
+    metric_type: 'count'
+  });
+
+  // Add new state for task selection
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -437,6 +481,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     if (!newGoal.title || !newGoal.target_date) return;
 
     try {
+      // First create the goal without metrics
       const { data: goal, error } = await supabase
         .from('goals')
         .insert([{
@@ -444,7 +489,6 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           description: newGoal.description || '',
           target_date: newGoal.target_date,
           status: newGoal.status || 'not_started',
-          metrics: newGoal.metrics,
           project_id: project.id,
           user_id: user.id
         }])
@@ -459,7 +503,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
       // Update the project state with the new goal
       setProject({
         ...project,
-        goals: [...project.goals, goal]
+        goals: [...project.goals, { ...goal, metrics: [] }]
       });
 
       // Reset the form
@@ -468,11 +512,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
         description: '',
         status: 'not_started',
         target_date: new Date().toISOString().slice(0, 16),
-        metrics: {
-          target: 0,
-          current: 0,
-          unit: 'hours'
-        }
+        metrics: []
       });
       
       // Close the dialog
@@ -486,9 +526,8 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     return tasks.filter(task => task.status === status);
   };
 
-  const getGoalProgress = (goal: Goal) => {
-    if (!goal.metrics) return 0;
-    return (goal.metrics.current / goal.metrics.target) * 100;
+  const getMetricProgress = (metric: Metrics) => {
+    return (metric.current_value / metric.target_value) * 100;
   };
 
   const fetchAvailableNodes = async () => {
@@ -678,6 +717,7 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
         goals: project.goals.map(g => g.id === goalId ? { ...g, ...goal } : g)
       });
       setEditingGoal(null);
+      setEditedGoalData(null);
     } catch (error) {
       console.error('Error updating goal:', error);
     }
@@ -710,19 +750,6 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
           return g;
         })
       });
-
-      // Update goal metrics if task is completed
-      const task = tasks.find(t => t.id === taskId);
-      if (task?.status === 'completed') {
-        const goal = project.goals.find(g => g.id === goalId);
-        if (goal?.metrics) {
-          const updatedMetrics = {
-            ...goal.metrics,
-            current: goal.metrics.current + timeWorth
-          };
-          await handleEditGoal(goalId, { metrics: updatedMetrics });
-        }
-      }
     } catch (error) {
       console.error('Error attaching task to goal:', error);
     }
@@ -992,6 +1019,149 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
     }
   };
 
+  // Add function to handle metric creation
+  const handleAddMetric = async (goalId: string) => {
+    try {
+      const { data: metric, error } = await supabase
+        .from('goal_metrics')
+        .insert([{
+          goal_id: goalId,
+          title: newMetric.title,
+          description: newMetric.description,
+          target_value: newMetric.target_value,
+          unit: newMetric.unit,
+          metric_type: newMetric.metric_type
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update the project state with the new metric
+      setProject({
+        ...project,
+        goals: project.goals.map(g => {
+          if (g.id === goalId) {
+            return {
+              ...g,
+              metrics: [...(g.metrics || []), metric]
+            };
+          }
+          return g;
+        })
+      });
+
+      // Reset form and close dialog
+      setNewMetric({
+        title: '',
+        description: '',
+        target_value: 0,
+        unit: 'count',
+        metric_type: 'count'
+      });
+      setIsAddingMetric(false);
+    } catch (error) {
+      console.error('Error adding metric:', error);
+    }
+  };
+
+  // Update the handleAddMetricTask function to handle the new metrics structure
+  const handleAddMetricTask = async (metricId: string, taskId: string, contributionValue: number) => {
+    try {
+      const { data: metricTask, error } = await supabase
+        .from('goal_metric_tasks')
+        .insert([{
+          metric_id: metricId,
+          task_id: taskId,
+          contribution_value: contributionValue
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update local state
+      setProject(prev => ({
+        ...prev,
+        goals: prev.goals.map(g => ({
+          ...g,
+          metrics: g.metrics.map(m => 
+            m.id === metricId && tasks.find(t => t.id === taskId)?.status === 'completed'
+              ? { ...m, current_value: m.current_value + contributionValue }
+              : m
+          )
+        }))
+      }));
+    } catch (error) {
+      console.error('Error adding metric task:', error);
+    }
+  };
+
+  // Add this function to fetch project data with metrics
+  const fetchProjectData = async () => {
+    const { data: projectData, error: projectError } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        goals (
+          id,
+          title,
+          description,
+          target_date,
+          status,
+          metrics:goal_metrics (
+            id,
+            title,
+            description,
+            target_value,
+            current_value,
+            unit,
+            metric_type,
+            metric_tasks:goal_metric_tasks (
+              id,
+              task_id,
+              contribution_value
+            )
+          )
+        ),
+        tasks:task_projects (
+          task:tasks (
+            id,
+            title,
+            description,
+            priority,
+            due_date,
+            status
+          )
+        )
+      `)
+      .eq('id', project.id)
+      .single();
+
+    if (projectError) {
+      console.error('Error fetching project data:', projectError);
+      return;
+    }
+
+    // Transform the data to match our interfaces
+    const transformedProject = {
+      ...projectData,
+      goals: projectData.goals.map((goal: any) => ({
+        ...goal,
+        metrics: goal.metrics || []
+      })),
+      tasks: projectData.tasks.map((t: any) => t.task)
+    };
+
+    setProject(transformedProject);
+    setTasks(transformedProject.tasks);
+  };
+
+  // Call fetchProjectData when component mounts
+  useEffect(() => {
+    fetchProjectData();
+  }, []);
+
   return (
     <div className="min-h-screen bg-white p-6">
       <div className="max-w-7xl mx-auto">
@@ -1156,46 +1326,6 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                   />
                 </div>
                 <div>
-                  <Label htmlFor="goal-target" className="text-sm font-medium text-gray-700">Target Metric</Label>
-                  <div className="flex gap-4 mt-1">
-                    <Input
-                      type="number"
-                      value={newGoal.metrics?.target || 0}
-                      onChange={(e) => setNewGoal({
-                        ...newGoal,
-                        metrics: {
-                          target: parseFloat(e.target.value) || 0,
-                          current: 0,
-                          unit: newGoal.metrics?.unit || 'hours'
-                        }
-                      })}
-                      placeholder="Target value"
-                      className="w-1/3"
-                    />
-                    <Select
-                      value={newGoal.metrics?.unit || 'hours'}
-                      onValueChange={(value) => setNewGoal({
-                        ...newGoal,
-                        metrics: {
-                          target: newGoal.metrics?.target || 0,
-                          current: newGoal.metrics?.current || 0,
-                          unit: value
-                        }
-                      })}
-                    >
-                      <SelectTrigger className="w-1/3">
-                        <SelectValue placeholder="Unit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="hours">Hours</SelectItem>
-                        <SelectItem value="percent">Percent</SelectItem>
-                        <SelectItem value="tasks">Tasks</SelectItem>
-                        <SelectItem value="points">Points</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
                   <Label htmlFor="goal-target-date" className="text-sm font-medium text-gray-700">Target Date</Label>
                   <Input
                     id="goal-target-date"
@@ -1313,7 +1443,17 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                     >
                                       {editingTask === task.id ? 'Save' : 'Edit'}
                                     </Button>
-                                    <Dialog open={isAttachingTask} onOpenChange={setIsAttachingTask}>
+                                    <Dialog open={isAttachingTask && selectedTaskId === task.id} onOpenChange={(open) => {
+                                      setIsAttachingTask(open);
+                                      if (open) {
+                                        setSelectedTaskId(task.id);
+                                      } else {
+                                        setSelectedTaskId(null);
+                                        setSelectedGoalForTask(null);
+                                        setSelectedMetricId(null);
+                                        setSelectedTaskTimeWorth(1);
+                                      }
+                                    }}>
                                       <DialogTrigger asChild>
                                         <Button variant="ghost" size="sm">
                                           <PlusCircle className="h-4 w-4" />
@@ -1334,16 +1474,38 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                                 <SelectValue placeholder="Choose a goal" />
                                               </SelectTrigger>
                                               <SelectContent className="bg-white">
-                                                {project.goals.map(goal => (
-                                                  <SelectItem key={goal.id} value={goal.id} className="text-gray-900">
-                                                    {goal.title}
+                                                {project.goals.map(currentGoal => (
+                                                  <SelectItem key={currentGoal.id} value={currentGoal.id} className="text-gray-900">
+                                                    {currentGoal.title}
                                                   </SelectItem>
                                                 ))}
                                               </SelectContent>
                                             </Select>
                                           </div>
+                                          {selectedGoalForTask && (
+                                            <div className="space-y-2">
+                                              <Label className="text-sm font-medium text-gray-700">Select Metric</Label>
+                                              <Select
+                                                value={selectedMetricId || ''}
+                                                onValueChange={setSelectedMetricId}
+                                              >
+                                                <SelectTrigger className="w-full bg-white border-gray-200">
+                                                  <SelectValue placeholder="Choose a metric" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-white">
+                                                  {project.goals
+                                                    .find(g => g.id === selectedGoalForTask)
+                                                    ?.metrics.map(metric => (
+                                                      <SelectItem key={metric.id} value={metric.id} className="text-gray-900">
+                                                        {metric.title} ({metric.current_value} / {metric.target_value} {metric.unit})
+                                                      </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          )}
                                           <div className="space-y-2">
-                                            <Label className="text-sm font-medium text-gray-700">Time Worth (hours)</Label>
+                                            <Label className="text-sm font-medium text-gray-700">Contribution Value</Label>
                                             <Input
                                               type="number"
                                               min="0.1"
@@ -1358,7 +1520,9 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                           <Button
                                             variant="outline"
                                             onClick={() => {
+                                              setSelectedTaskId(null);
                                               setSelectedGoalForTask(null);
+                                              setSelectedMetricId(null);
                                               setSelectedTaskTimeWorth(1);
                                               setIsAttachingTask(false);
                                             }}
@@ -1368,14 +1532,16 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                           </Button>
                                           <Button
                                             onClick={() => {
-                                              if (selectedGoalForTask) {
-                                                handleAttachTaskToGoal(task.id, selectedGoalForTask, selectedTaskTimeWorth);
+                                              if (selectedTaskId && selectedGoalForTask && selectedMetricId) {
+                                                handleAddMetricTask(selectedMetricId, selectedTaskId, selectedTaskTimeWorth);
+                                                setSelectedTaskId(null);
                                                 setSelectedGoalForTask(null);
+                                                setSelectedMetricId(null);
                                                 setSelectedTaskTimeWorth(1);
                                                 setIsAttachingTask(false);
                                               }
                                             }}
-                                            disabled={!selectedGoalForTask}
+                                            disabled={!selectedGoalForTask || !selectedMetricId}
                                             className="bg-blue-600 text-white hover:bg-blue-700"
                                           >
                                             Attach to Goal
@@ -1436,14 +1602,17 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                                     )
                                   )}
                                 </div>
-                                {/* Show attached goals */}
-                                {project.goals.map(goal => 
-                                  goal.goal_tasks?.some(gt => gt.task_id === task.id) && (
-                                    <div key={goal.id} className="mt-2 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded flex items-center justify-between">
-                                      <span>🎯 {goal.title}</span>
-                                      <span>{goal.goal_tasks.find(gt => gt.task_id === task.id)?.time_worth}h</span>
-                                    </div>
-                                  )
+                                {/* Show attached metrics */}
+                                {project.goals.map(currentGoal => 
+                                  currentGoal.metrics.map(metric => {
+                                    const metricTask = metric.metric_tasks?.find(mt => mt.task_id === task.id);
+                                    return metricTask && (
+                                      <div key={metric.id} className="mt-2 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded flex items-center justify-between">
+                                        <span>📊 {currentGoal.title} - {metric.title}</span>
+                                        <span>{metricTask.contribution_value} {metric.unit}</span>
+                                      </div>
+                                    );
+                                  })
                                 )}
                               </div>
                             )}
@@ -1460,67 +1629,139 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
 
           <Tabs.Content value="goals" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {project.goals.map(goal => (
-                <Card key={goal.id}>
+              {project.goals.map(currentGoal => (
+                <Card key={currentGoal.id}>
                   <CardHeader className="flex flex-row justify-between items-start">
                     <CardTitle>
-                      {editingGoal === goal.id ? (
+                      {editingGoal === currentGoal.id ? (
                         <Input
-                          value={goal.title}
-                          onChange={(e) => handleEditGoal(goal.id, { title: e.target.value })}
+                          value={editedGoalData?.title || currentGoal.title}
+                          onChange={(e) => setEditedGoalData(prev => ({ 
+                            ...prev, 
+                            title: e.target.value,
+                            description: prev?.description || currentGoal.description || '',
+                            target_date: prev?.target_date || currentGoal.target_date
+                          }))}
                           className="mt-[-4px]"
                         />
                       ) : (
-                        goal.title
+                        currentGoal.title
                       )}
                     </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingGoal(editingGoal === goal.id ? null : goal.id)}
-                    >
-                      {editingGoal === goal.id ? 'Save' : 'Edit'}
-                    </Button>
+                    <div className="flex gap-2">
+                      {editingGoal === currentGoal.id ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingGoal(null);
+                              setEditedGoalData(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              if (editedGoalData) {
+                                handleEditGoal(currentGoal.id, editedGoalData);
+                              }
+                            }}
+                          >
+                            Save
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingGoal(currentGoal.id);
+                            setEditedGoalData({
+                              title: currentGoal.title,
+                              description: currentGoal.description || '',
+                              target_date: currentGoal.target_date
+                            });
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    {goal.description && (
+                    {currentGoal.description && (
                       <div className="mb-4">
-                        {editingGoal === goal.id ? (
+                        {editingGoal === currentGoal.id ? (
                           <Textarea
-                            value={goal.description}
-                            onChange={(e) => handleEditGoal(goal.id, { description: e.target.value })}
+                            value={editedGoalData?.description || currentGoal.description}
+                            onChange={(e) => setEditedGoalData(prev => ({
+                              ...prev!,
+                              description: e.target.value
+                            }))}
                             className="min-h-[100px]"
                           />
                         ) : (
-                          <p className="text-gray-600 whitespace-pre-wrap">{goal.description}</p>
+                          <p className="text-gray-600 whitespace-pre-wrap">{currentGoal.description}</p>
                         )}
                       </div>
                     )}
-                    {goal.metrics && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>Progress</span>
-                          <span>{goal.metrics.current} / {goal.metrics.target} {goal.metrics.unit}</span>
-                        </div>
-                        <Progress value={getGoalProgress(goal)} />
+                    
+                    {/* Metrics Section */}
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-medium">Metrics</h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedMetricId(null);
+                            setIsAddingMetric(true);
+                          }}
+                        >
+                          Add Metric
+                        </Button>
                       </div>
-                    )}
+                      
+                      {currentGoal.metrics?.map(metric => (
+                        <div key={metric.id} className="bg-gray-50 rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-medium">{metric.title}</h4>
+                              {metric.description && (
+                                <p className="text-sm text-gray-600">{metric.description}</p>
+                              )}
+                            </div>
+                            <span className="text-sm font-medium">
+                              {metric.current_value} / {metric.target_value} {metric.unit}
+                            </span>
+                          </div>
+                          <Progress value={getMetricProgress(metric)} />
+                        </div>
+                      ))}
+                    </div>
+
                     <div className="mt-4 space-y-2">
                       <div className="flex justify-between text-sm text-gray-500">
-                        <span>Target Date: {new Date(goal.target_date).toLocaleDateString()}</span>
+                        <span>Target Date: {new Date(currentGoal.target_date).toLocaleDateString()}</span>
                         <span className={`font-medium ${
-                          getDaysRemaining(goal.target_date) < 0 ? 'text-red-500' :
-                          getDaysRemaining(goal.target_date) < 7 ? 'text-yellow-500' :
+                          getDaysRemaining(currentGoal.target_date) < 0 ? 'text-red-500' :
+                          getDaysRemaining(currentGoal.target_date) < 7 ? 'text-yellow-500' :
                           'text-green-500'
                         }`}>
-                          {getDaysRemaining(goal.target_date)} days remaining
+                          {getDaysRemaining(currentGoal.target_date)} days remaining
                         </span>
                       </div>
-                      {editingGoal === goal.id && (
+                      {editingGoal === currentGoal.id && (
                         <Input
                           type="datetime-local"
-                          value={goal.target_date.slice(0, 16)}
-                          onChange={(e) => handleEditGoal(goal.id, { target_date: e.target.value })}
+                          value={editedGoalData?.target_date.slice(0, 16) || currentGoal.target_date.slice(0, 16)}
+                          onChange={(e) => setEditedGoalData(prev => ({
+                            ...prev!,
+                            target_date: e.target.value
+                          }))}
                           className="mt-2"
                         />
                       )}
@@ -1843,6 +2084,95 @@ export default function ProjectView({ project: initialProject, user }: ProjectVi
                 className={`px-6 ${!selectedNoteId ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
               >
                 Link Note
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Metric Dialog */}
+        <Dialog open={isAddingMetric} onOpenChange={setIsAddingMetric}>
+          <DialogContent className="bg-white rounded-lg shadow-lg max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Add New Metric</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 p-4">
+              <div>
+                <Label htmlFor="metric-title">Title</Label>
+                <Input
+                  id="metric-title"
+                  value={newMetric.title}
+                  onChange={(e) => setNewMetric({ ...newMetric, title: e.target.value })}
+                  placeholder="e.g., Tasks Completed"
+                />
+              </div>
+              <div>
+                <Label htmlFor="metric-description">Description (Optional)</Label>
+                <Textarea
+                  id="metric-description"
+                  value={newMetric.description}
+                  onChange={(e) => setNewMetric({ ...newMetric, description: e.target.value })}
+                  placeholder="Describe what this metric measures"
+                />
+              </div>
+              <div>
+                <Label htmlFor="metric-target">Target Value</Label>
+                <Input
+                  id="metric-target"
+                  type="number"
+                  value={newMetric.target_value}
+                  onChange={(e) => setNewMetric({ ...newMetric, target_value: parseFloat(e.target.value) })}
+                  min="0"
+                  step="1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="metric-type">Type</Label>
+                <Select
+                  value={newMetric.metric_type}
+                  onValueChange={(value: 'count' | 'percentage' | 'time' | 'custom') => {
+                    const unit = value === 'time' ? 'hours' : 
+                                value === 'percentage' ? '%' : 
+                                value === 'count' ? 'items' : '';
+                    setNewMetric({ ...newMetric, metric_type: value, unit });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select metric type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="count">Count</SelectItem>
+                    <SelectItem value="percentage">Percentage</SelectItem>
+                    <SelectItem value="time">Time</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {newMetric.metric_type === 'custom' && (
+                <div>
+                  <Label htmlFor="metric-unit">Unit</Label>
+                  <Input
+                    id="metric-unit"
+                    value={newMetric.unit}
+                    onChange={(e) => setNewMetric({ ...newMetric, unit: e.target.value })}
+                    placeholder="e.g., points, items, etc."
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t">
+              <Button variant="outline" onClick={() => setIsAddingMetric(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  const selectedGoal = project.goals.find(g => g.id === selectedGoalForTask);
+                  if (selectedGoal) {
+                    handleAddMetric(selectedGoal.id);
+                  }
+                }}
+                disabled={!newMetric.title || newMetric.target_value <= 0 || !selectedGoalForTask}
+              >
+                Add Metric
               </Button>
             </div>
           </DialogContent>

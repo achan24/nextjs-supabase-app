@@ -12,6 +12,7 @@ const apps = [
   { name: 'Calendar', href: '/dashboard/calendar', description: 'View your schedule' },
   { name: 'Insights', href: '/dashboard/insights', description: 'Get productivity insights' },
   { name: 'AI Assistant', href: '/dashboard/ai', description: 'Get AI-powered help' },
+  { name: 'Relationship CRM', href: '/dashboard/crm', description: 'Track and grow meaningful relationships' },
 ];
 
 export function AppNavDropdown() {
