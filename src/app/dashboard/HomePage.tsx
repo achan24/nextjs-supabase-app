@@ -1,10 +1,12 @@
 'use client';
 
-import { User } from '@supabase/supabase-js'
+import { User } from '@supabase/auth-helpers-nextjs'
 import { useState } from 'react'
 import Link from 'next/link'
 import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { BarChart3 } from 'lucide-react'
 
 export default function HomePage({ user }: { user: User }) {
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
@@ -45,6 +47,25 @@ export default function HomePage({ user }: { user: User }) {
         {/* Feature Cards */}
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {/* Overview Card */}
+          <Link href="/dashboard/overview" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <BarChart3 className="h-6 w-6 text-purple-600" />
+                  </div>
+                  Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Track and manage all your targets and their progress in one place.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
           {/* Projects Card */}
           <Link href="/dashboard/projects" className="block">
             <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
