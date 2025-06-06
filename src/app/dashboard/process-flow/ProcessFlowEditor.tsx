@@ -21,6 +21,7 @@ import ReactFlow, {
   ReactFlowInstance,
   useReactFlow,
   ReactFlowProvider,
+  BezierEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -56,7 +57,12 @@ const nodeTypes = {
   technique: TechniqueNode,
   analytics: AnalyticsNode,
   link: LinkNode,
-  noteRef: NoteReferenceNode,
+  noteReference: NoteReferenceNode,
+};
+
+const edgeTypes = {
+  default: BezierEdge,
+  bezier: BezierEdge,
 };
 
 interface ProcessFlowEditorProps {
@@ -88,36 +94,15 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
     const handleUrlParams = async () => {
       const params = new URLSearchParams(window.location.search);
       const flowId = params.get('flowId');
-      const nodeId = params.get('nodeId');
       
-      if (flowId) {
-        if (nodeId) {
-          await jumpToNode(flowId, nodeId);
-        } else {
-          // Just load the flow without jumping to a node
-          const { data, error } = await supabase
-            .from('process_flows')
-            .select('*')
-            .eq('id', flowId)
-            .single();
-
-          if (error) {
-            console.error('Error loading flow:', error);
-            return;
-          }
-
-          if (data) {
-            setCurrentFlow(data);
-            setNodes(data.nodes || []);
-            setEdges(data.edges || []);
-            setFlowTitle(data.title);
-            setFlowDescription(data.description || '');
-          }
-        }
+      if (flowId && flowId !== currentFlow?.id) {
+        console.log('[url] Loading flow from URL params:', { flowId });
+        await loadFlowByIdAndJump(flowId);
       }
     };
+    
     handleUrlParams();
-  }, [supabase, setFlowTitle, reactFlowInstance]);
+  }, [window.location.search]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -673,66 +658,102 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   };
 
   // Function to jump to a node in a flow
-  const jumpToNode = (flowId: string, nodeId: string) => {
+  const jumpToNode = async (flowId: string, nodeId: string) => {
     console.log('[jump][step1] jumpToNode called with', { flowId, nodeId });
-    jumpTargetRef.current = { flowId, nodeId };
-    loadFlowByIdAndJump(flowId); // don't await
+    
+    // First, update the URL
+    const url = `/dashboard/process-flow?flowId=${flowId}&nodeId=${nodeId}`;
+    window.location.href = url;
   };
 
   // Helper to load a flow (no need to pass nodeId)
   const loadFlowByIdAndJump = async (flowId: string) => {
     console.log('[jump][step2] loadFlowByIdAndJump called with', { flowId });
     try {
-      const { data, error } = await supabase
+      const { data: flow, error } = await supabase
         .from('process_flows')
         .select('*')
         .eq('id', flowId)
         .single();
+      
       if (error) throw error;
-      setCurrentFlow(data);
-      setNodes(data.nodes);
-      setEdges(data.edges);
-      setFlowTitle(data.title);
-      setFlowDescription(data.description || '');
-      console.log('[jump][step2] loadFlowByIdAndJump finished, flow loaded:', data?.id);
+      
+      if (!flow) {
+        console.error('[jump][step2] Flow not found');
+        return;
+      }
+
+      console.log('[jump][step2] Flow loaded, updating state with flow:', flow.id);
+      
+      // Update all state at once
+      setCurrentFlow(flow);
+      setNodes(flow.nodes || []);
+      setEdges(flow.edges || []);
+      setFlowTitle(flow.title);
+      setFlowDescription(flow.description || '');
+      
+      // Wait for the next render cycle
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Try to find and jump to the node
+      const params = new URLSearchParams(window.location.search);
+      const nodeId = params.get('nodeId');
+      
+      if (nodeId && rf) {
+        const node = flow.nodes?.find((n: any) => n.id === nodeId);
+        if (node) {
+          console.log('[jump][step2] Found target node, centering view');
+          rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
+        }
+      }
     } catch (error) {
       console.error('[jump][step2] Error loading flow for jump:', error);
     }
   };
 
-  // Single effect for jump-to-link logic
+  // Single effect for jump-to-link logic with retry mechanism
   useEffect(() => {
     const jumpTarget = jumpTargetRef.current;
-    console.log('[jump][step3] useEffect triggered', { jumpTarget, currentFlowId: currentFlow?.id, rfReady: !!rf, nodesLength: nodes.length });
-    if (!jumpTarget || !rf) {
-      console.log('[jump][step3] jumpTarget or rf not ready');
-      return;
-    }
+    if (!jumpTarget || !rf || !nodes.length) return;
+    
+    console.log('[jump][step3] Checking jump conditions:', {
+      jumpTarget,
+      currentFlowId: currentFlow?.id,
+      nodesLoaded: nodes.length > 0
+    });
+    
     if (currentFlow?.id !== jumpTarget.flowId) {
       console.log('[jump][step3] Not on the right flow yet, waiting...');
       return;
     }
-    const node = rf.getNodes().find(n => n.id === jumpTarget.nodeId);
+    
+    const node = nodes.find(n => n.id === jumpTarget.nodeId);
     if (!node) {
-      console.log('[jump][step3] Node not found yet, waiting...');
+      console.log('[jump][step3] Node not found in current nodes');
       return;
     }
-    console.log('[jump][step3] Node found, jumping to', node.id, node.position);
-    rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
-    jumpTargetRef.current = null;
-    console.log('[jump][step3] Jump complete, jumpTarget cleared');
+    
+    // Add a small delay to ensure the node is properly rendered
+    setTimeout(() => {
+      console.log('[jump][step3] Node found, jumping to', node.id);
+      rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
+      jumpTargetRef.current = null;
+      console.log('[jump][step3] Jump complete, jumpTarget cleared');
+    }, 50);
   }, [currentFlow, rf, nodes]);
 
-  // Fallback timeout for missing node
+  // Fallback timeout for missing node with increased timeout
   useEffect(() => {
     if (!jumpTargetRef.current) return;
+    
     const timer = setTimeout(() => {
       if (jumpTargetRef.current) {
-        console.log('[jump][step4] Fallback timeout: node not found in time, showing alert and clearing jumpTarget');
+        console.log('[jump][step4] Fallback timeout: node not found in time');
         alert("Sorry, I can't find that node in this flow.");
         jumpTargetRef.current = null;
       }
-    }, 500);
+    }, 2000);
+    
     return () => clearTimeout(timer);
   }, [currentFlow, rf, nodes]);
 
@@ -960,6 +981,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
               onDrop={onDrop}
               onInit={onInit}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               defaultEdgeOptions={defaultEdgeOptions}
               minZoom={0.1}
               maxZoom={10}

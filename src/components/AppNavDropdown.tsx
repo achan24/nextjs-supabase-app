@@ -104,22 +104,8 @@ export function AppNavDropdown() {
     console.log('Navigating to flow:', flowId);
     setIsHotlinksOpen(false);
     
-    // Get the current pathname
-    const currentPath = window.location.pathname;
-    const isInProcessFlow = currentPath === '/dashboard/process-flow';
-    const url = `/dashboard/process-flow?flowId=${flowId}`;
-    
-    try {
-      if (isInProcessFlow) {
-        // Use router.push for in-page navigation
-        await router.push(url);
-      } else {
-        // Use router.replace for cross-page navigation
-        await router.replace(url);
-      }
-    } catch (error) {
-      console.error('Navigation error:', error);
-    }
+    // Use direct URL navigation for consistent behavior
+    window.location.href = `/dashboard/process-flow?flowId=${flowId}`;
   };
 
   return (
