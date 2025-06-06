@@ -94,15 +94,41 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
     const handleUrlParams = async () => {
       const params = new URLSearchParams(window.location.search);
       const flowId = params.get('flowId');
+      const nodeId = params.get('nodeId');
       
-      if (flowId && flowId !== currentFlow?.id) {
-        console.log('[url] Loading flow from URL params:', { flowId });
+      if (!flowId) return;
+
+      // If we're already on the right flow and have a nodeId, just center on it
+      if (flowId === currentFlow?.id && nodeId && rf) {
+        const node = nodes.find(n => n.id === nodeId);
+        if (node) {
+          console.log('[url] Centering on node in current flow:', nodeId);
+          rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
+          return;
+        }
+      }
+
+      // If we need to load a different flow
+      if (flowId !== currentFlow?.id) {
+        console.log('[url] Loading new flow:', flowId);
         await loadFlowByIdAndJump(flowId);
+        
+        // After loading the flow, wait a bit and then try to center on the node
+        if (nodeId) {
+          setTimeout(() => {
+            if (!rf) return;
+            const node = nodes.find(n => n.id === nodeId);
+            if (node) {
+              console.log('[url] Centering on node in new flow:', nodeId);
+              rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
+            }
+          }, 500); // Give time for the flow to load and render
+        }
       }
     };
     
     handleUrlParams();
-  }, [window.location.search]);
+  }, [window.location.search, currentFlow?.id, nodes, rf]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -691,71 +717,26 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
       setEdges(flow.edges || []);
       setFlowTitle(flow.title);
       setFlowDescription(flow.description || '');
-      
-      // Wait for the next render cycle
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Try to find and jump to the node
-      const params = new URLSearchParams(window.location.search);
-      const nodeId = params.get('nodeId');
-      
-      if (nodeId && rf) {
-        const node = flow.nodes?.find((n: any) => n.id === nodeId);
-        if (node) {
-          console.log('[jump][step2] Found target node, centering view');
-          rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
-        }
-      }
     } catch (error) {
       console.error('[jump][step2] Error loading flow for jump:', error);
     }
   };
 
-  // Single effect for jump-to-link logic with retry mechanism
+  // Effect to handle initial node centering after flow loads
   useEffect(() => {
-    const jumpTarget = jumpTargetRef.current;
-    if (!jumpTarget || !rf || !nodes.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const nodeId = params.get('nodeId');
     
-    console.log('[jump][step3] Checking jump conditions:', {
-      jumpTarget,
-      currentFlowId: currentFlow?.id,
-      nodesLoaded: nodes.length > 0
-    });
-    
-    if (currentFlow?.id !== jumpTarget.flowId) {
-      console.log('[jump][step3] Not on the right flow yet, waiting...');
-      return;
-    }
-    
-    const node = nodes.find(n => n.id === jumpTarget.nodeId);
-    if (!node) {
-      console.log('[jump][step3] Node not found in current nodes');
-      return;
-    }
-    
-    // Add a small delay to ensure the node is properly rendered
-    setTimeout(() => {
-      console.log('[jump][step3] Node found, jumping to', node.id);
-      rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
-      jumpTargetRef.current = null;
-      console.log('[jump][step3] Jump complete, jumpTarget cleared');
-    }, 50);
-  }, [currentFlow, rf, nodes]);
-
-  // Fallback timeout for missing node with increased timeout
-  useEffect(() => {
-    if (!jumpTargetRef.current) return;
-    
-    const timer = setTimeout(() => {
-      if (jumpTargetRef.current) {
-        console.log('[jump][step4] Fallback timeout: node not found in time');
-        alert("Sorry, I can't find that node in this flow.");
-        jumpTargetRef.current = null;
+    if (nodeId && rf && nodes.length > 0) {
+      const node = nodes.find(n => n.id === nodeId);
+      if (node) {
+        console.log('[init] Centering on initial node:', nodeId);
+        setTimeout(() => {
+          rf.setCenter(node.position.x, node.position.y, { zoom: 1.2, duration: 800 });
+        }, 100);
       }
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, [currentFlow, rf, nodes]);
+    }
+  }, [rf, nodes]);
 
   // Update onFlowChange when currentFlow changes
   useEffect(() => {
