@@ -729,6 +729,50 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
     onFlowChange?.(currentFlow?.id || null);
   }, [currentFlow, onFlowChange]);
 
+  // Watch for URL parameter changes
+  useEffect(() => {
+    const handleUrlChange = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const flowId = params.get('flowId');
+      
+      if (flowId && flowId !== currentFlow?.id) {
+        console.log('URL flowId changed, loading new flow:', flowId);
+        const { data, error } = await supabase
+          .from('process_flows')
+          .select('*')
+          .eq('id', flowId)
+          .single();
+
+        if (error) {
+          console.error('Error loading flow:', error);
+          return;
+        }
+
+        if (data) {
+          console.log('New flow loaded:', data);
+          setCurrentFlow(data);
+          setNodes(data.nodes || []);
+          setEdges(data.edges || []);
+          setFlowTitle(data.title);
+          setFlowDescription(data.description || '');
+
+          // Wait for React Flow to be ready and nodes to be rendered
+          const checkRf = setInterval(() => {
+            if (rf) {
+              clearInterval(checkRf);
+              rf.fitView({ duration: 800 });
+            }
+          }, 100);
+
+          // Clear the interval after 5 seconds to prevent memory leaks
+          setTimeout(() => clearInterval(checkRf), 5000);
+        }
+      }
+    };
+
+    handleUrlChange();
+  }, [window.location.search, currentFlow?.id, supabase, rf, setFlowTitle]);
+
   return (
     <ReactFlowProvider>
       <div className="h-full w-full flex p-0 m-0" onClick={handleBackgroundClick} style={{margin:0,padding:0}}>
