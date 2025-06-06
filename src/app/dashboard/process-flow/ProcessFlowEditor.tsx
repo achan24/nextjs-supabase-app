@@ -88,6 +88,8 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   const [flows, setFlows] = useState<ProcessFlow[]>([]);
   const [rf, setRf] = useState<ReactFlowInstance | null>(null);
   const jumpTargetRef = useRef<{ flowId: string; nodeId: string } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // Handle URL parameters
   useEffect(() => {
@@ -501,7 +503,9 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   };
 
   const deleteFlow = async (flowId: string) => {
-    if (!confirm('Are you sure you want to delete this flow?')) return;
+    if (deleteConfirmText.toLowerCase() !== 'delete map') {
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -515,6 +519,8 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
       if (currentFlow?.id === flowId) {
         createNewFlow();
       }
+      setShowDeleteModal(false);
+      setDeleteConfirmText('');
     } catch (error) {
       console.error('Error deleting flow:', error);
     }
@@ -827,11 +833,11 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
         <div
           className={`${
             isToolboxOpen ? 'translate-x-0' : '-translate-x-full'
-          } fixed w-64 bg-white shadow-md p-4 overflow-y-auto transition-transform duration-300 ease-in-out h-full border-r border-gray-200 flex-shrink-0 z-20`}
+          } fixed w-64 bg-white shadow-md p-4 overflow-y-auto transition-transform duration-300 ease-in-out h-full border-r border-gray-200 flex-shrink-0 z-20 flex flex-col`}
           onClick={(e) => e.stopPropagation()}
           style={{ left: 0, top: 0 }}
         >
-          <div className="flex flex-col space-y-4">
+          <div className="flex flex-col space-y-4 flex-grow">
             <div className="flex justify-between items-center space-x-2">
               <button
                 onClick={createNewFlow}
@@ -871,17 +877,6 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
 
             {/* Flow Management */}
             <div className="flex flex-col space-y-2">
-              <div className="flex justify-between">
-                {currentFlow && (
-                  <button
-                    onClick={() => deleteFlow(currentFlow.id)}
-                    className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-
               {/* Flow Selector */}
               <div className="flex flex-col space-y-2">
                 <label className="text-sm font-medium">Select Flow</label>
@@ -946,7 +941,60 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
               </div>
             </div>
           </div>
+
+          {/* Delete Button at Bottom */}
+          {currentFlow && (
+            <div className="pt-4 mt-4 border-t">
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="w-full px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Delete Process Flow
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && currentFlow && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-96 max-w-md">
+              <h3 className="text-lg font-semibold mb-4">Delete Process Flow</h3>
+              <p className="text-gray-600 mb-4">
+                This action cannot be undone. To confirm deletion, please type "delete map" below:
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type 'delete map' to confirm"
+                className="w-full px-3 py-2 border rounded mb-4"
+              />
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeleteConfirmText('');
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => deleteFlow(currentFlow.id)}
+                  disabled={deleteConfirmText.toLowerCase() !== 'delete map'}
+                  className={`px-4 py-2 text-white rounded ${
+                    deleteConfirmText.toLowerCase() === 'delete map'
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Flow Area */}
         <div className="flex-1 h-full flex flex-col min-w-0 overflow-hidden p-0 m-0" style={{margin:0,padding:0}}>
