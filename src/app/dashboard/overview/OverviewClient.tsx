@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,15 +9,54 @@ import { Button } from '@/components/ui/button';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Target } from './types';
+import { User } from '@supabase/supabase-js';
+import { getBrowserSupabase } from '@/utils/supabase-client';
 
-interface OverviewProps {
+interface OverviewClientProps {
   initialTargets: Target[];
+  initialSelectedTargets: string[];
+  user: User;
 }
 
-const Overview = ({ initialTargets }: OverviewProps) => {
-  const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
+const OverviewClient = ({ initialTargets, initialSelectedTargets, user }: OverviewClientProps) => {
+  const [selectedTargets, setSelectedTargets] = useState<string[]>(initialSelectedTargets);
   const [targets] = useState<Target[]>(initialTargets);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const supabase = getBrowserSupabase();
+
+  // Handle adding a target to overview
+  const handleAddTarget = async (targetId: string) => {
+    if (selectedTargets.includes(targetId)) return;
+
+    try {
+      const { error } = await supabase
+        .from('overview_targets')
+        .insert([{ target_id: targetId }]); // user_id will be auto-filled by the default
+
+      if (error) throw error;
+
+      setSelectedTargets(prev => [...prev, targetId]);
+    } catch (error) {
+      console.error('Error adding target to overview:', error);
+    }
+  };
+
+  // Handle removing a target from overview
+  const handleRemoveTarget = async (targetId: string) => {
+    try {
+      const { error } = await supabase
+        .from('overview_targets')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('target_id', targetId);
+
+      if (error) throw error;
+
+      setSelectedTargets(prev => prev.filter(id => id !== targetId));
+    } catch (error) {
+      console.error('Error removing target from overview:', error);
+    }
+  };
 
   // Calculate target progress
   const getProgress = (target: Target) => {
@@ -51,11 +90,7 @@ const Overview = ({ initialTargets }: OverviewProps) => {
           <h1 className="text-2xl font-semibold text-gray-900">Overview</h1>
           <Select
             value=""
-            onValueChange={(value) => {
-              if (value && !selectedTargets.includes(value)) {
-                setSelectedTargets(prev => [...prev, value]);
-              }
-            }}
+            onValueChange={handleAddTarget}
           >
             <SelectTrigger className="w-[300px]">
               <SelectValue placeholder="Add target to overview..." />
@@ -115,7 +150,7 @@ const Overview = ({ initialTargets }: OverviewProps) => {
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => setSelectedTargets(prev => prev.filter(id => id !== target.id))}
+                      onClick={() => handleRemoveTarget(target.id)}
                     >
                       Remove
                     </Button>
@@ -189,4 +224,4 @@ const Overview = ({ initialTargets }: OverviewProps) => {
   );
 };
 
-export default Overview; 
+export default OverviewClient; 

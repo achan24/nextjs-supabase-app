@@ -2,8 +2,9 @@ import { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { redirect } from 'next/navigation';
-import Overview from './Overview';
+import OverviewClient from './OverviewClient';
 import { Target } from './types';
+import { Database } from '@/lib/database.types';
 
 interface ProjectTarget {
   target: {
@@ -43,13 +44,19 @@ export const metadata: Metadata = {
 
 export default async function OverviewPage() {
   const cookieStore = cookies();
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: any) {
+          cookieStore.set({ name, value: '', ...options });
         },
       },
     }
@@ -94,14 +101,20 @@ export default async function OverviewPage() {
     return <div>Error loading targets</div>;
   }
 
-  console.log('Raw targets data:', JSON.stringify(targets, null, 2));
-  
+  // Fetch selected overview targets
+  const { data: overviewTargets, error: overviewError } = await supabase
+    .from('overview_targets')
+    .select('target_id')
+    .eq('user_id', user.id);
+
+  if (overviewError) {
+    console.error('Error fetching overview targets:', overviewError);
+    return <div>Error loading overview configuration</div>;
+  }
+
   // Format targets with project information
   const formattedTargets = targets?.map(target => {
-    console.log('Processing target:', target.title);
-    console.log('Goal links:', target.goal_target_links);
     const projectInfo = target.goal_target_links?.[0]?.goal?.project;
-    console.log('Extracted project info:', projectInfo);
     return {
       ...target,
       project: projectInfo ? {
@@ -111,7 +124,14 @@ export default async function OverviewPage() {
     };
   }) || [];
 
-  console.log('Final formatted targets:', JSON.stringify(formattedTargets, null, 2));
+  // Get the list of selected target IDs
+  const selectedTargetIds = overviewTargets?.map(ot => ot.target_id) || [];
 
-  return <Overview initialTargets={formattedTargets} />;
+  return (
+    <OverviewClient 
+      initialTargets={formattedTargets} 
+      initialSelectedTargets={selectedTargetIds}
+      user={user}
+    />
+  );
 } 

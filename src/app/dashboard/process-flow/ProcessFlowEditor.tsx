@@ -63,9 +63,10 @@ interface ProcessFlowEditorProps {
   user: User;
   flowTitle: string;
   setFlowTitle: (title: string) => void;
+  onFlowChange?: (flowId: string | null) => void;
 }
 
-export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: ProcessFlowEditorProps) {
+export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlowChange }: ProcessFlowEditorProps) {
   const supabase = createClient();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -89,12 +90,34 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
       const flowId = params.get('flowId');
       const nodeId = params.get('nodeId');
       
-      if (flowId && nodeId) {
-        jumpToNode(flowId, nodeId);
+      if (flowId) {
+        if (nodeId) {
+          await jumpToNode(flowId, nodeId);
+        } else {
+          // Just load the flow without jumping to a node
+          const { data, error } = await supabase
+            .from('process_flows')
+            .select('*')
+            .eq('id', flowId)
+            .single();
+
+          if (error) {
+            console.error('Error loading flow:', error);
+            return;
+          }
+
+          if (data) {
+            setCurrentFlow(data);
+            setNodes(data.nodes || []);
+            setEdges(data.edges || []);
+            setFlowTitle(data.title);
+            setFlowDescription(data.description || '');
+          }
+        }
       }
     };
     handleUrlParams();
-  }, []);
+  }, [supabase, setFlowTitle, reactFlowInstance]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -373,19 +396,33 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
         // Check URL parameters first
         const params = new URLSearchParams(window.location.search);
         const flowId = params.get('flowId');
-        const nodeId = params.get('nodeId');
         
-        if (flowId && nodeId) {
-          console.log('Found URL parameters, loading specific flow:', flowId);
+        if (flowId) {
+          console.log('Found flowId in URL, loading flow:', flowId);
           const targetFlow = flows.find(f => f.id === flowId);
           if (targetFlow) {
+            console.log('Found target flow:', targetFlow);
             setCurrentFlow(targetFlow);
-            setNodes(targetFlow.nodes);
-            setEdges(targetFlow.edges);
+            setNodes(targetFlow.nodes || []);
+            setEdges(targetFlow.edges || []);
             setFlowTitle(targetFlow.title);
             setFlowDescription(targetFlow.description || '');
-            jumpToNode(flowId, nodeId);
+            
+            // Wait for React Flow to be ready
+            const checkRf = setInterval(() => {
+              if (rf) {
+                clearInterval(checkRf);
+                // Center the view
+                rf.fitView({ duration: 800 });
+              }
+            }, 100);
+
+            // Clear the interval after 5 seconds to prevent memory leaks
+            setTimeout(() => clearInterval(checkRf), 5000);
+            
             return;
+          } else {
+            console.error('Flow not found:', flowId);
           }
         }
 
@@ -394,8 +431,8 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
           const latestFlow = flows[0];
           console.log('Setting latest flow:', latestFlow);
           setCurrentFlow(latestFlow);
-          setNodes(latestFlow.nodes);
-          setEdges(latestFlow.edges);
+          setNodes(latestFlow.nodes || []);
+          setEdges(latestFlow.edges || []);
           setFlowTitle(latestFlow.title);
           setFlowDescription(latestFlow.description || '');
         }
@@ -410,7 +447,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
     } else {
       console.error('No user ID available');
     }
-  }, [supabase, user.id]);
+  }, [supabase, user.id, rf]);
 
   const createNewFlow = () => {
     setCurrentFlow(null);
@@ -686,6 +723,11 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle }: Pro
     }, 500);
     return () => clearTimeout(timer);
   }, [currentFlow, rf, nodes]);
+
+  // Update onFlowChange when currentFlow changes
+  useEffect(() => {
+    onFlowChange?.(currentFlow?.id || null);
+  }, [currentFlow, onFlowChange]);
 
   return (
     <ReactFlowProvider>
