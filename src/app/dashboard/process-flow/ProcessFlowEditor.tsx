@@ -467,11 +467,23 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
 
       if (error) throw error;
       
+      // Update URL first
+      const url = `/dashboard/process-flow?flowId=${flow.id}`;
+      window.history.replaceState({}, '', url);
+      
+      // Then update state
       setCurrentFlow(data);
-      setNodes(data.nodes);
-      setEdges(data.edges);
+      setNodes(data.nodes || []);
+      setEdges(data.edges || []);
       setFlowTitle(data.title);
       setFlowDescription(data.description || '');
+
+      // Center view after a short delay to ensure nodes are rendered
+      setTimeout(() => {
+        if (rf) {
+          rf.fitView({ duration: 800 });
+        }
+      }, 100);
     } catch (error) {
       console.error('Error loading flow:', error);
     }
@@ -735,8 +747,44 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
       const params = new URLSearchParams(window.location.search);
       const flowId = params.get('flowId');
       
-      if (flowId && flowId !== currentFlow?.id) {
-        console.log('URL flowId changed, loading new flow:', flowId);
+      if (!flowId) {
+        // If no flowId in URL, load latest flow
+        if (flows.length > 0) {
+          const latestFlow = flows[0];
+          setCurrentFlow(latestFlow);
+          setNodes(latestFlow.nodes || []);
+          setEdges(latestFlow.edges || []);
+          setFlowTitle(latestFlow.title);
+          setFlowDescription(latestFlow.description || '');
+        }
+        return;
+      }
+
+      // Don't reload if we're already showing this flow
+      if (flowId === currentFlow?.id) {
+        return;
+      }
+
+      // Find the flow in our loaded flows first
+      const targetFlow = flows.find(f => f.id === flowId);
+      if (targetFlow) {
+        setCurrentFlow(targetFlow);
+        setNodes(targetFlow.nodes || []);
+        setEdges(targetFlow.edges || []);
+        setFlowTitle(targetFlow.title);
+        setFlowDescription(targetFlow.description || '');
+
+        // Center view after a short delay
+        setTimeout(() => {
+          if (rf) {
+            rf.fitView({ duration: 800 });
+          }
+        }, 100);
+        return;
+      }
+
+      // If not found in loaded flows, try to fetch it
+      try {
         const { data, error } = await supabase
           .from('process_flows')
           .select('*')
@@ -749,29 +797,26 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
         }
 
         if (data) {
-          console.log('New flow loaded:', data);
           setCurrentFlow(data);
           setNodes(data.nodes || []);
           setEdges(data.edges || []);
           setFlowTitle(data.title);
           setFlowDescription(data.description || '');
 
-          // Wait for React Flow to be ready and nodes to be rendered
-          const checkRf = setInterval(() => {
+          // Center view after a short delay
+          setTimeout(() => {
             if (rf) {
-              clearInterval(checkRf);
               rf.fitView({ duration: 800 });
             }
           }, 100);
-
-          // Clear the interval after 5 seconds to prevent memory leaks
-          setTimeout(() => clearInterval(checkRf), 5000);
         }
+      } catch (error) {
+        console.error('Error in URL change handler:', error);
       }
     };
 
     handleUrlChange();
-  }, [window.location.search, currentFlow?.id, supabase, rf, setFlowTitle]);
+  }, [window.location.search, currentFlow?.id, flows, rf, supabase]);
 
   return (
     <ReactFlowProvider>
@@ -840,9 +885,27 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
                 <label className="text-sm font-medium">Select Flow</label>
                 <select
                   value={currentFlow?.id || ''}
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const flow = flows.find(f => f.id === e.target.value);
-                    if (flow) loadFlow(flow);
+                    if (flow) {
+                      // Update URL first
+                      const url = `/dashboard/process-flow?flowId=${flow.id}`;
+                      window.history.replaceState({}, '', url);
+                      
+                      // Then load the flow
+                      setCurrentFlow(flow);
+                      setNodes(flow.nodes || []);
+                      setEdges(flow.edges || []);
+                      setFlowTitle(flow.title);
+                      setFlowDescription(flow.description || '');
+
+                      // Center view after a short delay to ensure nodes are rendered
+                      setTimeout(() => {
+                        if (rf) {
+                          rf.fitView({ duration: 800 });
+                        }
+                      }, 100);
+                    }
                   }}
                   className="w-full px-2 py-1 border rounded"
                 >

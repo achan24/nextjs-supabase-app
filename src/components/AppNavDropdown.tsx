@@ -100,22 +100,25 @@ export function AppNavDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleFlowClick = (flowId: string) => {
+  const handleFlowClick = async (flowId: string) => {
     console.log('Navigating to flow:', flowId);
     setIsHotlinksOpen(false);
     
     // Get the current pathname
     const currentPath = window.location.pathname;
     const isInProcessFlow = currentPath === '/dashboard/process-flow';
+    const url = `/dashboard/process-flow?flowId=${flowId}`;
     
-    if (isInProcessFlow) {
-      // If we're already in process flow, just update the URL without a full navigation
-      window.history.pushState({}, '', `/dashboard/process-flow?flowId=${flowId}`);
-      // Dispatch a popstate event to trigger the URL parameter watcher
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    } else {
-      // If we're not in process flow, do a full navigation
-      router.replace(`/dashboard/process-flow?flowId=${flowId}`);
+    try {
+      if (isInProcessFlow) {
+        // Use router.push for in-page navigation
+        await router.push(url);
+      } else {
+        // Use router.replace for cross-page navigation
+        await router.replace(url);
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
     }
   };
 
