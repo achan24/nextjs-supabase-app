@@ -57,7 +57,7 @@ const nodeTypes = {
   technique: TechniqueNode,
   analytics: AnalyticsNode,
   link: LinkNode,
-  noteReference: NoteReferenceNode,
+  noteRef: NoteReferenceNode,
 };
 
 const edgeTypes = {
@@ -90,6 +90,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   const jumpTargetRef = useRef<{ flowId: string; nodeId: string } | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   // Handle URL parameters
   useEffect(() => {
@@ -942,15 +943,41 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
             </div>
           </div>
 
-          {/* Delete Button at Bottom */}
+          {/* Options Menu */}
           {currentFlow && (
             <div className="pt-4 mt-4 border-t">
               <button
-                onClick={() => setShowDeleteModal(true)}
-                className="w-full px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                className="w-full px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 flex items-center justify-between"
               >
-                Delete Process Flow
+                <span>Flow Options</span>
+                <svg
+                  className={`w-4 h-4 transform transition-transform ${showOptionsMenu ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
+              {showOptionsMenu && (
+                <div className="mt-2 space-y-2">
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="w-full px-3 py-2 text-sm text-red-600 bg-white border border-red-200 rounded-md hover:bg-red-50 flex items-center justify-center gap-2"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete Process Flow
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   type TEXT NOT NULL CHECK (type IN ('before', 'at')),
   minutes_before INTEGER,
   time TIMESTAMP WITH TIME ZONE,
+  sent_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

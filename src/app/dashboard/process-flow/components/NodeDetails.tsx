@@ -1,10 +1,11 @@
 'use client';
 
-import { Node } from 'reactflow';
+import type { Node } from 'reactflow';
 import { useState, useEffect, useRef } from 'react';
 import ClozeText from './ClozeText';
 import FlashcardReview from './FlashcardReview';
 import { createClient } from '@/lib/supabase';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface CompletionRecord {
   completedAt: number;
@@ -19,6 +20,14 @@ interface CueRecord {
   lastUsed?: number;
   useCount: number;
   archived: boolean;
+}
+
+interface Reminder {
+  id?: string;
+  type: 'before' | 'at';
+  minutes_before?: number;
+  time?: string;
+  sent_at?: string;
 }
 
 interface NodeDetailsProps {
@@ -52,6 +61,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
   const supabase = createClient();
+  const notificationContext = useNotifications();
 
   useEffect(() => {
     if (node) {
@@ -791,6 +801,127 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
               >
                 Reset Timer
               </button>
+              <button
+                onClick={async () => {
+                  console.log('[NodeDetails] Testing notification system');
+                  
+                  // First check if notifications are supported
+                  if (!("Notification" in window)) {
+                    console.error("[NodeDetails] Notifications not supported");
+                    alert("This browser does not support notifications");
+                    return;
+                  }
+
+                  // Check notification permission
+                  let permission = Notification.permission;
+                  console.log('[NodeDetails] Current notification permission:', permission);
+                  
+                  if (permission === "denied") {
+                    console.error("[NodeDetails] Notifications denied");
+                    alert("Please enable notifications in your browser settings");
+                    return;
+                  }
+
+                  if (permission === "default") {
+                    permission = await Notification.requestPermission();
+                    console.log('[NodeDetails] Requested permission result:', permission);
+                  }
+
+                  if (permission === "granted") {
+                    try {
+                      console.log('[NodeDetails] Attempting to send test notification');
+                      
+                      // Try direct browser notification first
+                      new Notification("Test Notification", {
+                        body: "This is a test notification from the task node"
+                      });
+
+                      // Also try through the notification context
+                      notificationContext.addNotification({
+                        title: "Test Notification (Context)",
+                        body: "This is a test notification through the context system",
+                        type: "task",
+                        url: `/dashboard/process-flow?task=${node.id}`
+                      });
+
+                      console.log('[NodeDetails] Test notifications sent');
+                    } catch (err) {
+                      const error = err as Error;
+                      console.error('[NodeDetails] Error sending notification:', error);
+                      alert("Error sending notification: " + error.message);
+                    }
+                  }
+                }}
+                className="px-3 py-2 text-sm bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
+              >
+                Test Notification
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Time Settings</h4>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Target Duration</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="480"
+                  value={Math.floor((node.data.targetDuration || 0) / 60)}
+                  onChange={(e) => {
+                    const minutes = parseInt(e.target.value);
+                    const seconds = node.data.targetDuration ? node.data.targetDuration % 60 : 0;
+                    if (minutes >= 0) {
+                      const duration = minutes * 60 + seconds;
+                      const now = new Date();
+                      const targetTime = new Date(now.getTime() + duration * 1000);
+                      updateNode(node.id, { 
+                        targetDuration: duration,
+                        targetTime: targetTime.toISOString(),
+                        reminders: [{
+                          type: 'at',
+                          time: targetTime.toISOString()
+                        }]
+                      });
+                    }
+                  }}
+                  className="w-20 p-2 text-sm border rounded-md"
+                  placeholder="0"
+                />
+                <span className="text-sm text-gray-500">minutes</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={node.data.targetDuration ? node.data.targetDuration % 60 : 0}
+                  onChange={(e) => {
+                    const minutes = Math.floor((node.data.targetDuration || 0) / 60);
+                    const seconds = parseInt(e.target.value);
+                    if (seconds >= 0 && seconds <= 59) {
+                      const duration = minutes * 60 + seconds;
+                      const now = new Date();
+                      const targetTime = new Date(now.getTime() + duration * 1000);
+                      updateNode(node.id, { 
+                        targetDuration: duration,
+                        targetTime: targetTime.toISOString(),
+                        reminders: [{
+                          type: 'at',
+                          time: targetTime.toISOString()
+                        }]
+                      });
+                    }
+                  }}
+                  className="w-20 p-2 text-sm border rounded-md"
+                  placeholder="0"
+                />
+                <span className="text-sm text-gray-500">seconds</span>
+              </div>
+              {node.data.targetDuration && (
+                <p className="mt-1 text-sm text-gray-500">
+                  Timer will complete in {Math.floor(node.data.targetDuration / 60)} minutes and {node.data.targetDuration % 60} seconds
+                </p>
+              )}
             </div>
           </div>
 

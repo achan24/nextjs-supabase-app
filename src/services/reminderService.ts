@@ -13,8 +13,8 @@ export class ReminderService {
   }
 
   async startCheckingReminders() {
-    // Check every minute instead of every 5 seconds to be more battery-friendly
-    this.checkInterval = setInterval(() => this.checkDueTasks(), 60000);
+    // Check every 5 seconds for more responsive short-duration timers
+    this.checkInterval = setInterval(() => this.checkDueTasks(), 5000);
     // Initial check
     await this.checkDueTasks();
 
@@ -38,7 +38,7 @@ export class ReminderService {
     if (document.visibilityState === 'visible') {
       // Check if we missed any reminders while hidden
       const now = Date.now();
-      if (now - this.lastCheckTime > 60000) { // If more than a minute has passed
+      if (now - this.lastCheckTime > 5000) { // If more than 5 seconds have passed
         await this.checkDueTasks();
       }
     }
@@ -46,58 +46,86 @@ export class ReminderService {
 
   private async checkDueTasks() {
     try {
-      console.log('[ReminderService] Checking for due tasks...');
+      const now = new Date();
+      console.log('[ReminderService] Checking for due tasks at:', now.toISOString());
       this.lastCheckTime = Date.now();
 
-      // Get tasks with their reminders (only unsent reminders)
+      // Get tasks with their unsent reminders using proper join
       const { data: tasks, error: tasksError } = await this.supabase
         .from('tasks')
         .select(`
-          *,
-          reminders (*, sent_at)
+          id,
+          title,
+          due_date,
+          reminders!inner (
+            id,
+            type,
+            minutes_before,
+            time,
+            sent_at
+          )
         `)
-        .eq('status', 'todo')
-        .not('due_date', 'is', null);
+        .is('reminders.sent_at', null);
 
-      if (tasksError) throw tasksError;
+      if (tasksError) {
+        console.error('[ReminderService] Error fetching tasks:', tasksError);
+        return;
+      }
 
-      const now = new Date();
+      console.log('[ReminderService] Found tasks with unsent reminders:', tasks);
+
+      if (!tasks || tasks.length === 0) {
+        console.log('[ReminderService] No tasks with unsent reminders found');
+        return;
+      }
+
       const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       console.log('[ReminderService] Local timezone:', localTimeZone);
 
       for (const task of tasks) {
-        if (!task.due_date) continue;
-
-        // Convert due_date to local timezone
-        const dueDate = new Date(task.due_date);
-        const localDueDate = new Date(dueDate.toLocaleString('en-US', { timeZone: localTimeZone }));
+        console.log('[ReminderService] Processing task:', task);
         
         // Check each reminder
         for (const reminder of task.reminders || []) {
           try {
-            if (reminder.sent_at) continue; // Only trigger unsent reminders
-            
             let reminderTime: Date;
-            if (reminder.type === 'at') {
-              // Convert reminder time to local timezone
-              reminderTime = new Date(new Date(reminder.time).toLocaleString('en-US', { timeZone: localTimeZone }));
-              console.log('[ReminderService] At reminder time:', reminderTime);
+            if (reminder.type === 'at' && reminder.time) {
+              // Convert reminder time to local timezone with seconds precision
+              reminderTime = new Date(reminder.time);
+              console.log('[ReminderService] At reminder time (UTC):', reminderTime.toISOString());
+              console.log('[ReminderService] Current time (UTC):', now.toISOString());
+            } else if (reminder.type === 'before' && task.due_date && reminder.minutes_before) {
+              // For 'before' type with due_date, calculate the reminder time based on minutes_before
+              const dueDate = new Date(task.due_date);
+              // Convert to milliseconds for more precise timing
+              const millisBefore = reminder.minutes_before * 60 * 1000;
+              reminderTime = new Date(dueDate.getTime() - millisBefore);
+              console.log('[ReminderService] Before reminder time (UTC):', reminderTime.toISOString());
+              console.log('[ReminderService] Due date (UTC):', dueDate.toISOString());
+              console.log('[ReminderService] Minutes before:', reminder.minutes_before);
             } else {
-              // For 'before' type, calculate the reminder time based on minutes_before
-              const minutesBefore = reminder.minutes_before || 0;
-              reminderTime = new Date(localDueDate.getTime() - minutesBefore * 60 * 1000);
-              console.log('[ReminderService] Before reminder time:', reminderTime);
+              console.log('[ReminderService] Skipping reminder due to missing data:', reminder);
+              continue;
             }
 
-            // Check if it's time to show the reminder (within the last 5 minutes to be more lenient)
-            const fiveMinutesAgo = new Date(now.getTime() - 300000);
-            if (reminderTime <= now && reminderTime > fiveMinutesAgo) {
+            // Check if it's time to show the reminder (within the last 5 seconds to be more responsive)
+            const fiveSecondsAgo = new Date(now.getTime() - 5000);
+            const isTimeToRemind = reminderTime <= now && reminderTime > fiveSecondsAgo;
+            
+            console.log('[ReminderService] Time check:', {
+              reminderTime: reminderTime.toISOString(),
+              now: now.toISOString(),
+              fiveSecondsAgo: fiveSecondsAgo.toISOString(),
+              isTimeToRemind
+            });
+
+            if (isTimeToRemind) {
               console.log('[ReminderService] Sending reminder for task:', task.title);
               
               // Mark reminder as sent BEFORE showing notification
               const { error: updateError } = await this.supabase
                 .from('reminders')
-                .update({ sent_at: new Date().toISOString() })
+                .update({ sent_at: now.toISOString() })
                 .eq('id', reminder.id);
 
               if (updateError) {
@@ -105,16 +133,21 @@ export class ReminderService {
                 continue;
               }
 
-              const minutesUntilDue = Math.floor((localDueDate.getTime() - now.getTime()) / (60 * 1000));
-              const timeText = reminder.type === 'at' 
-                ? 'now' 
-                : `${reminder.minutes_before} minutes before due time`;
-
               // Double-check notification permission before sending
               if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                const notificationTitle = reminder.type === 'at' ? 'Task Timer Complete' : 'Task Reminder';
+                const notificationBody = reminder.type === 'at' ? 
+                  `${task.title} timer is complete!` :
+                  `${task.title} is due in ${reminder.minutes_before} minutes`;
+
+                console.log('[ReminderService] Sending notification:', {
+                  title: notificationTitle,
+                  body: notificationBody
+                });
+
                 this.notificationContext.addNotification({
-                  title: 'Task Reminder',
-                  body: `${task.title} is due ${timeText} (${minutesUntilDue} minutes remaining)`,
+                  title: notificationTitle,
+                  body: notificationBody,
                   type: 'task',
                   url: `/dashboard/process-flow?task=${task.id}`
                 });
@@ -125,7 +158,7 @@ export class ReminderService {
             }
           } catch (reminderError) {
             console.error('[ReminderService] Error processing reminder:', reminderError);
-            continue; // Continue with next reminder even if one fails
+            continue;
           }
         }
       }
