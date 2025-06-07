@@ -877,11 +877,11 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
           )}
 
           {/* Timer */}
-          <div className="bg-gray-900 text-white rounded-2xl p-8">
-            <div className="text-8xl font-mono font-bold tabular-nums">
+          <div className="bg-gray-900 text-white rounded-2xl p-4 sm:p-8">
+            <div className="text-5xl sm:text-8xl font-mono font-bold tabular-nums text-center">
               {formatTime(timeSpent)}
             </div>
-            <div className="mt-4 space-y-2 text-gray-400">
+            <div className="mt-4 space-y-2 text-sm sm:text-base text-gray-400">
               {currentTask.data.targetDuration && (
                 <div>Target: {formatTime(currentTask.data.targetDuration * 1000)}</div>
               )}
@@ -895,265 +895,187 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
           </div>
 
           {/* Controls */}
-          <div className="flex justify-center gap-4">
-            {!isRunning ? (
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+            {isRunning ? (
               <Button
-                onClick={() => {
-                  setStartTime(Date.now() - timeSpent);
-                  setIsRunning(true);
-                }}
-                className="bg-green-500 hover:bg-green-600 text-white px-8 py-6 text-xl rounded-xl"
+                variant="outline"
+                onClick={() => setIsRunning(false)}
+                className="flex-1 py-4 sm:py-6"
               >
-                <Play size={24} className="mr-2" />
-                Start
+                <Pause className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
+                Pause
               </Button>
             ) : (
-              <>
-                <Button
-                  onClick={() => {
-                    setIsRunning(false);
-                    setTimeSpent(Date.now() - (startTime || Date.now()));
-                  }}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-8 py-6 text-xl rounded-xl"
-                >
-                  <Pause size={24} className="mr-2" />
-                  Pause
-                </Button>
-                <Button
-                  onClick={async () => {
-                    if (currentTaskIndex < selectedTasks.length - 1) {
-                      // Save completion record if needed
-                      const currentTask = selectedTasks[currentTaskIndex];
-                      if (currentTask && timeSpent > 0) {
-                        // Call onTaskComplete if provided
-                        if (onTaskComplete) {
-                          onTaskComplete(currentTask.id, timeSpent);
-                        }
+              <Button
+                variant="default"
+                onClick={() => {
+                  setIsRunning(true);
+                  if (!startTime) {
+                    setStartTime(Date.now() - timeSpent);
+                  }
+                }}
+                className="flex-1 py-4 sm:py-6"
+              >
+                <Play className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
+                {timeSpent === 0 ? 'Start' : 'Resume'}
+              </Button>
+            )}
 
-                        // Validate flowId exists
-                        if (!currentTask.data?.flowId) {
-                          console.error('Task missing flowId:', currentTask);
-                          throw new Error(`Task ${currentTask.id} is missing flowId`);
-                        }
+            {currentTaskIndex < selectedTasks.length - 1 ? (
+              <Button
+                variant="default"
+                onClick={async () => {
+                  // Save completion record for current task
+                  const currentTask = selectedTasks[currentTaskIndex];
+                  if (currentTask && timeSpent > 0) {
+                    const newHistory = [
+                      ...(currentTask.data.completionHistory || []),
+                      {
+                        completedAt: Date.now(),
+                        timeSpent
+                      }
+                    ];
+                    
+                    const updatedTask = {
+                      ...currentTask,
+                      data: {
+                        ...currentTask.data,
+                        completionHistory: newHistory
+                      }
+                    };
+                    
+                    // Update task in local state
+                    setSelectedTasks(tasks => 
+                      tasks.map(t => t.id === currentTask.id ? updatedTask : t)
+                    );
 
-                        // Save completion record
-                        const newHistory = [
-                          ...(currentTask.data.completionHistory || []),
-                          {
-                            completedAt: Date.now(),
-                            timeSpent
-                          }
-                        ];
-                        
-                        const updatedTask = {
-                          ...currentTask,
-                          data: {
-                            ...currentTask.data,
-                            completionHistory: newHistory
-                          }
-                        };
-                        
-                        // Update task in local state
-                        setSelectedTasks(tasks => 
-                          tasks.map(t => t.id === currentTask.id ? updatedTask : t)
-                        );
+                    // Update task in database
+                    try {
+                      // First get the current flow
+                      const { data: flow, error: fetchError } = await supabase
+                        .from('process_flows')
+                        .select('nodes')
+                        .eq('id', currentTask.data.flowId)
+                        .single();
 
-                        // Update task in database
-                        try {
-                          console.log('Saving task completion for:', {
-                            taskId: currentTask.id,
-                            flowId: currentTask.data.flowId,
-                            timeSpent
-                          });
-
-                          // First get the current flow
-                          const { data: flow, error: fetchError } = await supabase
-                            .from('process_flows')
-                            .select('nodes')
-                            .eq('id', currentTask.data.flowId)
-                            .single();
-
-                          if (fetchError) {
-                            console.error('Error fetching flow:', fetchError);
-                            throw fetchError;
-                          }
-
-                          if (!flow || !flow.nodes) {
-                            console.error('Invalid flow data:', flow);
-                            throw new Error('Invalid flow data');
-                          }
-
-                          // Find and update the specific node
-                          const nodeIndex = flow.nodes.findIndex((n: any) => n.id === currentTask.id);
-                          if (nodeIndex === -1) {
-                            console.error('Node not found in flow:', {
-                              nodeId: currentTask.id,
-                              flowId: currentTask.data.flowId,
-                              availableNodes: flow.nodes.map((n: any) => n.id)
-                            });
-                            throw new Error(`Node ${currentTask.id} not found in flow ${currentTask.data.flowId}`);
-                          }
-
-                          // Create updated nodes array
-                          const updatedNodes = [...flow.nodes];
-                          updatedNodes[nodeIndex] = {
-                            ...flow.nodes[nodeIndex],
-                            data: {
-                              ...flow.nodes[nodeIndex].data,
-                              completionHistory: newHistory
-                            }
-                          };
-
-                          // Save the updated nodes
-                          const { error: updateError } = await supabase
-                            .from('process_flows')
-                            .update({ nodes: updatedNodes })
-                            .eq('id', currentTask.data.flowId);
-
-                          if (updateError) {
-                            console.error('Error updating flow:', updateError);
-                            throw updateError;
-                          }
-
-                          console.log('Successfully saved task completion');
-                        } catch (error) {
-                          console.error('Error saving task completion:', error);
-                          throw error; // Propagate error to show in UI
-                        }
-
-                        // Clear timer state for this task
-                        localStorage.removeItem(`timer_${currentTask.id}`);
+                      if (fetchError) {
+                        console.error('Error fetching flow:', fetchError);
+                        throw fetchError;
                       }
 
-                      // Move to next task and auto-start it
-                      setCurrentTaskIndex(currentTaskIndex + 1);
-                      setTimeSpent(0);
-                      setStartTime(Date.now()); // Set start time for auto-start
-                      setIsRunning(true); // Auto-start the timer
-                    } else {
-                      // We're on the last task
-                      const currentTask = selectedTasks[currentTaskIndex];
-                      
-                      // Save the current time spent before stopping the timer
-                      const finalTimeSpent = timeSpent;
-                      
-                      // Stop the timer first
-                      setIsRunning(false);
-                      
-                      if (currentTask && finalTimeSpent > 0) {
-                        // Validate flowId exists
-                        if (!currentTask.data?.flowId) {
-                          console.error('Last task missing flowId:', currentTask);
-                          throw new Error(`Last task ${currentTask.id} is missing flowId`);
-                        }
-
-                        // Save completion record for the last task
-                        const newHistory = [
-                          ...(currentTask.data.completionHistory || []),
-                          {
-                            completedAt: Date.now(),
-                            timeSpent: finalTimeSpent
-                          }
-                        ];
-                        
-                        const updatedTask = {
-                          ...currentTask,
+                      // Update the specific node in the nodes array
+                      const updatedNodes = flow.nodes.map((node: any) => 
+                        node.id === currentTask.id ? {
+                          ...node,
                           data: {
-                            ...currentTask.data,
+                            ...node.data,
                             completionHistory: newHistory
                           }
-                        };
-                        
-                        // Update task in local state
-                        setSelectedTasks(tasks => 
-                          tasks.map(t => t.id === currentTask.id ? updatedTask : t)
-                        );
+                        } : node
+                      );
 
-                        // Update task in database
-                        try {
-                          console.log('Saving last task completion:', {
-                            taskId: currentTask.id,
-                            flowId: currentTask.data.flowId,
-                            timeSpent: finalTimeSpent
-                          });
+                      // Save the updated nodes
+                      const { error: updateError } = await supabase
+                        .from('process_flows')
+                        .update({ nodes: updatedNodes })
+                        .eq('id', currentTask.data.flowId);
 
-                          // First get the current flow
-                          const { data: flow, error: fetchError } = await supabase
-                            .from('process_flows')
-                            .select('nodes')
-                            .eq('id', currentTask.data.flowId)
-                            .single();
-
-                          if (fetchError) {
-                            console.error('Error fetching flow:', fetchError);
-                            throw fetchError;
-                          }
-
-                          if (!flow || !flow.nodes) {
-                            console.error('Invalid flow data:', flow);
-                            throw new Error('Invalid flow data');
-                          }
-
-                          // Find and update the specific node
-                          const nodeIndex = flow.nodes.findIndex((n: any) => n.id === currentTask.id);
-                          if (nodeIndex === -1) {
-                            console.error('Node not found in flow:', {
-                              nodeId: currentTask.id,
-                              flowId: currentTask.data.flowId,
-                              availableNodes: flow.nodes.map((n: any) => n.id)
-                            });
-                            throw new Error(`Node ${currentTask.id} not found in flow ${currentTask.data.flowId}`);
-                          }
-
-                          // Create updated nodes array
-                          const updatedNodes = [...flow.nodes];
-                          updatedNodes[nodeIndex] = {
-                            ...flow.nodes[nodeIndex],
-                            data: {
-                              ...flow.nodes[nodeIndex].data,
-                              completionHistory: newHistory
-                            }
-                          };
-
-                          // Save the updated nodes
-                          const { error: updateError } = await supabase
-                            .from('process_flows')
-                            .update({ nodes: updatedNodes })
-                            .eq('id', currentTask.data.flowId);
-
-                          if (updateError) {
-                            console.error('Error updating flow:', updateError);
-                            throw updateError;
-                          }
-
-                          console.log('Successfully saved last task completion');
-
-                          // Clear timer state for this task
-                          localStorage.removeItem(`timer_${currentTask.id}`);
-                        } catch (error) {
-                          console.error('Error saving last task completion:', error);
-                          throw error;
-                        }
+                      if (updateError) {
+                        console.error('Error updating node completion history:', updateError);
+                        throw updateError;
                       }
 
-                      // Now complete the sequence with the final time
-                      await handleCompleteSequence();
+                      // Refresh the next task's data to ensure we have latest completion history
+                      const nextTask = selectedTasks[currentTaskIndex + 1];
+                      if (nextTask) {
+                        const { data: nextFlow, error: nextFetchError } = await supabase
+                          .from('process_flows')
+                          .select('nodes')
+                          .eq('id', nextTask.data.flowId)
+                          .single();
+
+                        if (!nextFetchError && nextFlow) {
+                          const nextNode = nextFlow.nodes.find((n: any) => n.id === nextTask.id);
+                          if (nextNode) {
+                            // Update the next task in local state with fresh data
+                            setSelectedTasks(tasks =>
+                              tasks.map(t => t.id === nextTask.id ? { ...t, data: nextNode.data } : t)
+                            );
+                          }
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Error saving task completion:', error);
+                      // Don't return early, continue with moving to next task
                     }
-                  }}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-6 text-xl rounded-xl"
-                >
-                  <SkipForward size={24} className="mr-2" />
-                  {currentTaskIndex < selectedTasks.length - 1 ? 'Next' : 'Complete'}
-                </Button>
-              </>
+                  }
+                  
+                  // Move to next task
+                  setCurrentTaskIndex(i => i + 1);
+                  setTimeSpent(0);
+                  setStartTime(null);
+                  setIsRunning(false);
+
+                  // Clear any persisted timer state for the current task
+                  if (currentTask) {
+                    localStorage.removeItem(`timer_${currentTask.id}`);
+                  }
+
+                  // Reset timer state for the next task
+                  const nextTask = selectedTasks[currentTaskIndex + 1];
+                  if (nextTask) {
+                    localStorage.removeItem(`timer_${nextTask.id}`);
+                  }
+                }}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-4 sm:py-6 px-4 sm:px-8 text-base sm:text-xl rounded-xl"
+              >
+                <SkipForward className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
+                Next
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                onClick={async () => {
+                  // Save completion record for the last task
+                  const currentTask = selectedTasks[currentTaskIndex];
+                  if (currentTask && timeSpent > 0) {
+                    const newHistory = [
+                      ...(currentTask.data.completionHistory || []),
+                      {
+                        completedAt: Date.now(),
+                        timeSpent
+                      }
+                    ];
+                    
+                    const updatedTask = {
+                      ...currentTask,
+                      data: {
+                        ...currentTask.data,
+                        completionHistory: newHistory
+                      }
+                    };
+                    
+                    setSelectedTasks(tasks => 
+                      tasks.map(t => t.id === currentTask.id ? updatedTask : t)
+                    );
+                  }
+                  
+                  // Complete the sequence
+                  handleCompleteSequence();
+                }}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-4 sm:py-6 px-4 sm:px-8 text-base sm:text-xl rounded-xl"
+              >
+                <SkipForward className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
+                Complete
+              </Button>
             )}
           </div>
 
           {/* Up Next */}
           {currentTaskIndex < selectedTasks.length - 1 && (
-            <div className="mt-8">
-              <h3 className="text-lg font-medium text-gray-500">Up Next</h3>
-              <div className="mt-2 bg-gray-50 rounded-lg p-4">
+            <div className="mt-6 sm:mt-8">
+              <h3 className="text-base sm:text-lg font-medium text-gray-500">Up Next</h3>
+              <div className="mt-2 bg-gray-50 rounded-lg p-3 sm:p-4">
                 {selectedTasks[currentTaskIndex + 1].data.label}
               </div>
             </div>
