@@ -8,14 +8,18 @@ import { createClient } from '@/lib/supabase';
 import { PostgrestResponse } from '@supabase/supabase-js';
 
 const apps = [
+  { name: 'Overview', href: '/dashboard/overview', description: 'Track and manage all your targets and progress' },
   { name: 'Projects', href: '/dashboard/projects', description: 'Manage your projects and goals' },
   { name: 'Tasks', href: '/dashboard/tasks', description: 'Track your daily tasks' },
   { name: 'Notes', href: '/dashboard/notes', description: 'Organize your thoughts and ideas' },
   { name: 'Process Flow', href: '/dashboard/process-flow', description: 'Visualize your learning progress' },
+  { name: 'Process Timer', href: '/dashboard/process-flow/timer', description: 'Time and track your process sequences' },
   { name: 'Calendar', href: '/dashboard/calendar', description: 'View your schedule' },
   { name: 'Insights', href: '/dashboard/insights', description: 'Get productivity insights' },
   { name: 'AI Assistant', href: '/dashboard/ai', description: 'Get AI-powered help' },
   { name: 'Relationship CRM', href: '/dashboard/crm', description: 'Track and grow meaningful relationships' },
+  { name: 'Habits', href: '/dashboard/habits', description: 'Build and track your habits' },
+  { name: 'Recommendations', href: '/dashboard/recommendations', description: 'Get personalized recommendations' }
 ];
 
 interface ProcessFlow {
