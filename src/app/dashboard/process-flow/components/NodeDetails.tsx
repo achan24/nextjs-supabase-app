@@ -862,6 +862,22 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
           <div className="pt-4 border-t">
             <h4 className="text-sm font-medium text-gray-700 mb-2">Time Settings</h4>
             <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  id="useTargetDuration"
+                  checked={node.data.useTargetDuration || false}
+                  onChange={(e) => {
+                    updateNode(node.id, { 
+                      useTargetDuration: e.target.checked,
+                    });
+                  }}
+                  className="h-4 w-4 text-blue-600 rounded border-gray-300"
+                />
+                <label htmlFor="useTargetDuration" className="ml-2 text-sm text-gray-600">
+                  Use target duration for notifications (unchecked will use average completion time)
+                </label>
+              </div>
               <label className="block text-sm text-gray-600 mb-1">Target Duration</label>
               <div className="flex items-center gap-2">
                 <input
@@ -928,9 +944,14 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
           {node.data.completionHistory && node.data.completionHistory.length > 0 && (
             <div className="pt-4 border-t">
               <div className="flex justify-between items-center mb-2">
-                <h4 className="text-sm font-medium text-gray-700">
-                  Completion History ({node.data.completionHistory.length})
-                </h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    Completion History ({node.data.completionHistory.length})
+                  </h4>
+                  <span className="text-sm text-blue-600">
+                    Avg: {formatTime(node.data.completionHistory.reduce((sum: number, rec: CompletionRecord) => sum + rec.timeSpent, 0) / node.data.completionHistory.length)}
+                  </span>
+                </div>
                 <button
                   onClick={() => setHistoryOrder(historyOrder === 'desc' ? 'asc' : 'desc')}
                   className="text-xs text-blue-600 hover:text-blue-800"

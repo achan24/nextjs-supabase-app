@@ -40,6 +40,7 @@ interface TaskNodeData extends BaseNodeData {
   targetDuration?: number;
   eta?: string;
   reminders?: Reminder[];
+  useTargetDuration?: boolean;
 }
 
 export const TaskNode = memo(({ id, data, dragHandle, selected, type, zIndex, isConnectable, xPos, yPos, dragging }: NodeProps<TaskNodeData>) => {
@@ -109,6 +110,7 @@ export const TaskNode = memo(({ id, data, dragHandle, selected, type, zIndex, is
   // Handle timer state
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let lastNotificationCheck = 0;
     
     if (data.isRunning && data.startTime) {
       // Calculate ETA when timer starts
@@ -122,60 +124,50 @@ export const TaskNode = memo(({ id, data, dragHandle, selected, type, zIndex, is
           second: '2-digit',
           hour12: false 
         }));
-
-        // Set up reminder for ETA
-        const reminder = {
-          type: 'at' as const,
-          time: etaTime.toISOString()
-        };
-
-        // Check if we already have an ETA reminder
-        const existingEtaReminder = data.reminders?.find(r => 
-          r.type === 'at' && new Date(r.time!).getTime() === etaTime.getTime()
-        );
-
-        if (!existingEtaReminder) {
-          // Save reminder to database
-          supabase.from('reminders').insert([{
-            task_id: id,
-            type: 'at',
-            time: etaTime.toISOString()
-          }]).then(({ error }) => {
-            if (error) console.error('Error saving ETA reminder:', error);
-            else {
-              // Update local state
-              data.reminders = [...(data.reminders || []), reminder];
-            }
-          });
-        }
       }
 
-      // Update immediately
+      // Update timer and check notifications
       const updateTimer = () => {
         if (!data.startTime) return;
         const currentElapsedTime = (data.timeSpent || 0) + (Date.now() - data.startTime);
         setCurrentTime(currentElapsedTime);
 
-        // Check if we've exceeded the target duration
-        if (data.targetDuration) {
-          const targetDurationMs = data.targetDuration * 1000;
-          if (currentElapsedTime >= targetDurationMs) {
-            const now = Date.now();
-            // Only show notification if 30 seconds have passed since the last one
-            if (!lastNotificationTime || (now - lastNotificationTime) >= 30000) {
+        // Check notifications every 30 seconds
+        const now = Date.now();
+        if (now - lastNotificationCheck >= 30000) {
+          // Only check notifications if we have either target duration (and it's enabled) or completion history
+          if ((data.useTargetDuration && data.targetDuration) || 
+              (!data.useTargetDuration && data.completionHistory?.length)) {
+            
+            let shouldNotify = false;
+            let notificationTime = 0;
+
+            if (data.useTargetDuration && data.targetDuration) {
+              // Use target duration for notification
+              notificationTime = data.targetDuration * 1000;
+              shouldNotify = currentElapsedTime >= notificationTime;
+            } else if (!data.useTargetDuration && data.completionHistory?.length) {
+              // Use average completion time for notification
+              const total = data.completionHistory.reduce((sum, rec) => sum + rec.timeSpent, 0);
+              const avgTime = total / data.completionHistory.length;
+              shouldNotify = currentElapsedTime >= avgTime;
+              notificationTime = avgTime;
+            }
+
+            if (shouldNotify) {
               // Show notification
               if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('Target Duration Reached', {
-                  body: `Time to stop task: ${data.label}`,
+                new Notification('Time to Stop Task', {
+                  body: `${data.useTargetDuration ? 'Target duration' : 'Average completion time'} reached for: ${data.label}`,
                   icon: '/favicon.ico'
                 });
               }
               // Play a sound
               playNotificationSound();
-              // Update last notification time
-              setLastNotificationTime(now);
             }
           }
+          // Update last notification check time
+          lastNotificationCheck = now;
         }
       };
 
@@ -200,7 +192,7 @@ export const TaskNode = memo(({ id, data, dragHandle, selected, type, zIndex, is
         clearInterval(interval);
       }
     };
-  }, [data.isRunning, data.startTime, data.timeSpent, id, data.completionHistory, data.reminders, data.targetDuration, data.label]);
+  }, [data.isRunning, data.startTime, data.timeSpent, id, data.completionHistory, data.reminders, data.targetDuration, data.label, data.useTargetDuration]);
 
   // Request notification permission when component mounts
   useEffect(() => {
