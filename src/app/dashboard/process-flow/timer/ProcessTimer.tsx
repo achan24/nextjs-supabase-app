@@ -148,6 +148,11 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         // First refresh the task data
         const refreshedTasks = await Promise.all(
           selectedSequence.tasks.map(async (task) => {
+            if (!task.data?.flowId) {
+              console.error('Task missing flowId in loadCompletions:', task);
+              throw new Error(`Task ${task.id} is missing flowId`);
+            }
+
             const { data: flow, error: fetchError } = await supabase
               .from('process_flows')
               .select('nodes')
@@ -157,7 +162,24 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
             if (fetchError) throw fetchError;
 
             const node = flow.nodes.find((n: any) => n.id === task.id);
-            return node ? { ...task, data: node.data } : task;
+            if (!node) {
+              console.error('Node not found in flow:', task.id);
+              throw new Error(`Node ${task.id} not found in flow ${task.data.flowId}`);
+            }
+
+            // Preserve the flowId and any other essential data
+            return {
+              ...task,
+              data: {
+                ...node.data,
+                flowId: task.data.flowId, // Explicitly preserve flowId
+                completionHistory: node.data.completionHistory || [],
+                targetDuration: node.data.targetDuration,
+                useTargetDuration: node.data.useTargetDuration,
+                cues: node.data.cues || [],
+                activeCueId: node.data.activeCueId
+              }
+            };
           })
         );
 
@@ -287,6 +309,13 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         throw new Error('Some tasks are missing required data');
       }
 
+      // Log the tasks before refresh
+      console.log('Starting sequence with tasks:', sequence.tasks.map(t => ({
+        id: t.id,
+        flowId: t.data.flowId,
+        label: t.data.label
+      })));
+
       // Fetch fresh task data for each task in the sequence
       const refreshedTasks = await Promise.all(
         sequence.tasks.map(async (task) => {
@@ -317,16 +346,30 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
             throw new Error(`Node ${task.id} not found in flow ${task.data.flowId}`);
           }
 
-          // Preserve the flowId in the refreshed task data
-          return {
+          // Preserve the flowId and any other essential data
+          const refreshedTask = {
             ...task,
             data: {
               ...node.data,
-              flowId: task.data.flowId
+              flowId: task.data.flowId, // Explicitly preserve flowId
+              completionHistory: node.data.completionHistory || [],
+              targetDuration: node.data.targetDuration,
+              useTargetDuration: node.data.useTargetDuration,
+              cues: node.data.cues || [],
+              activeCueId: node.data.activeCueId
             }
           };
+
+          return refreshedTask;
         })
       );
+
+      // Log the refreshed tasks
+      console.log('Refreshed tasks:', refreshedTasks.map(t => ({
+        id: t.id,
+        flowId: t.data.flowId,
+        label: t.data.label
+      })));
 
       setSelectedSequence(sequence);
       setSelectedTasks(refreshedTasks);
@@ -337,7 +380,6 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       setIsTimerView(true);
     } catch (error) {
       console.error('Error starting sequence:', error);
-      // Show error to user
       setCompletionError(error as Error);
     }
   };
@@ -888,6 +930,12 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                           onTaskComplete(currentTask.id, timeSpent);
                         }
 
+                        // Validate flowId exists
+                        if (!currentTask.data?.flowId) {
+                          console.error('Task missing flowId:', currentTask);
+                          throw new Error(`Task ${currentTask.id} is missing flowId`);
+                        }
+
                         // Save completion record
                         const newHistory = [
                           ...(currentTask.data.completionHistory || []),
@@ -912,6 +960,12 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
                         // Update task in database
                         try {
+                          console.log('Saving task completion for:', {
+                            taskId: currentTask.id,
+                            flowId: currentTask.data.flowId,
+                            timeSpent
+                          });
+
                           // First get the current flow
                           const { data: flow, error: fetchError } = await supabase
                             .from('process_flows')
@@ -929,16 +983,26 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             throw new Error('Invalid flow data');
                           }
 
-                          // Update the specific node in the nodes array
-                          const updatedNodes = flow.nodes.map((node: any) => 
-                            node.id === currentTask.id ? {
-                              ...node,
-                              data: {
-                                ...node.data,
-                                completionHistory: newHistory
-                              }
-                            } : node
-                          );
+                          // Find and update the specific node
+                          const nodeIndex = flow.nodes.findIndex((n: any) => n.id === currentTask.id);
+                          if (nodeIndex === -1) {
+                            console.error('Node not found in flow:', {
+                              nodeId: currentTask.id,
+                              flowId: currentTask.data.flowId,
+                              availableNodes: flow.nodes.map((n: any) => n.id)
+                            });
+                            throw new Error(`Node ${currentTask.id} not found in flow ${currentTask.data.flowId}`);
+                          }
+
+                          // Create updated nodes array
+                          const updatedNodes = [...flow.nodes];
+                          updatedNodes[nodeIndex] = {
+                            ...flow.nodes[nodeIndex],
+                            data: {
+                              ...flow.nodes[nodeIndex].data,
+                              completionHistory: newHistory
+                            }
+                          };
 
                           // Save the updated nodes
                           const { error: updateError } = await supabase
@@ -950,19 +1014,22 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             console.error('Error updating flow:', updateError);
                             throw updateError;
                           }
+
+                          console.log('Successfully saved task completion');
                         } catch (error) {
                           console.error('Error saving task completion:', error);
+                          throw error; // Propagate error to show in UI
                         }
 
                         // Clear timer state for this task
                         localStorage.removeItem(`timer_${currentTask.id}`);
                       }
 
-                      // Move to next task
+                      // Move to next task and auto-start it
                       setCurrentTaskIndex(currentTaskIndex + 1);
                       setTimeSpent(0);
-                      setStartTime(null);
-                      setIsRunning(false);
+                      setStartTime(Date.now()); // Set start time for auto-start
+                      setIsRunning(true); // Auto-start the timer
                     } else {
                       // We're on the last task
                       const currentTask = selectedTasks[currentTaskIndex];
@@ -974,9 +1041,10 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                       setIsRunning(false);
                       
                       if (currentTask && finalTimeSpent > 0) {
-                        // Call onTaskComplete if provided
-                        if (onTaskComplete) {
-                          onTaskComplete(currentTask.id, finalTimeSpent);
+                        // Validate flowId exists
+                        if (!currentTask.data?.flowId) {
+                          console.error('Last task missing flowId:', currentTask);
+                          throw new Error(`Last task ${currentTask.id} is missing flowId`);
                         }
 
                         // Save completion record for the last task
@@ -1003,6 +1071,12 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
                         // Update task in database
                         try {
+                          console.log('Saving last task completion:', {
+                            taskId: currentTask.id,
+                            flowId: currentTask.data.flowId,
+                            timeSpent: finalTimeSpent
+                          });
+
                           // First get the current flow
                           const { data: flow, error: fetchError } = await supabase
                             .from('process_flows')
@@ -1020,16 +1094,26 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             throw new Error('Invalid flow data');
                           }
 
-                          // Update the specific node in the nodes array
-                          const updatedNodes = flow.nodes.map((node: any) => 
-                            node.id === currentTask.id ? {
-                              ...node,
-                              data: {
-                                ...node.data,
-                                completionHistory: newHistory
-                              }
-                            } : node
-                          );
+                          // Find and update the specific node
+                          const nodeIndex = flow.nodes.findIndex((n: any) => n.id === currentTask.id);
+                          if (nodeIndex === -1) {
+                            console.error('Node not found in flow:', {
+                              nodeId: currentTask.id,
+                              flowId: currentTask.data.flowId,
+                              availableNodes: flow.nodes.map((n: any) => n.id)
+                            });
+                            throw new Error(`Node ${currentTask.id} not found in flow ${currentTask.data.flowId}`);
+                          }
+
+                          // Create updated nodes array
+                          const updatedNodes = [...flow.nodes];
+                          updatedNodes[nodeIndex] = {
+                            ...flow.nodes[nodeIndex],
+                            data: {
+                              ...flow.nodes[nodeIndex].data,
+                              completionHistory: newHistory
+                            }
+                          };
 
                           // Save the updated nodes
                           const { error: updateError } = await supabase
@@ -1041,6 +1125,8 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             console.error('Error updating flow:', updateError);
                             throw updateError;
                           }
+
+                          console.log('Successfully saved last task completion');
 
                           // Clear timer state for this task
                           localStorage.removeItem(`timer_${currentTask.id}`);
