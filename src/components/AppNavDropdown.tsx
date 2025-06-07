@@ -3,23 +3,98 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, Star } from 'lucide-react';
+import { 
+  ChevronDown, 
+  Star,
+  BarChart3,
+  FolderKanban,
+  CheckSquare,
+  StickyNote,
+  GitFork,
+  Timer,
+  Calendar,
+  LineChart,
+  Bot,
+  Users,
+  Repeat,
+  Lightbulb
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { PostgrestResponse } from '@supabase/supabase-js';
 
 const apps = [
-  { name: 'Overview', href: '/dashboard/overview', description: 'Track and manage all your targets and progress' },
-  { name: 'Projects', href: '/dashboard/projects', description: 'Manage your projects and goals' },
-  { name: 'Tasks', href: '/dashboard/tasks', description: 'Track your daily tasks' },
-  { name: 'Notes', href: '/dashboard/notes', description: 'Organize your thoughts and ideas' },
-  { name: 'Process Flow', href: '/dashboard/process-flow', description: 'Visualize your learning progress' },
-  { name: 'Process Timer', href: '/dashboard/process-flow/timer', description: 'Time and track your process sequences' },
-  { name: 'Calendar', href: '/dashboard/calendar', description: 'View your schedule' },
-  { name: 'Insights', href: '/dashboard/insights', description: 'Get productivity insights' },
-  { name: 'AI Assistant', href: '/dashboard/ai', description: 'Get AI-powered help' },
-  { name: 'Relationship CRM', href: '/dashboard/crm', description: 'Track and grow meaningful relationships' },
-  { name: 'Habits', href: '/dashboard/habits', description: 'Build and track your habits' },
-  { name: 'Recommendations', href: '/dashboard/recommendations', description: 'Get personalized recommendations' }
+  { 
+    name: 'Overview', 
+    href: '/dashboard/overview', 
+    description: 'Track and manage all your targets and progress',
+    icon: BarChart3
+  },
+  { 
+    name: 'Projects', 
+    href: '/dashboard/projects', 
+    description: 'Manage your projects and goals',
+    icon: FolderKanban
+  },
+  { 
+    name: 'Tasks', 
+    href: '/dashboard/tasks', 
+    description: 'Track your daily tasks',
+    icon: CheckSquare
+  },
+  { 
+    name: 'Notes', 
+    href: '/dashboard/notes', 
+    description: 'Organize your thoughts and ideas',
+    icon: StickyNote
+  },
+  { 
+    name: 'Process Flow', 
+    href: '/dashboard/process-flow', 
+    description: 'Visualize your learning progress',
+    icon: GitFork
+  },
+  { 
+    name: 'Process Timer', 
+    href: '/dashboard/process-flow/timer', 
+    description: 'Time and track your process sequences',
+    icon: Timer
+  },
+  { 
+    name: 'Calendar', 
+    href: '/dashboard/calendar', 
+    description: 'View your schedule',
+    icon: Calendar
+  },
+  { 
+    name: 'Insights', 
+    href: '/dashboard/insights', 
+    description: 'Get productivity insights',
+    icon: LineChart
+  },
+  { 
+    name: 'AI Assistant', 
+    href: '/dashboard/ai', 
+    description: 'Get AI-powered help',
+    icon: Bot
+  },
+  { 
+    name: 'Relationship CRM', 
+    href: '/dashboard/crm', 
+    description: 'Track and grow meaningful relationships',
+    icon: Users
+  },
+  { 
+    name: 'Habits', 
+    href: '/dashboard/habits', 
+    description: 'Build and track your habits',
+    icon: Repeat
+  },
+  { 
+    name: 'Recommendations', 
+    href: '/dashboard/recommendations', 
+    description: 'Get personalized recommendations',
+    icon: Lightbulb
+  }
 ];
 
 interface ProcessFlow {
@@ -104,74 +179,81 @@ export function AppNavDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleFlowClick = async (flowId: string) => {
-    console.log('Navigating to flow:', flowId);
-    setIsHotlinksOpen(false);
-    
-    // Use direct URL navigation for consistent behavior
-    window.location.href = `/dashboard/process-flow?flowId=${flowId}`;
-  };
-
   return (
-    <div className="flex items-center gap-4">
-      {/* Apps Dropdown */}
+    <div className="flex items-center gap-2">
+      {/* Apps Button */}
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
         >
           Apps
-          <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
-        
+
+        {/* Apps Dropdown */}
         {isOpen && (
-          <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-            {apps.map((app) => (
-              <Link
-                key={app.href}
-                href={app.href}
-                className="flex flex-col px-4 py-2 hover:bg-gray-50"
-                onClick={() => setIsOpen(false)}
-              >
-                <span className="font-medium text-gray-900">{app.name}</span>
-                <span className="text-sm text-gray-500">{app.description}</span>
-              </Link>
-            ))}
+          <div className="absolute left-0 z-10 mt-2 w-80 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+            <div className="py-1">
+              {apps.map((app) => {
+                const Icon = app.icon;
+                return (
+                  <Link
+                    key={app.href}
+                    href={app.href}
+                    className="flex items-start gap-3 px-4 py-3 hover:bg-gray-100 transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <div className="flex-shrink-0 mt-1">
+                      <Icon className="w-5 h-5 text-gray-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{app.name}</div>
+                      <div className="text-xs text-gray-500">{app.description}</div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Hotlinks Dropdown */}
+      {/* Hotlinks Button */}
       <div className="relative" ref={hotlinksRef}>
         <button
           onClick={() => setIsHotlinksOpen(!isHotlinksOpen)}
-          className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
         >
-          <Star className="h-4 w-4" />
+          <Star className="w-4 h-4" />
           Hotlinks
-          <ChevronDown className={`h-4 w-4 transition-transform ${isHotlinksOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 transition-transform ${isHotlinksOpen ? 'rotate-180' : ''}`} />
         </button>
-        
+
+        {/* Hotlinks Dropdown */}
         {isHotlinksOpen && (
-          <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-            {favoriteFlows.length > 0 ? (
-              favoriteFlows.map((flow) => (
-                <button
-                  key={flow.id}
-                  onClick={() => handleFlowClick(flow.id)}
-                  className="w-full text-left flex flex-col px-4 py-2 hover:bg-gray-50"
-                >
-                  <span className="font-medium text-gray-900">{flow.title}</span>
-                  {flow.description && (
-                    <span className="text-sm text-gray-500">{flow.description}</span>
-                  )}
-                </button>
-              ))
-            ) : (
-              <div className="px-4 py-2 text-sm text-gray-500">
-                No favorited process maps yet
-              </div>
-            )}
+          <div className="absolute right-0 z-10 mt-2 w-64 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+            <div className="py-1">
+              {favoriteFlows.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-gray-500">
+                  No favorite flows yet. Star a flow to add it here.
+                </div>
+              ) : (
+                favoriteFlows.map((flow) => (
+                  <Link
+                    key={flow.id}
+                    href={`/dashboard/process-flow?flowId=${flow.id}`}
+                    className="block px-4 py-2 text-sm hover:bg-gray-100 transition-colors"
+                    onClick={() => setIsHotlinksOpen(false)}
+                  >
+                    <div className="font-medium text-gray-900">{flow.title}</div>
+                    {flow.description && (
+                      <div className="text-xs text-gray-500">{flow.description}</div>
+                    )}
+                  </Link>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>

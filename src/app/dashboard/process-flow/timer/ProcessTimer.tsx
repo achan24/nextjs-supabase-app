@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useActiveSequence } from '@/contexts/ActiveSequenceContext';
 
 interface CompletionRecord {
   completedAt: number;
@@ -49,6 +50,7 @@ interface TimerSequence {
   description: string;
   tasks: Node[];
   created_at: string;
+  startTime: number | null;
 }
 
 interface SequenceCompletion {
@@ -63,11 +65,21 @@ interface SequenceCompletion {
 export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedTasks, setSelectedTasks] = useState<Node[]>([]);
-  const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
-  const [timeSpent, setTimeSpent] = useState(0);
-  const [startTime, setStartTime] = useState<number | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
+  const { 
+    activeSequence: selectedSequence,
+    setActiveSequence: setSelectedSequence,
+    currentTaskIndex,
+    setCurrentTaskIndex,
+    timeSpent,
+    setTimeSpent,
+    isRunning,
+    setIsRunning,
+    startTimer,
+    pauseTimer,
+    resetTimer
+  } = useActiveSequence();
   const [isTimerView, setIsTimerView] = useState(false);
   const [isCompletionView, setIsCompletionView] = useState(false);
   const [lastCompletion, setLastCompletion] = useState<SequenceCompletion | null>(null);
@@ -78,12 +90,21 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [newSequenceTitle, setNewSequenceTitle] = useState('');
   const [newSequenceDescription, setNewSequenceDescription] = useState('');
-  const [selectedSequence, setSelectedSequence] = useState<TimerSequence | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [completions, setCompletions] = useState<SequenceCompletion[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Set timer view based on URL parameter and active sequence
+  useEffect(() => {
+    if (!searchParams) return;
+    const shouldShowTimer = searchParams.get('isTimerView') === 'true';
+    if (shouldShowTimer && selectedSequence) {
+      setIsTimerView(true);
+      setSelectedTasks(selectedSequence.tasks);
+    }
+  }, [searchParams, selectedSequence]);
 
   // Load flows from Supabase
   useEffect(() => {
@@ -208,14 +229,14 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (isRunning && startTime) {
+    if (isRunning && selectedSequence?.startTime !== null && selectedSequence?.startTime !== undefined) {
       interval = setInterval(() => {
-        setTimeSpent(Date.now() - startTime);
+        setTimeSpent(Date.now() - selectedSequence.startTime!);
       }, 1000);
     }
 
     return () => clearInterval(interval);
-  }, [isRunning, startTime]);
+  }, [isRunning, selectedSequence?.startTime]);
 
   const formatTime = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -302,19 +323,17 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
   const handleStartSequence = async (sequence: TimerSequence) => {
     try {
+      // Check if there's already an active sequence
+      if (selectedSequence) {
+        throw new Error('Another sequence is currently active. Please complete or stop it first.');
+      }
+
       // Validate that all tasks have flowIds
       const invalidTasks = sequence.tasks.filter(task => !task.data?.flowId);
       if (invalidTasks.length > 0) {
         console.error('Tasks missing flowId:', invalidTasks);
         throw new Error('Some tasks are missing required data');
       }
-
-      // Log the tasks before refresh
-      console.log('Starting sequence with tasks:', sequence.tasks.map(t => ({
-        id: t.id,
-        flowId: t.data.flowId,
-        label: t.data.label
-      })));
 
       // Fetch fresh task data for each task in the sequence
       const refreshedTasks = await Promise.all(
@@ -351,7 +370,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
             ...task,
             data: {
               ...node.data,
-              flowId: task.data.flowId, // Explicitly preserve flowId
+              flowId: task.data.flowId,
               completionHistory: node.data.completionHistory || [],
               targetDuration: node.data.targetDuration,
               useTargetDuration: node.data.useTargetDuration,
@@ -364,18 +383,14 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         })
       );
 
-      // Log the refreshed tasks
-      console.log('Refreshed tasks:', refreshedTasks.map(t => ({
-        id: t.id,
-        flowId: t.data.flowId,
-        label: t.data.label
-      })));
-
-      setSelectedSequence(sequence);
       setSelectedTasks(refreshedTasks);
+      setSelectedSequence({ 
+        ...sequence, 
+        tasks: refreshedTasks,
+        startTime: null
+      });
       setCurrentTaskIndex(0);
       setTimeSpent(0);
-      setStartTime(null);
       setIsRunning(false);
       setIsTimerView(true);
     } catch (error) {
@@ -418,40 +433,8 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     try {
       setCompletionError(null);
 
-      // Refresh all tasks' data to ensure we have latest completion histories
-      const refreshedTasks = await Promise.all(
-        selectedTasks.map(async (task) => {
-          try {
-            const { data: flow, error: fetchError } = await supabase
-              .from('process_flows')
-              .select('nodes')
-              .eq('id', task.data.flowId)
-              .single();
-
-            if (fetchError) {
-              console.error(`Error fetching flow for task ${task.id}:`, fetchError);
-              return task;
-            }
-
-            if (!flow || !flow.nodes) {
-              console.error(`Invalid flow data for task ${task.id}:`, flow);
-              return task;
-            }
-
-            const node = flow.nodes.find((n: any) => n.id === task.id);
-            return node ? { ...task, data: node.data } : task;
-          } catch (error) {
-            console.error(`Error refreshing task ${task.id}:`, error);
-            return task;
-          }
-        })
-      );
-
-      // Update local state with refreshed tasks
-      setSelectedTasks(refreshedTasks);
-
       // Calculate task times using refreshed data
-      const taskTimes = refreshedTasks.map((task) => {
+      const taskTimes = selectedTasks.map((task) => {
         const completionHistory = task.data.completionHistory || [];
         // Get the most recent completion
         const latestCompletion = completionHistory[completionHistory.length - 1];
@@ -501,7 +484,6 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       // Reset timer state but keep sequence info for completion view
       setCurrentTaskIndex(-1);
       setTimeSpent(0);
-      setStartTime(null);
       setIsRunning(false);
 
     } catch (error) {
@@ -553,12 +535,12 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   }
 
   // If showing completion summary
-  if (isCompletionView && lastCompletion && selectedSequence) {
+  if (isCompletionView && lastCompletion) {
     return (
       <div className="max-w-2xl mx-auto py-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">Sequence Completed!</h1>
-          <p className="text-gray-600">{selectedSequence.title}</p>
+          <p className="text-gray-600">{selectedSequence?.title}</p>
         </div>
 
         <Card className="p-6 mb-8">
@@ -677,9 +659,16 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                       variant="default"
                       onClick={() => handleStartSequence(sequence)}
                       className="flex-1"
+                      disabled={selectedSequence !== null}
                     >
-                      <Play className="w-4 h-4 mr-2" />
-                      Start
+                      {selectedSequence ? (
+                        'Another sequence is active'
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Start
+                        </>
+                      )}
                     </Button>
                   </div>
                 </Card>
@@ -750,7 +739,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
             <DialogHeader>
               <DialogTitle>Delete Sequence</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete "{selectedSequence?.title}"? This action cannot be undone.
+                Are you sure you want to delete this sequence? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -770,62 +759,55 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         <Dialog open={isHistoryModalOpen} onOpenChange={setIsHistoryModalOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Sequence History - {selectedSequence?.title}</DialogTitle>
+              <DialogTitle>Sequence History</DialogTitle>
+              <DialogDescription>
+                View past completions of this sequence
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-500">
-                  {completions.filter(c => c.sequence_id === selectedSequence?.id).length} completions
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setHistoryOrder(historyOrder === 'desc' ? 'asc' : 'desc')}
-                >
-                  {historyOrder === 'desc' ? 'Oldest First' : 'Newest First'}
-                </Button>
-              </div>
-              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                {completions
-                  .filter(c => c.sequence_id === selectedSequence?.id)
-                  .sort((a, b) => {
-                    const dateA = new Date(a.completed_at).getTime();
-                    const dateB = new Date(b.completed_at).getTime();
-                    return historyOrder === 'desc' ? dateB - dateA : dateA - dateB;
-                  })
-                  .map((completion) => (
-                    <Card key={completion.id} className="p-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm">
-                          {new Date(completion.completed_at).toLocaleString()}
-                        </span>
-                        <span className="text-sm font-medium">
-                          Total: {formatTime(completion.total_time)}
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        {completion.task_times.map((taskTime, index) => {
-                          const task = selectedSequence?.tasks.find(t => t.id === taskTime.taskId);
-                          return (
-                            <div key={taskTime.taskId} className="text-sm flex justify-between">
-                              <span className="text-gray-600">
-                                {index + 1}. {task?.data.label || 'Unknown Task'}
-                              </span>
-                              <span className="text-gray-500">
-                                {formatTime(taskTime.timeSpent)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {completion.notes && (
-                        <p className="mt-2 text-sm text-gray-600">
-                          {completion.notes}
-                        </p>
-                      )}
-                    </Card>
-                  ))}
-              </div>
+            <div className="flex justify-end mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHistoryOrder(order => order === 'asc' ? 'desc' : 'asc')}
+              >
+                Sort {historyOrder === 'asc' ? '↑' : '↓'}
+              </Button>
+            </div>
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {completions
+                .filter(c => c.sequence_id === selectedSequence?.id)
+                .sort((a, b) => {
+                  const dateA = new Date(a.completed_at).getTime();
+                  const dateB = new Date(b.completed_at).getTime();
+                  return historyOrder === 'desc' ? dateB - dateA : dateA - dateB;
+                })
+                .map((completion) => (
+                  <Card key={completion.id} className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm">
+                        {new Date(completion.completed_at).toLocaleString()}
+                      </span>
+                      <span className="text-sm font-medium">
+                        Total: {formatTime(completion.total_time)}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {completion.task_times.map((taskTime, index) => {
+                        const task = selectedSequence?.tasks.find(t => t.id === taskTime.taskId);
+                        return (
+                          <div key={taskTime.taskId} className="text-sm flex justify-between">
+                            <span className="text-gray-600">
+                              {index + 1}. {task?.data.label || 'Unknown Task'}
+                            </span>
+                            <span className="text-gray-500">
+                              {formatTime(taskTime.timeSpent)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                ))}
             </div>
           </DialogContent>
         </Dialog>
@@ -895,37 +877,33 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
           </div>
 
           {/* Controls */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+          <div className="flex justify-center gap-4">
             {isRunning ? (
               <Button
                 variant="outline"
-                onClick={() => setIsRunning(false)}
-                className="flex-1 py-4 sm:py-6"
+                size="lg"
+                onClick={pauseTimer}
+                className="w-32"
               >
-                <Pause className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
                 Pause
               </Button>
             ) : (
               <Button
                 variant="default"
-                onClick={() => {
-                  setIsRunning(true);
-                  if (!startTime) {
-                    setStartTime(Date.now() - timeSpent);
-                  }
-                }}
-                className="flex-1 py-4 sm:py-6"
+                size="lg"
+                onClick={startTimer}
+                className="w-32"
               >
-                <Play className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
-                {timeSpent === 0 ? 'Start' : 'Resume'}
+                Start
               </Button>
             )}
 
             {currentTaskIndex < selectedTasks.length - 1 ? (
               <Button
                 variant="default"
-                onClick={async () => {
-                  // Save completion record for current task
+                size="lg"
+                onClick={() => {
+                  // Save completion record for the current task
                   const currentTask = selectedTasks[currentTaskIndex];
                   if (currentTask && timeSpent > 0) {
                     const newHistory = [
@@ -944,98 +922,24 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                       }
                     };
                     
-                    // Update task in local state
                     setSelectedTasks(tasks => 
                       tasks.map(t => t.id === currentTask.id ? updatedTask : t)
                     );
-
-                    // Update task in database
-                    try {
-                      // First get the current flow
-                      const { data: flow, error: fetchError } = await supabase
-                        .from('process_flows')
-                        .select('nodes')
-                        .eq('id', currentTask.data.flowId)
-                        .single();
-
-                      if (fetchError) {
-                        console.error('Error fetching flow:', fetchError);
-                        throw fetchError;
-                      }
-
-                      // Update the specific node in the nodes array
-                      const updatedNodes = flow.nodes.map((node: any) => 
-                        node.id === currentTask.id ? {
-                          ...node,
-                          data: {
-                            ...node.data,
-                            completionHistory: newHistory
-                          }
-                        } : node
-                      );
-
-                      // Save the updated nodes
-                      const { error: updateError } = await supabase
-                        .from('process_flows')
-                        .update({ nodes: updatedNodes })
-                        .eq('id', currentTask.data.flowId);
-
-                      if (updateError) {
-                        console.error('Error updating node completion history:', updateError);
-                        throw updateError;
-                      }
-
-                      // Refresh the next task's data to ensure we have latest completion history
-                      const nextTask = selectedTasks[currentTaskIndex + 1];
-                      if (nextTask) {
-                        const { data: nextFlow, error: nextFetchError } = await supabase
-                          .from('process_flows')
-                          .select('nodes')
-                          .eq('id', nextTask.data.flowId)
-                          .single();
-
-                        if (!nextFetchError && nextFlow) {
-                          const nextNode = nextFlow.nodes.find((n: any) => n.id === nextTask.id);
-                          if (nextNode) {
-                            // Update the next task in local state with fresh data
-                            setSelectedTasks(tasks =>
-                              tasks.map(t => t.id === nextTask.id ? { ...t, data: nextNode.data } : t)
-                            );
-                          }
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Error saving task completion:', error);
-                      // Don't return early, continue with moving to next task
-                    }
                   }
                   
                   // Move to next task
-                  setCurrentTaskIndex(i => i + 1);
-                  setTimeSpent(0);
-                  setStartTime(null);
-                  setIsRunning(false);
-
-                  // Clear any persisted timer state for the current task
-                  if (currentTask) {
-                    localStorage.removeItem(`timer_${currentTask.id}`);
-                  }
-
-                  // Reset timer state for the next task
-                  const nextTask = selectedTasks[currentTaskIndex + 1];
-                  if (nextTask) {
-                    localStorage.removeItem(`timer_${nextTask.id}`);
-                  }
+                  setCurrentTaskIndex(currentTaskIndex + 1);
+                  resetTimer();
                 }}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-4 sm:py-6 px-4 sm:px-8 text-base sm:text-xl rounded-xl"
+                className="w-32"
               >
-                <SkipForward className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
-                Next
+                Next Task
               </Button>
             ) : (
               <Button
                 variant="default"
-                onClick={async () => {
+                size="lg"
+                onClick={() => {
                   // Save completion record for the last task
                   const currentTask = selectedTasks[currentTaskIndex];
                   if (currentTask && timeSpent > 0) {
@@ -1063,198 +967,14 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                   // Complete the sequence
                   handleCompleteSequence();
                 }}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-4 sm:py-6 px-4 sm:px-8 text-base sm:text-xl rounded-xl"
+                className="w-32"
               >
-                <SkipForward className="w-4 h-4 sm:w-6 sm:h-6 mr-2" />
                 Complete
               </Button>
             )}
           </div>
-
-          {/* Up Next */}
-          {currentTaskIndex < selectedTasks.length - 1 && (
-            <div className="mt-6 sm:mt-8">
-              <h3 className="text-base sm:text-lg font-medium text-gray-500">Up Next</h3>
-              <div className="mt-2 bg-gray-50 rounded-lg p-3 sm:p-4">
-                {selectedTasks[currentTaskIndex + 1].data.label}
-              </div>
-            </div>
-          )}
         </div>
       )}
-
-      <div className="flex gap-2">
-        {isRunning ? (
-          <Button
-            variant="outline"
-            onClick={() => setIsRunning(false)}
-            className="flex-1"
-          >
-            <Pause className="w-4 h-4 mr-2" />
-            Pause
-          </Button>
-        ) : (
-          <Button
-            variant="default"
-            onClick={() => {
-              setIsRunning(true);
-              if (!startTime) {
-                setStartTime(Date.now() - timeSpent);
-              }
-            }}
-            className="flex-1"
-          >
-            <Play className="w-4 h-4 mr-2" />
-            {timeSpent === 0 ? 'Start' : 'Resume'}
-          </Button>
-        )}
-
-        {currentTaskIndex < selectedTasks.length - 1 ? (
-          <Button
-            variant="outline"
-            onClick={async () => {
-              // Save completion record for current task
-              const currentTask = selectedTasks[currentTaskIndex];
-              if (currentTask && timeSpent > 0) {
-                const newHistory = [
-                  ...(currentTask.data.completionHistory || []),
-                  {
-                    completedAt: Date.now(),
-                    timeSpent
-                  }
-                ];
-                
-                const updatedTask = {
-                  ...currentTask,
-                  data: {
-                    ...currentTask.data,
-                    completionHistory: newHistory
-                  }
-                };
-                
-                // Update task in local state
-                setSelectedTasks(tasks => 
-                  tasks.map(t => t.id === currentTask.id ? updatedTask : t)
-                );
-
-                // Update task in database
-                try {
-                  // First get the current flow
-                  const { data: flow, error: fetchError } = await supabase
-                    .from('process_flows')
-                    .select('nodes')
-                    .eq('id', currentTask.data.flowId)
-                    .single();
-
-                  if (fetchError) {
-                    console.error('Error fetching flow:', fetchError);
-                    throw fetchError;
-                  }
-
-                  // Update the specific node in the nodes array
-                  const updatedNodes = flow.nodes.map((node: any) => 
-                    node.id === currentTask.id ? {
-                      ...node,
-                      data: {
-                        ...node.data,
-                        completionHistory: newHistory
-                      }
-                    } : node
-                  );
-
-                  // Save the updated nodes
-                  const { error: updateError } = await supabase
-                    .from('process_flows')
-                    .update({ nodes: updatedNodes })
-                    .eq('id', currentTask.data.flowId);
-
-                  if (updateError) {
-                    console.error('Error updating node completion history:', updateError);
-                    throw updateError;
-                  }
-
-                  // Refresh the next task's data to ensure we have latest completion history
-                  const nextTask = selectedTasks[currentTaskIndex + 1];
-                  if (nextTask) {
-                    const { data: nextFlow, error: nextFetchError } = await supabase
-                      .from('process_flows')
-                      .select('nodes')
-                      .eq('id', nextTask.data.flowId)
-                      .single();
-
-                    if (!nextFetchError && nextFlow) {
-                      const nextNode = nextFlow.nodes.find((n: any) => n.id === nextTask.id);
-                      if (nextNode) {
-                        // Update the next task in local state with fresh data
-                        setSelectedTasks(tasks =>
-                          tasks.map(t => t.id === nextTask.id ? { ...t, data: nextNode.data } : t)
-                        );
-                      }
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error saving task completion:', error);
-                  // Don't return early, continue with moving to next task
-                }
-              }
-              
-              // Move to next task
-              setCurrentTaskIndex(i => i + 1);
-              setTimeSpent(0);
-              setStartTime(null);
-              setIsRunning(false);
-
-              // Clear any persisted timer state for the current task
-              if (currentTask) {
-                localStorage.removeItem(`timer_${currentTask.id}`);
-              }
-
-              // Reset timer state for the next task
-              const nextTask = selectedTasks[currentTaskIndex + 1];
-              if (nextTask) {
-                localStorage.removeItem(`timer_${nextTask.id}`);
-              }
-            }}
-          >
-            <SkipForward className="w-4 h-4 mr-2" />
-            Next Task
-          </Button>
-        ) : (
-          <Button
-            variant="default"
-            onClick={() => {
-              // Save completion record for the last task
-              const currentTask = selectedTasks[currentTaskIndex];
-              if (currentTask && timeSpent > 0) {
-                const newHistory = [
-                  ...(currentTask.data.completionHistory || []),
-                  {
-                    completedAt: Date.now(),
-                    timeSpent
-                  }
-                ];
-                
-                const updatedTask = {
-                  ...currentTask,
-                  data: {
-                    ...currentTask.data,
-                    completionHistory: newHistory
-                  }
-                };
-                
-                setSelectedTasks(tasks => 
-                  tasks.map(t => t.id === currentTask.id ? updatedTask : t)
-                );
-              }
-              
-              // Complete the sequence
-              handleCompleteSequence();
-            }}
-          >
-            Complete Sequence
-          </Button>
-        )}
-      </div>
     </div>
   );
 } 
