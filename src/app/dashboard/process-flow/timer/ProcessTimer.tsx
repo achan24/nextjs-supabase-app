@@ -434,13 +434,13 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     try {
       setCompletionError(null);
 
-      // Calculate task times using the actual completion history and last time spent
-      const taskTimes: Array<{taskId: string, timeSpent: number}> = selectedTasks.map((task) => {
-        // For the last task, use the lastTimeSpent if available
-        if (task.id === selectedTasks[currentTaskIndex]?.id && task.data.lastTimeSpent) {
+      // Calculate task times using the actual completion history and current time spent
+      const taskTimes: Array<{taskId: string, timeSpent: number}> = selectedTasks.map((task, index) => {
+        // For the current task, use the current timeSpent
+        if (index === currentTaskIndex) {
           return {
             taskId: task.id,
-            timeSpent: task.data.lastTimeSpent
+            timeSpent: timeSpent
           };
         }
 
@@ -614,76 +614,108 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
           <>
             <h2 className="text-lg font-semibold mb-4">Sequences</h2>
             <div className="space-y-3">
-              {sequences.map((sequence) => (
-                <Card key={sequence.id} className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-semibold">{sequence.title}</h3>
-                      <p className="text-sm text-gray-500">{sequence.description}</p>
+              {sequences.map((sequence) => {
+                // Calculate total estimated time
+                const totalEstimatedTime = sequence.tasks.reduce((total, task) => {
+                  // If task has target duration, use that
+                  if (task.data.targetDuration) {
+                    return total + (task.data.targetDuration * 1000);
+                  }
+                  // If task has completion history, use average
+                  if (task.data.completionHistory?.length) {
+                    const avgTime = task.data.completionHistory.reduce((sum: number, rec: CompletionRecord) => sum + rec.timeSpent, 0) / 
+                      task.data.completionHistory.length;
+                    return total + avgTime;
+                  }
+                  return total;
+                }, 0);
+
+                // Calculate ETA if we start now
+                const eta = totalEstimatedTime ? new Date(Date.now() + totalEstimatedTime) : null;
+
+                return (
+                  <Card key={sequence.id} className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-semibold">{sequence.title}</h3>
+                        <p className="text-sm text-gray-500">{sequence.description}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setIsHistoryModalOpen(true);
+                            setHistorySequenceId(sequence.id);
+                          }}
+                        >
+                          <Clock className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditSequence(sequence)}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedSequence(sequence);
+                            setIsDeleteModalOpen(true);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
+
+                    <div className="space-y-2 mb-4">
+                      <p className="text-sm">
+                        {sequence.tasks.length} tasks
+                      </p>
+                      {completions.filter(c => c.sequence_id === sequence.id).length > 0 && (
+                        <p className="text-sm text-gray-500">
+                          {completions.filter(c => c.sequence_id === sequence.id).length} completions
+                        </p>
+                      )}
+                      {totalEstimatedTime > 0 && (
+                        <p className="text-sm text-blue-600">
+                          Estimated time: {formatTime(totalEstimatedTime)}
+                          {eta && (
+                            <span className="ml-2 text-gray-500">
+                              (ETA: {eta.toLocaleTimeString([], { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                hour12: false 
+                              })})
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
                     <div className="flex gap-2">
                       <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          // Just open the history modal, don't set the sequence
-                          setIsHistoryModalOpen(true);
-                          // Store sequence ID for filtering completions
-                          setHistorySequenceId(sequence.id);
-                        }}
+                        variant="default"
+                        onClick={() => handleStartSequence(sequence)}
+                        className="flex-1"
+                        disabled={selectedSequence !== null}
                       >
-                        <Clock className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEditSequence(sequence)}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedSequence(sequence);
-                          setIsDeleteModalOpen(true);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
+                        {selectedSequence ? (
+                          'Another sequence is active'
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4 mr-2" />
+                            Start
+                          </>
+                        )}
                       </Button>
                     </div>
-                  </div>
-
-                  <div className="space-y-2 mb-4">
-                    <p className="text-sm">
-                      {sequence.tasks.length} tasks
-                    </p>
-                    {completions.filter(c => c.sequence_id === sequence.id).length > 0 && (
-                      <p className="text-sm text-gray-500">
-                        {completions.filter(c => c.sequence_id === sequence.id).length} completions
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="default"
-                      onClick={() => handleStartSequence(sequence)}
-                      className="flex-1"
-                      disabled={selectedSequence !== null}
-                    >
-                      {selectedSequence ? (
-                        'Another sequence is active'
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4 mr-2" />
-                          Start
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           </>
         )}
@@ -918,7 +950,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                   // Save completion record for current task
                   const currentTask = selectedTasks[currentTaskIndex];
                   if (currentTask) {
-                    const elapsedTime = selectedSequence?.startTime ? Date.now() - selectedSequence.startTime : timeSpent;
+                    const elapsedTime = timeSpent;
                     const newHistory = [
                       ...(currentTask.data.completionHistory || []),
                       {
@@ -939,7 +971,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             console.error('Error fetching flow:', error);
                             return;
                           }
-                          
+
                           const updatedNodes = flow.nodes.map((n: any) => {
                             if (n.id === currentTask.id) {
                               return {
@@ -996,7 +1028,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                   // Save completion record for current task
                   const currentTask = selectedTasks[currentTaskIndex];
                   if (currentTask) {
-                    const elapsedTime = selectedSequence?.startTime ? Date.now() - selectedSequence.startTime : timeSpent;
+                    const elapsedTime = timeSpent;
                     const newHistory = [
                       ...(currentTask.data.completionHistory || []),
                       {
@@ -1017,7 +1049,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             console.error('Error fetching flow:', error);
                             return;
                           }
-                          
+
                           const updatedNodes = flow.nodes.map((n: any) => {
                             if (n.id === currentTask.id) {
                               return {
