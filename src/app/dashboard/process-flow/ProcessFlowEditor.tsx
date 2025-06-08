@@ -37,6 +37,7 @@ import { AnalyticsNode } from './nodes/AnalyticsNode';
 import FlashcardReview from './components/FlashcardReview';
 import LinkNode from './nodes/LinkNode';
 import NoteReferenceNode from './nodes/NoteReferenceNode';
+import ChecklistNode from './nodes/ChecklistNode';
 
 interface ProcessFlow {
   id: string;
@@ -58,6 +59,7 @@ const nodeTypes = {
   analytics: AnalyticsNode,
   link: LinkNode,
   noteRef: NoteReferenceNode,
+  checklist: ChecklistNode,
 };
 
 const edgeTypes = {

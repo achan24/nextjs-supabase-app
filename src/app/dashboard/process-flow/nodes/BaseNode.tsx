@@ -61,6 +61,12 @@ const nodeTypeStyles = {
     borderClass: 'border-indigo-200',
     selectedBorderClass: 'border-indigo-500',
   },
+  checklist: {
+    icon: '✅',
+    bgClass: 'bg-green-50',
+    borderClass: 'border-green-200',
+    selectedBorderClass: 'border-green-500',
+  },
 };
 
 const BaseNode = ({

@@ -51,6 +51,12 @@ const nodeTypes = [
     description: 'Jump to a node in another map',
     icon: '🔗',
   },
+  {
+    type: 'checklist',
+    label: 'Checklist',
+    description: 'Create a list of checkable items',
+    icon: '✅',
+  },
 ];
 
 export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolboxProps) {
@@ -114,6 +120,7 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
         ...(type === 'process' && { subTasks: [], progress: 0 }),
         ...(type === 'skill' && { level: 1, experience: '' }),
         ...(type === 'technique' && { effectiveness: 0, steps: [] }),
+        ...(type === 'checklist' && { text: '', items: [] }),
       },
     };
 
@@ -212,6 +219,14 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
             draggable
           >
             📝 Note Reference
+          </div>
+          <div
+            className="p-3 bg-green-50 border-2 border-green-200 rounded-md cursor-pointer hover:bg-green-100"
+            onDragStart={(event) => onDragStart(event, 'checklist')}
+            onClick={() => addNode('checklist')}
+            draggable
+          >
+            ✅ Checklist
           </div>
         </div>
       </div>

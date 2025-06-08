@@ -95,6 +95,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const [completions, setCompletions] = useState<SequenceCompletion[]>([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<'asc' | 'desc'>('desc');
+  const [historySequenceId, setHistorySequenceId] = useState<string | null>(null);
 
   // Set timer view based on URL parameter and active sequence
   useEffect(() => {
@@ -433,10 +434,18 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     try {
       setCompletionError(null);
 
-      // Calculate task times using refreshed data
-      const taskTimes = selectedTasks.map((task) => {
+      // Calculate task times using the actual completion history and last time spent
+      const taskTimes: Array<{taskId: string, timeSpent: number}> = selectedTasks.map((task) => {
+        // For the last task, use the lastTimeSpent if available
+        if (task.id === selectedTasks[currentTaskIndex]?.id && task.data.lastTimeSpent) {
+          return {
+            taskId: task.id,
+            timeSpent: task.data.lastTimeSpent
+          };
+        }
+
+        // For other tasks, use their completion history
         const completionHistory = task.data.completionHistory || [];
-        // Get the most recent completion
         const latestCompletion = completionHistory[completionHistory.length - 1];
         
         return {
@@ -446,7 +455,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       });
 
       // Calculate total time as sum of all task times
-      const totalTime = taskTimes.reduce((sum, task) => sum + task.timeSpent, 0);
+      const totalTime = taskTimes.reduce((sum: number, task: {timeSpent: number}) => sum + task.timeSpent, 0);
 
       // Validate data before saving
       if (!selectedSequence.id || !user.id) {
@@ -617,8 +626,10 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                         variant="ghost"
                         size="icon"
                         onClick={() => {
-                          setSelectedSequence(sequence);
+                          // Just open the history modal, don't set the sequence
                           setIsHistoryModalOpen(true);
+                          // Store sequence ID for filtering completions
+                          setHistorySequenceId(sequence.id);
                         }}
                       >
                         <Clock className="w-4 h-4" />
@@ -775,7 +786,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
             </div>
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
               {completions
-                .filter(c => c.sequence_id === selectedSequence?.id)
+                .filter(c => c.sequence_id === historySequenceId)
                 .sort((a, b) => {
                   const dateA = new Date(a.completed_at).getTime();
                   const dateB = new Date(b.completed_at).getTime();
@@ -793,7 +804,8 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                     </div>
                     <div className="space-y-1">
                       {completion.task_times.map((taskTime, index) => {
-                        const task = selectedSequence?.tasks.find(t => t.id === taskTime.taskId);
+                        const sequence = sequences.find(s => s.id === completion.sequence_id);
+                        const task = sequence?.tasks.find(t => t.id === taskTime.taskId);
                         return (
                           <div key={taskTime.taskId} className="text-sm flex justify-between">
                             <span className="text-gray-600">
@@ -903,22 +915,63 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                 variant="default"
                 size="lg"
                 onClick={() => {
-                  // Save completion record for the current task
+                  // Save completion record for current task
                   const currentTask = selectedTasks[currentTaskIndex];
-                  if (currentTask && timeSpent > 0) {
+                  if (currentTask) {
+                    const elapsedTime = selectedSequence?.startTime ? Date.now() - selectedSequence.startTime : timeSpent;
                     const newHistory = [
                       ...(currentTask.data.completionHistory || []),
                       {
                         completedAt: Date.now(),
-                        timeSpent
+                        timeSpent: elapsedTime
                       }
                     ];
+                    
+                    // Update task in database first
+                    if (currentTask.data.flowId) {
+                      supabase
+                        .from('process_flows')
+                        .select('nodes')
+                        .eq('id', currentTask.data.flowId)
+                        .single()
+                        .then(({ data: flow, error }) => {
+                          if (error) {
+                            console.error('Error fetching flow:', error);
+                            return;
+                          }
+                          
+                          const updatedNodes = flow.nodes.map((n: any) => {
+                            if (n.id === currentTask.id) {
+                              return {
+                                ...n,
+                                data: {
+                                  ...n.data,
+                                  completionHistory: newHistory,
+                                  lastTimeSpent: elapsedTime
+                                }
+                              };
+                            }
+                            return n;
+                          });
+                          
+                          supabase
+                            .from('process_flows')
+                            .update({ nodes: updatedNodes })
+                            .eq('id', currentTask.data.flowId)
+                            .then(({ error }) => {
+                              if (error) {
+                                console.error('Error updating flow:', error);
+                              }
+                            });
+                        });
+                    }
                     
                     const updatedTask = {
                       ...currentTask,
                       data: {
                         ...currentTask.data,
-                        completionHistory: newHistory
+                        completionHistory: newHistory,
+                        lastTimeSpent: elapsedTime
                       }
                     };
                     
@@ -940,22 +993,63 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                 variant="default"
                 size="lg"
                 onClick={() => {
-                  // Save completion record for the last task
+                  // Save completion record for current task
                   const currentTask = selectedTasks[currentTaskIndex];
-                  if (currentTask && timeSpent > 0) {
+                  if (currentTask) {
+                    const elapsedTime = selectedSequence?.startTime ? Date.now() - selectedSequence.startTime : timeSpent;
                     const newHistory = [
                       ...(currentTask.data.completionHistory || []),
                       {
                         completedAt: Date.now(),
-                        timeSpent
+                        timeSpent: elapsedTime
                       }
                     ];
+                    
+                    // Update task in database first
+                    if (currentTask.data.flowId) {
+                      supabase
+                        .from('process_flows')
+                        .select('nodes')
+                        .eq('id', currentTask.data.flowId)
+                        .single()
+                        .then(({ data: flow, error }) => {
+                          if (error) {
+                            console.error('Error fetching flow:', error);
+                            return;
+                          }
+                          
+                          const updatedNodes = flow.nodes.map((n: any) => {
+                            if (n.id === currentTask.id) {
+                              return {
+                                ...n,
+                                data: {
+                                  ...n.data,
+                                  completionHistory: newHistory,
+                                  lastTimeSpent: elapsedTime
+                                }
+                              };
+                            }
+                            return n;
+                          });
+                          
+                          supabase
+                            .from('process_flows')
+                            .update({ nodes: updatedNodes })
+                            .eq('id', currentTask.data.flowId)
+                            .then(({ error }) => {
+                              if (error) {
+                                console.error('Error updating flow:', error);
+                              }
+                            });
+                        });
+                    }
                     
                     const updatedTask = {
                       ...currentTask,
                       data: {
                         ...currentTask.data,
-                        completionHistory: newHistory
+                        completionHistory: newHistory,
+                        lastTimeSpent: elapsedTime
                       }
                     };
                     
