@@ -96,6 +96,29 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<'asc' | 'desc'>('desc');
   const [historySequenceId, setHistorySequenceId] = useState<string | null>(null);
+  const currentTask = selectedTasks[currentTaskIndex];
+  const [lockedTaskEta, setLockedTaskEta] = useState<Date | null>(null);
+  const [lockedSequenceEta, setLockedSequenceEta] = useState<Date | null>(null);
+
+  // Load all sequence completions when component mounts
+  useEffect(() => {
+    const loadAllCompletions = async () => {
+      try {
+        const { data: completions, error } = await supabase
+          .from('sequence_completions')
+          .select('*')
+          .order('completed_at', { ascending: false });
+
+        if (error) throw error;
+        setCompletions(completions || []);
+      } catch (error) {
+        console.error('Error loading sequence completions:', error);
+        setCompletions([]);
+      }
+    };
+
+    loadAllCompletions();
+  }, []);
 
   // Set timer view based on URL parameter and active sequence
   useEffect(() => {
@@ -238,6 +261,31 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
     return () => clearInterval(interval);
   }, [isRunning, selectedSequence?.startTime]);
+
+  // Update ETAs when starting timer
+  useEffect(() => {
+    if (isRunning && currentTask) {
+      if (!lockedTaskEta && currentTask.data.targetDuration) {
+        setLockedTaskEta(new Date(Date.now() + currentTask.data.targetDuration * 1000));
+      }
+      if (!lockedSequenceEta && currentTaskIndex < selectedTasks.length - 1) {
+        const totalTime = selectedTasks.slice(currentTaskIndex).reduce((total, task) => {
+          if (task.data.targetDuration) {
+            return total + (task.data.targetDuration * 1000);
+          }
+          if (task.data.completionHistory?.length) {
+            return total + (task.data.completionHistory.reduce((s: number, r: CompletionRecord) => s + r.timeSpent, 0) / 
+              task.data.completionHistory.length);
+          }
+          return total;
+        }, 0);
+        setLockedSequenceEta(new Date(Date.now() + totalTime));
+      }
+    } else {
+      setLockedTaskEta(null);
+      setLockedSequenceEta(null);
+    }
+  }, [isRunning, currentTask, currentTaskIndex, selectedTasks]);
 
   const formatTime = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -434,7 +482,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     try {
       setCompletionError(null);
 
-      // Calculate task times using the actual completion history and current time spent
+      // Calculate task times using the actual completion history
       const taskTimes: Array<{taskId: string, timeSpent: number}> = selectedTasks.map((task, index) => {
         // For the current task, use the current timeSpent
         if (index === currentTaskIndex) {
@@ -444,7 +492,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
           };
         }
 
-        // For other tasks, use their completion history
+        // For completed tasks, use their latest completion record
         const completionHistory = task.data.completionHistory || [];
         const latestCompletion = completionHistory[completionHistory.length - 1];
         
@@ -455,7 +503,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       });
 
       // Calculate total time as sum of all task times
-      const totalTime = taskTimes.reduce((sum: number, task: {timeSpent: number}) => sum + task.timeSpent, 0);
+      const totalTime = taskTimes.reduce((sum, task) => sum + task.timeSpent, 0);
 
       // Validate data before saving
       if (!selectedSequence.id || !user.id) {
@@ -484,8 +532,9 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         throw new Error('No completion data returned');
       }
 
-      // Set the completion for display
+      // Set the completion for display and update completions array
       setLastCompletion(completion);
+      setCompletions(prevCompletions => [...prevCompletions, completion]);
       
       // Show completion view
       setIsCompletionView(true);
@@ -859,8 +908,6 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     );
   }
 
-  const currentTask = currentTaskIndex >= 0 ? selectedTasks[currentTaskIndex] : null;
-
   // Calculate average completion time
   const avgTime = currentTask?.data.completionHistory?.length ? 
     currentTask.data.completionHistory.reduce((sum: number, rec: CompletionRecord) => sum + rec.timeSpent, 0) / 
@@ -908,7 +955,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
               {formatTime(timeSpent)}
             </div>
             <div className="mt-4 space-y-2 text-sm sm:text-base text-gray-400">
-              {currentTask.data.targetDuration && (
+              {currentTask?.data.targetDuration && (
                 <div>Target: {formatTime(currentTask.data.targetDuration * 1000)}</div>
               )}
               {lastTime && (
@@ -917,6 +964,34 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
               {avgTime && (
                 <div>Average: {formatTime(avgTime)}</div>
               )}
+              {currentTask?.data.targetDuration && (
+                <div className="text-blue-400">
+                  ETA: {(isRunning && lockedTaskEta ? lockedTaskEta : new Date(Date.now() + (currentTask?.data.targetDuration || 0) * 1000))
+                    .toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: false 
+                    })}
+                </div>
+              )}
+              <div className="text-green-400">
+                Sequence ETA: {(isRunning && lockedSequenceEta ? lockedSequenceEta : new Date(Date.now() + selectedTasks.slice(currentTaskIndex).reduce((total, task) => {
+                  if (task?.data?.targetDuration) {
+                    return total + (task.data.targetDuration * 1000);
+                  }
+                  if (task?.data?.completionHistory?.length) {
+                    return total + (task.data.completionHistory.reduce((s: number, r: CompletionRecord) => s + r.timeSpent, 0) / 
+                      task.data.completionHistory.length);
+                  }
+                  return total;
+                }, 0))).toLocaleTimeString([], { 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false 
+                })}
+              </div>
             </div>
           </div>
 

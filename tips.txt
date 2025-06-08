@@ -260,3 +260,43 @@ function transformDBToUI(dbData: DBResponse): UIModel {
   };
 }
 ```
+
+SEQUENCE TIMING TIPS
+------------------
+
+1. Timer Source of Truth
+   - ALWAYS use timeSpent from ActiveSequenceContext as the source of truth
+   - NEVER try to calculate elapsed time manually using startTime
+   - NEVER use lastTimeSpent or historical values for current task timing
+
+2. Task Completion Recording
+   - When completing a task, use the CURRENT timeSpent value
+   - Do NOT use task.data.lastTimeSpent for the current task
+   - Only use completionHistory for PREVIOUSLY completed tasks
+
+3. Sequence Completion
+   - For the current task: use timeSpent
+   - For previous tasks: use their latest completionHistory entry
+   - Calculate total time by summing all task times
+   - Reset timeSpent to 0 only AFTER saving completion
+
+4. Common Pitfalls
+   - Using startTime to calculate elapsed time (use timeSpent instead)
+   - Using lastTimeSpent for current task (use timeSpent instead)
+   - Using stale completion history for current task
+   - Resetting timer before saving completion
+
+5. Testing Timing Changes
+   - Always test with multiple tasks
+   - Verify times in completion summary
+   - Check task history after completion
+   - Test pause/resume functionality
+   - Verify sequence history shows correct times
+
+6. Debugging Timing Issues
+   - Check ActiveSequenceContext timeSpent
+   - Verify task completion records
+   - Look for manual time calculations
+   - Ensure timer reset happens after saving
+
+Remember: timeSpent from ActiveSequenceContext is ALWAYS the source of truth for the current task!

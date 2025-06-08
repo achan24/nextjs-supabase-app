@@ -12,7 +12,7 @@ function formatTime(ms: number) {
 }
 
 export function ActiveSequenceIndicator() {
-  const { activeSequence, currentTaskIndex, timeSpent, isRunning, setIsRunning } = useActiveSequence();
+  const { activeSequence, currentTaskIndex, timeSpent, isRunning, startTimer, pauseTimer } = useActiveSequence();
 
   if (!activeSequence) return null;
 
@@ -34,7 +34,7 @@ export function ActiveSequenceIndicator() {
       </div>
       <div className="font-mono text-sm text-blue-700">{formatTime(timeSpent)}</div>
       <button
-        onClick={() => setIsRunning(!isRunning)}
+        onClick={() => isRunning ? pauseTimer() : startTimer()}
         className="p-1 rounded-full hover:bg-blue-100"
       >
         {isRunning ? (
