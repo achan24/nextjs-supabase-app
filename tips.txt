@@ -300,3 +300,100 @@ SEQUENCE TIMING TIPS
    - Ensure timer reset happens after saving
 
 Remember: timeSpent from ActiveSequenceContext is ALWAYS the source of truth for the current task!
+
+## Handling User Authentication in Database Operations
+
+### Common 401 Error Pattern
+One of the most frequent issues in the app is getting 401 (Unauthorized) errors when inserting/updating data, even when the user appears to be logged in. This typically happens because:
+
+1. The table has RLS (Row Level Security) enabled
+2. The table requires a user_id field
+3. The RLS policy checks if auth.uid() matches user_id
+4. The insert/update operation doesn't include the user_id
+
+### Solution Pattern
+When working with tables that have user-based RLS:
+
+```typescript
+// ✅ CORRECT WAY - Always include user_id
+const addItem = async (data: ItemData) => {
+  // 1. Get current session
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!sessionData.session?.user?.id) throw new Error('No authenticated user');
+
+  // 2. Include user_id in the operation
+  const { data: result, error } = await supabase
+    .from('your_table')
+    .insert({ ...data, user_id: sessionData.session.user.id })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return result;
+};
+
+// ❌ WRONG WAY - Missing user_id
+const addItem = async (data: ItemData) => {
+  const { data: result, error } = await supabase
+    .from('your_table')
+    .insert(data)  // Missing user_id will cause 401
+    .select()
+    .single();
+
+  if (error) throw error;
+  return result;
+};
+```
+
+### Checklist for New Tables/Features
+When adding new tables or features that require user data:
+
+1. Database Setup:
+   - Add user_id column (uuid references auth.users(id))
+   - Enable RLS on the table
+   - Create RLS policies that check auth.uid()
+   - Add NOT NULL constraint on user_id
+   - Add foreign key with ON DELETE CASCADE
+
+2. Insert Operations:
+   - Always get current session first
+   - Verify user is authenticated
+   - Include user_id in the insert
+   - Handle potential auth errors
+
+3. Update/Delete Operations:
+   - RLS policies will handle auth check
+   - No need to include user_id in where clause
+   - Still handle potential auth errors
+
+### Remember
+- 401 errors usually mean you forgot to include user_id
+- Always check RLS policies when adding new tables
+- Get user session before database operations
+- Include user_id in ALL insert operations
+- Test with both authenticated and unauthenticated states
+
+## Handling Supabase RLS Policy Migrations
+
+### Common Issues with Policy Migrations
+When working with Supabase RLS policies in migrations:
+
+1. Policy Already Exists Error (42710)
+   - This happens when trying to create a policy that already exists
+   - Solution: Always drop existing policies first using `drop policy if exists`
+   - Example:
+   ```sql
+   -- Drop first
+   drop policy if exists "Policy name" on table_name;
+   
+   -- Then create
+   create policy "Policy name" on table_name ...
+   ```
+
+2. Best Practices for Policy Migrations
+   - Create separate migrations for policy changes
+   - Always use `if exists` when dropping
+   - Keep policies organized by table
+   - Document policy relationships in comments
+   - Test policy changes in development first

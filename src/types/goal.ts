@@ -1,0 +1,71 @@
+export interface LifeGoalArea {
+  id: string;
+  name: string;
+  description?: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  subareas: LifeGoalSubarea[];
+}
+
+export interface LifeGoalSubarea {
+  id: string;
+  name: string;
+  description?: string;
+  area_id: string;
+  created_at: string;
+  updated_at: string;
+  goals: LifeGoal[];
+}
+
+export interface LifeGoal {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'active' | 'completed' | 'archived';
+  subarea_id: string;
+  created_at: string;
+  updated_at: string;
+  milestones: LifeGoalMilestone[];
+  metrics: LifeGoalMetric[];
+}
+
+export interface LifeGoalMilestone {
+  id: string;
+  title: string;
+  description?: string;
+  completed: boolean;
+  completed_at?: string;
+  goal_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LifeGoalMetric {
+  id: string;
+  name: string;
+  type: 'time' | 'count' | 'streak' | 'custom';
+  current_value: number;
+  unit?: string;
+  goal_id: string;
+  created_at: string;
+  updated_at: string;
+  thresholds: LifeGoalMetricThreshold[];
+}
+
+export interface LifeGoalMetricThreshold {
+  id: string;
+  metric_id: string;
+  milestone_id: string;
+  target_value: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LifeGoalSequenceContribution {
+  id: string;
+  sequence_id: string;
+  metric_id: string;
+  contribution_value: number;
+  created_at: string;
+} 

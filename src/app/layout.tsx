@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import type { Metadata } from 'next'
 import { NotificationProvider } from '../contexts/NotificationContext'
 import { ServiceWorkerRegistration } from '../components/ServiceWorkerRegistration'
+import { Toaster } from '@/components/ui/toaster'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -26,6 +27,7 @@ export default function RootLayout({
         <NotificationProvider>
           <ServiceWorkerRegistration />
           {children}
+          <Toaster />
         </NotificationProvider>
       </body>
     </html>
