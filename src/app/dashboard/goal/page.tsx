@@ -2,16 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import * as Tabs from '@radix-ui/react-tabs';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import AreaManager from './components/AreaManager';
 import GoalManager from './components/GoalManager';
 import MetricManager from './components/MetricManager';
+import SubareaManager from './components/SubareaManager';
+import { useGoalSystem } from '@/hooks/useGoalSystem';
+import type { LifeGoalArea, LifeGoalSubarea, LifeGoal } from '@/types/goal';
 
 export default function GOALSystem() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('areas');
-  const subareaId = searchParams.get('subarea');
+  const subareaId = searchParams?.get('subarea') || null;
+  const { areas } = useGoalSystem();
 
   // Switch to goals tab when subarea is selected
   useEffect(() => {
@@ -38,6 +42,12 @@ export default function GOALSystem() {
             Areas
           </Tabs.Trigger>
           <Tabs.Trigger
+            value="subareas"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+          >
+            Subareas
+          </Tabs.Trigger>
+          <Tabs.Trigger
             value="goals"
             className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
           >
@@ -61,6 +71,10 @@ export default function GOALSystem() {
           <AreaManager />
         </Tabs.Content>
 
+        <Tabs.Content value="subareas" className="mt-2">
+          <SubareaManager />
+        </Tabs.Content>
+
         <Tabs.Content value="goals" className="mt-2">
           <GoalManager selectedSubareaId={subareaId} />
         </Tabs.Content>
@@ -76,7 +90,7 @@ export default function GOALSystem() {
                 <CardTitle>Areas</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">7</p>
+                <p className="text-2xl font-bold">{areas?.length || 0}</p>
                 <p className="text-sm text-gray-500">Life areas being tracked</p>
               </CardContent>
             </Card>
@@ -86,7 +100,11 @@ export default function GOALSystem() {
                 <CardTitle>Active Goals</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">12</p>
+                <p className="text-2xl font-bold">
+                  {areas?.reduce((total: number, area: LifeGoalArea) => 
+                    total + area.subareas.reduce((subtotal: number, subarea: LifeGoalSubarea) => 
+                      subtotal + (subarea.goals?.length || 0), 0), 0) || 0}
+                </p>
                 <p className="text-sm text-gray-500">Goals in progress</p>
               </CardContent>
             </Card>
@@ -96,7 +114,12 @@ export default function GOALSystem() {
                 <CardTitle>Metrics</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">24</p>
+                <p className="text-2xl font-bold">
+                  {areas?.reduce((total: number, area: LifeGoalArea) => 
+                    total + area.subareas.reduce((subtotal: number, subarea: LifeGoalSubarea) => 
+                      subtotal + subarea.goals.reduce((goalTotal: number, goal: LifeGoal) => 
+                        goalTotal + (goal.metrics?.length || 0), 0), 0), 0) || 0}
+                </p>
                 <p className="text-sm text-gray-500">Metrics being tracked</p>
               </CardContent>
             </Card>

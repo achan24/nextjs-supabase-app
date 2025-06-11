@@ -2,11 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  webpack: (config, { isServer }) => {
-    // Add support for ESM modules
+  webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
-      "supports-color": require.resolve("supports-color"),
     };
     return config;
   },
@@ -14,7 +12,8 @@ const nextConfig = {
     domains: ['localhost', 'gkigehbjdhsfxbwdqrkq.supabase.co'],
   },
   experimental: {
-    serverActions: true
+    serverActions: true,
+    esmExternals: 'loose'
   },
   // Add PWA-specific headers
   async headers() {
@@ -38,7 +37,7 @@ const nextConfig = {
       }
     ]
   },
-  transpilePackages: ['supports-color'],
+  transpilePackages: [],
 }
 
 module.exports = nextConfig 

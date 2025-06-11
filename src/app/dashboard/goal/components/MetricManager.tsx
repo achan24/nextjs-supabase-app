@@ -15,7 +15,7 @@ import {
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
-import { Metric } from '@/types/goal';
+import { LifeGoalMetric } from '@/types/goal';
 
 export default function MetricManager() {
   const {
@@ -66,7 +66,7 @@ export default function MetricManager() {
     if (!editMetricValue.trim()) return;
 
     try {
-      await updateMetric(id, { currentValue: parseFloat(editMetricValue) || 0 });
+      await updateMetric(id, { current_value: parseFloat(editMetricValue) || 0 });
       setEditingMetric(null);
       setEditMetricValue('');
     } catch (err) {
@@ -139,7 +139,7 @@ export default function MetricManager() {
                     size="icon"
                     onClick={() => {
                       setEditingMetric(metric.id);
-                      setEditMetricValue(metric.currentValue?.toString() || '');
+                      setEditMetricValue(metric.current_value?.toString() || '');
                     }}
                   >
                     <Edit2 className="w-4 h-4" />
@@ -158,7 +158,7 @@ export default function MetricManager() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-2xl font-bold">
-                    {metric.currentValue}
+                    {metric.current_value}
                     {metric.unit && ` ${metric.unit}`}
                   </p>
                   <p className="text-sm text-gray-500">Current Value</p>

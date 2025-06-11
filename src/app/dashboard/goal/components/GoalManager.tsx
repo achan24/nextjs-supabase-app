@@ -38,6 +38,9 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
     addMetric,
     updateMetric,
     deleteMetric,
+    addMetricThreshold,
+    updateMetricThreshold,
+    deleteMetricThreshold,
   } = useGoalSystem();
 
   const [isAddingGoal, setIsAddingGoal] = useState(false);
@@ -50,6 +53,12 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
   const [newMilestoneDescription, setNewMilestoneDescription] = useState('');
+
+  // Add state for metric threshold dialog
+  const [isAddingMetricThreshold, setIsAddingMetricThreshold] = useState(false);
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string | null>(null);
+  const [selectedMetricId, setSelectedMetricId] = useState<string | null>(null);
+  const [newThresholdValue, setNewThresholdValue] = useState('');
 
   // Find the area that contains the selected subarea
   useEffect(() => {
@@ -66,16 +75,21 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
   }, [selectedSubareaId, areas]);
 
   const handleAddGoal = async () => {
-    if (!selectedSubareaId || !newGoalTitle.trim()) return;
+    console.log('Adding goal for subarea:', selectedSubareaId);
+    if (!selectedSubareaId || !newGoalTitle.trim()) {
+      toast.error('Please select a subarea and enter a goal title');
+      return;
+    }
 
     try {
       await addGoal(selectedSubareaId, newGoalTitle, newGoalDescription);
+      toast.success('Goal added successfully');
       setIsAddingGoal(false);
       setNewGoalTitle('');
       setNewGoalDescription('');
-      setSelectedAreaId(null);
     } catch (err) {
       console.error('Error adding goal:', err);
+      toast.error('Failed to add goal');
     }
   };
 
@@ -90,12 +104,22 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
   };
 
   const handleAddMilestone = async (goalId: string, title: string, description?: string) => {
+    console.log('Adding milestone for goal:', goalId);
+    if (!goalId || !title.trim()) {
+      toast.error('Please enter a milestone title');
+      return;
+    }
+
     try {
       await addMilestone(goalId, title, description);
       toast.success('Milestone added successfully');
+      setIsAddingMilestone(false);
+      setSelectedGoalId(null);
+      setNewMilestoneTitle('');
+      setNewMilestoneDescription('');
     } catch (err) {
+      console.error('Error adding milestone:', err);
       toast.error('Failed to add milestone');
-      console.error(err);
     }
   };
 
@@ -129,6 +153,25 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
     }
   };
 
+  const handleAddMetricThreshold = async () => {
+    if (!selectedMilestoneId || !selectedMetricId || !newThresholdValue.trim()) {
+      toast.error('Please select a metric and enter a threshold value');
+      return;
+    }
+
+    try {
+      await addMetricThreshold(selectedMetricId, selectedMilestoneId, Number(newThresholdValue));
+      toast.success('Metric threshold added successfully');
+      setIsAddingMetricThreshold(false);
+      setSelectedMilestoneId(null);
+      setSelectedMetricId(null);
+      setNewThresholdValue('');
+    } catch (err) {
+      console.error('Error adding metric threshold:', err);
+      toast.error('Failed to add metric threshold');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -148,35 +191,96 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Goals</h2>
-        <Button onClick={() => setIsAddingGoal(true)} disabled={!selectedSubareaId}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Goal
-        </Button>
+        <div>
+          <h2 className="text-2xl font-bold">Goals</h2>
+          {selectedSubareaId && areas.map(area => 
+            area.subareas
+              .filter(subarea => subarea.id === selectedSubareaId)
+              .map(subarea => (
+                <p key={subarea.id} className="text-gray-600">
+                  {area.name} &gt; {subarea.name}
+                </p>
+              ))
+          )}
+        </div>
+        <div className="flex gap-2">
+          {selectedSubareaId && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                window.history.pushState({}, '', '/dashboard/goal');
+                window.location.reload();
+              }}
+            >
+              View All Goals
+            </Button>
+          )}
+          <Button 
+            onClick={() => setIsAddingGoal(true)} 
+            disabled={!selectedSubareaId}
+            title={!selectedSubareaId ? "Select a subarea in the Areas tab first" : "Add a new goal"}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Goal
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {areas.map((area) => (
-          <div key={area.id} className="space-y-4">
-            <h3 className="text-lg font-semibold">{area.name}</h3>
-            {area.subareas.map((subarea) => (
-              <Card 
-                key={subarea.id}
-                className={`${subarea.id === selectedSubareaId ? 'ring-2 ring-primary' : ''}`}
-              >
-                <CardHeader>
-                  <CardTitle>{subarea.name}</CardTitle>
-                </CardHeader>
-                <CardContent>
+      {!selectedSubareaId ? (
+        // Show all goals grouped by area and subarea
+        <div className="space-y-8">
+          {areas.map(area => (
+            <div key={area.id}>
+              <h3 className="text-xl font-semibold mb-4">{area.name}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {area.subareas.map(subarea => (
+                  <Card key={subarea.id}>
+                    <CardHeader>
+                      <CardTitle>{subarea.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {subarea.goals && subarea.goals.length > 0 ? (
+                        <ul className="space-y-2">
+                          {subarea.goals.map(goal => (
+                            <li key={goal.id} className="flex justify-between items-start border-b pb-2 last:border-0">
+                              <div>
+                                <p className="font-medium">{goal.title}</p>
+                                {goal.description && (
+                                  <p className="text-sm text-gray-600">{goal.description}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 text-sm text-gray-500">
+                                <span>{goal.milestones?.length || 0} milestone{goal.milestones?.length !== 1 ? 's' : ''}</span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-500">No goals yet</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        // Show goals for selected subarea
+        <div className="space-y-4">
+          {areas.map(area => 
+            area.subareas
+              .filter(subarea => subarea.id === selectedSubareaId)
+              .map(subarea => (
+                <div key={subarea.id} className="space-y-4">
                   {subarea.goals && subarea.goals.length > 0 ? (
-                    <ul className="space-y-4">
-                      {subarea.goals.map((goal) => {
-                        console.log('Rendering goal:', { id: goal.id, title: goal.title });
-                        return (
-                          <li key={goal.id} className="border rounded-lg p-4">
+                    <div className="grid grid-cols-1 gap-4">
+                      {subarea.goals.map((goal) => (
+                        <Card key={goal.id}>
+                          <CardHeader>
                             <div className="flex justify-between items-start">
                               <div>
-                                <h4 className="font-medium">{goal.title}</h4>
+                                <CardTitle>{goal.title}</CardTitle>
                                 {goal.description && (
                                   <p className="text-sm text-gray-600 mt-1">
                                     {goal.description}
@@ -196,108 +300,79 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
                                 </Button>
                               </div>
                             </div>
-
-                            <div className="mt-4 space-y-2">
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Milestones</span>
-                                <Dialog open={isAddingMilestone && selectedGoalId === goal.id} onOpenChange={(open) => {
-                                  if (!open) {
-                                    setIsAddingMilestone(false);
-                                    setSelectedGoalId(null);
-                                    setNewMilestoneTitle('');
-                                    setNewMilestoneDescription('');
-                                  }
-                                }}>
-                                  <DialogTrigger asChild>
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      onClick={() => {
-                                        setSelectedGoalId(goal.id);
-                                        setIsAddingMilestone(true);
-                                      }}
-                                    >
-                                      <Flag className="w-3 h-3 mr-1" />
-                                      Add Milestone
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent>
-                                    <DialogHeader>
-                                      <DialogTitle>Add Milestone</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="space-y-4 py-4">
-                                      <div className="space-y-2">
-                                        <label htmlFor="title" className="text-sm font-medium">
-                                          Title
-                                        </label>
-                                        <Input
-                                          id="title"
-                                          value={newMilestoneTitle}
-                                          onChange={(e) => setNewMilestoneTitle(e.target.value)}
-                                          placeholder="Enter milestone title"
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <label htmlFor="description" className="text-sm font-medium">
-                                          Description (optional)
-                                        </label>
-                                        <Textarea
-                                          id="description"
-                                          value={newMilestoneDescription}
-                                          onChange={(e) => setNewMilestoneDescription(e.target.value)}
-                                          placeholder="Enter milestone description"
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="flex justify-end gap-3">
-                                      <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                          setIsAddingMilestone(false);
-                                          setSelectedGoalId(null);
-                                          setNewMilestoneTitle('');
-                                          setNewMilestoneDescription('');
-                                        }}
-                                      >
-                                        Cancel
-                                      </Button>
-                                      <Button
-                                        onClick={async () => {
-                                          if (!selectedGoalId || !newMilestoneTitle.trim()) return;
-                                          try {
-                                            await handleAddMilestone(selectedGoalId, newMilestoneTitle, newMilestoneDescription);
-                                            setIsAddingMilestone(false);
-                                            setSelectedGoalId(null);
-                                            setNewMilestoneTitle('');
-                                            setNewMilestoneDescription('');
-                                          } catch (err) {
-                                            console.error('Error adding milestone:', err);
-                                          }
-                                        }}
-                                      >
-                                        Add Milestone
-                                      </Button>
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              <div className="flex justify-between items-center">
+                                <h4 className="text-sm font-medium text-gray-500">Milestones</h4>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedGoalId(goal.id);
+                                    setIsAddingMilestone(true);
+                                  }}
+                                >
+                                  <Flag className="w-3 h-3 mr-1" />
+                                  Add Milestone
+                                </Button>
                               </div>
                               {goal.milestones && goal.milestones.length > 0 ? (
-                                <ul className="space-y-1">
-                                  {goal.milestones.map((milestone) => (
+                                <ul className="space-y-2">
+                                  {goal.milestones.map((milestone: LifeGoalMilestone) => (
                                     <li
                                       key={milestone.id}
-                                      className="flex justify-between items-center py-1 px-2 rounded hover:bg-gray-50"
+                                      className="flex flex-col p-3 rounded-lg border"
                                     >
-                                      <span>{milestone.title}</span>
-                                      <div className="flex gap-2">
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => handleDeleteMilestone(milestone.id)}
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </Button>
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <span className="font-medium">{milestone.title}</span>
+                                          {milestone.description && (
+                                            <p className="text-sm text-gray-600 mt-1">{milestone.description}</p>
+                                          )}
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                              setSelectedMilestoneId(milestone.id);
+                                              setIsAddingMetricThreshold(true);
+                                            }}
+                                          >
+                                            <Target className="w-3 h-3" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleDeleteMilestone(milestone.id)}
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </Button>
+                                        </div>
                                       </div>
+                                      {/* Show associated metric thresholds */}
+                                      {goal.metrics.some((metric: LifeGoalMetric) => 
+                                        metric.thresholds.some(threshold => threshold.milestone_id === milestone.id)
+                                      ) && (
+                                        <div className="mt-2 pl-4 border-l-2 border-gray-200">
+                                          <p className="text-xs text-gray-500 mb-1">Target Metrics:</p>
+                                          <ul className="space-y-1">
+                                            {goal.metrics.map((metric: LifeGoalMetric) => {
+                                              const threshold = metric.thresholds.find(t => t.milestone_id === milestone.id);
+                                              if (!threshold) return null;
+                                              return (
+                                                <li key={metric.id} className="text-sm flex justify-between items-center">
+                                                  <span>{metric.name}</span>
+                                                  <span className="text-gray-600">
+                                                    {threshold.target_value} {metric.unit || ''}
+                                                  </span>
+                                                </li>
+                                              );
+                                            })}
+                                          </ul>
+                                        </div>
+                                      )}
                                     </li>
                                   ))}
                                 </ul>
@@ -305,63 +380,21 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
                                 <p className="text-sm text-gray-500">No milestones yet</p>
                               )}
                             </div>
-
-                            <div className="mt-4 space-y-2">
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Metrics</span>
-                                <Button variant="outline" size="sm">
-                                  <Target className="w-3 h-3 mr-1" />
-                                  Add Metric
-                                </Button>
-                              </div>
-                              {goal.metrics && goal.metrics.length > 0 ? (
-                                <ul className="space-y-1">
-                                  {goal.metrics.map((metric) => (
-                                    <li
-                                      key={metric.id}
-                                      className="flex justify-between items-center py-1 px-2 rounded hover:bg-gray-50"
-                                    >
-                                      <div>
-                                        <span>{metric.name}</span>
-                                        <span className="text-sm text-gray-500 ml-2">
-                                          {metric.current_value}
-                                          {metric.unit && ` ${metric.unit}`}
-                                        </span>
-                                      </div>
-                                      <div className="flex gap-1">
-                                        <Button variant="ghost" size="icon">
-                                          <Edit2 className="w-3 h-3" />
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => handleDeleteMetric(metric.id)}
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </Button>
-                                      </div>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="text-sm text-gray-500 italic">
-                                  No metrics yet
-                                </p>
-                              )}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="text-gray-500 italic">No goals yet</p>
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <p className="text-gray-500">No goals yet</p>
+                      <p className="text-sm text-gray-400 mt-1">Click "Add Goal" to get started</p>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ))}
-      </div>
+                </div>
+              ))
+          )}
+        </div>
+      )}
 
       {/* Add Goal Dialog */}
       <Dialog open={isAddingGoal} onOpenChange={setIsAddingGoal}>
@@ -393,50 +426,6 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
                 rows={3}
               />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="area" className="text-sm font-medium">
-                Area
-              </label>
-              <select
-                id="area"
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                value={selectedAreaId || ''}
-                onChange={(e) => {
-                  setSelectedAreaId(e.target.value || null);
-                }}
-              >
-                <option value="">Select an area</option>
-                {areas.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedAreaId && (
-              <div className="space-y-2">
-                <label htmlFor="subarea" className="text-sm font-medium">
-                  Subarea
-                </label>
-                <select
-                  id="subarea"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                  value={selectedSubareaId || ''}
-                  onChange={(e) => {
-                    // This is a placeholder change handler. The selectedSubareaId is now a prop.
-                  }}
-                >
-                  <option value="">Select a subarea</option>
-                  {areas
-                    .find((area) => area.id === selectedAreaId)
-                    ?.subareas.map((subarea) => (
-                      <option key={subarea.id} value={subarea.id}>
-                        {subarea.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            )}
           </div>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setIsAddingGoal(false)}>
@@ -444,9 +433,146 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
             </Button>
             <Button
               onClick={handleAddGoal}
-              disabled={!newGoalTitle.trim() || !selectedAreaId || !selectedSubareaId}
+              disabled={!newGoalTitle.trim()}
             >
               Add Goal
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Milestone Dialog */}
+      <Dialog 
+        open={isAddingMilestone} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsAddingMilestone(false);
+            setSelectedGoalId(null);
+            setNewMilestoneTitle('');
+            setNewMilestoneDescription('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Milestone</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="milestone-title" className="text-sm font-medium">
+                Title
+              </label>
+              <Input
+                id="milestone-title"
+                value={newMilestoneTitle}
+                onChange={(e) => setNewMilestoneTitle(e.target.value)}
+                placeholder="Enter milestone title"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="milestone-description" className="text-sm font-medium">
+                Description (optional)
+              </label>
+              <Textarea
+                id="milestone-description"
+                value={newMilestoneDescription}
+                onChange={(e) => setNewMilestoneDescription(e.target.value)}
+                placeholder="Describe this milestone..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddingMilestone(false);
+                setSelectedGoalId(null);
+                setNewMilestoneTitle('');
+                setNewMilestoneDescription('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedGoalId && handleAddMilestone(selectedGoalId, newMilestoneTitle, newMilestoneDescription)}
+              disabled={!newMilestoneTitle.trim()}
+            >
+              Add Milestone
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Metric Threshold Dialog */}
+      <Dialog 
+        open={isAddingMetricThreshold} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsAddingMetricThreshold(false);
+            setSelectedMilestoneId(null);
+            setSelectedMetricId(null);
+            setNewThresholdValue('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Metric Target</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="metric" className="text-sm font-medium">
+                Metric
+              </label>
+              <select
+                id="metric"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                value={selectedMetricId || ''}
+                onChange={(e) => setSelectedMetricId(e.target.value)}
+              >
+                <option value="">Select a metric</option>
+                {areas
+                  .flatMap(area => area.subareas)
+                  .flatMap(subarea => subarea.goals)
+                  .find(g => g.milestones.some(m => m.id === selectedMilestoneId))
+                  ?.metrics.map((metric: LifeGoalMetric) => (
+                    <option key={metric.id} value={metric.id}>
+                      {metric.name} ({metric.unit || metric.type})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="threshold" className="text-sm font-medium">
+                Target Value
+              </label>
+              <Input
+                id="threshold"
+                type="number"
+                value={newThresholdValue}
+                onChange={(e) => setNewThresholdValue(e.target.value)}
+                placeholder="Enter target value"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddingMetricThreshold(false);
+                setSelectedMilestoneId(null);
+                setSelectedMetricId(null);
+                setNewThresholdValue('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddMetricThreshold}
+              disabled={!selectedMetricId || !newThresholdValue.trim()}
+            >
+              Add Target
             </Button>
           </div>
         </DialogContent>

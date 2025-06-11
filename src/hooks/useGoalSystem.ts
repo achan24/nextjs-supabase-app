@@ -16,21 +16,20 @@ export function useGoalSystem() {
   const supabase = createClient();
 
   const fetchAreas = useCallback(async () => {
+    console.log('Fetching areas...');
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      setError(null);
-
       const { data: areasData, error: areasError } = await supabase
         .from('life_goal_areas')
         .select(`
           *,
           subareas:life_goal_subareas (
             *,
-            goals:life_goals!inner (
+            goals:life_goals (
               *,
-              milestones:life_goal_milestones (
-                *
-              ),
+              milestones:life_goal_milestones (*),
               metrics:life_goal_metrics (
                 *,
                 thresholds:life_goal_metric_thresholds (*)
@@ -40,7 +39,12 @@ export function useGoalSystem() {
         `)
         .order('created_at', { ascending: true });
 
-      if (areasError) throw areasError;
+      if (areasError) {
+        console.error('Error fetching areas:', areasError);
+        throw areasError;
+      }
+
+      console.log('Raw areas data:', areasData);
       
       // Sort nested data
       const sortedData = areasData?.map(area => ({
@@ -55,13 +59,15 @@ export function useGoalSystem() {
         ) || []
       })) || [];
 
+      console.log('Sorted areas data:', sortedData);
       setAreas(sortedData);
     } catch (err) {
+      console.error('Error in fetchAreas:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     fetchAreas();
@@ -104,13 +110,18 @@ export function useGoalSystem() {
   }, [fetchAreas]);
 
   const addSubarea = useCallback(async (areaId: string, name: string, description?: string) => {
+    console.log('useGoalSystem.addSubarea called with:', { areaId, name, description });
     const { data, error } = await supabase
       .from('life_goal_subareas')
       .insert({ area_id: areaId, name, description })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error adding subarea:', error);
+      throw error;
+    }
+    console.log('Subarea added to database:', data);
     await fetchAreas();
     return data;
   }, [fetchAreas]);

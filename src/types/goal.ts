@@ -68,4 +68,55 @@ export interface LifeGoalSequenceContribution {
   metric_id: string;
   contribution_value: number;
   created_at: string;
+}
+
+export interface Metric {
+  id: string;
+  name: string;
+  description?: string;
+  current_value: number;
+  target_value: number;
+  unit: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Goal {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'not_started' | 'in_progress' | 'completed' | 'archived';
+  due_date?: Date;
+  metrics: Metric[];
+  milestones: Milestone[];
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Milestone {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'not_started' | 'in_progress' | 'completed';
+  due_date?: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Subarea {
+  id: string;
+  name: string;
+  description?: string;
+  goals: Goal[];
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Area {
+  id: string;
+  name: string;
+  description?: string;
+  subareas: Subarea[];
+  created_at: Date;
+  updated_at: Date;
 } 

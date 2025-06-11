@@ -397,3 +397,15 @@ When working with Supabase RLS policies in migrations:
    - Keep policies organized by table
    - Document policy relationships in comments
    - Test policy changes in development first
+
+# Type Error Fix: Metric vs LifeGoalMetric
+When encountering the error "Module '@/types/goal' has no exported member 'Metric'" during build:
+1. Check that you're using the correct type name from types/goal.ts (e.g., LifeGoalMetric instead of Metric)
+2. Ensure property names match the type definition's casing:
+   - Use snake_case (e.g., current_value) instead of camelCase (e.g., currentValue)
+   - This is because our database uses snake_case for column names
+3. Common properties to check:
+   - current_value (not currentValue)
+   - created_at (not createdAt)
+   - updated_at (not updatedAt)
+   - goal_id (not goalId)

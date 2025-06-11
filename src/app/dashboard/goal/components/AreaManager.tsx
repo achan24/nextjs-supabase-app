@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { toast } from 'sonner';
-import { LifeGoalArea } from '@/types/goal';
+import { LifeGoalArea, LifeGoal } from '@/types/goal';
 
 export default function AreaManager() {
   console.log('AreaManager render');
@@ -48,6 +48,8 @@ export default function AreaManager() {
   const [editingSubarea, setEditingSubarea] = useState<string | null>(null);
   const [editSubareaName, setEditSubareaName] = useState('');
   const [editSubareaDescription, setEditSubareaDescription] = useState('');
+  const [deletingArea, setDeletingArea] = useState<string | null>(null);
+  const [deletingSubarea, setDeletingSubarea] = useState<string | null>(null);
 
   const handleAddArea = async () => {
     try {
@@ -77,8 +79,11 @@ export default function AreaManager() {
   const handleDeleteArea = async (id: string) => {
     try {
       await deleteArea(id);
+      setDeletingArea(null);
+      toast.success('Area deleted successfully');
     } catch (err) {
       console.error('Error deleting area:', err);
+      toast.error('Failed to delete area');
     }
   };
 
@@ -86,20 +91,26 @@ export default function AreaManager() {
     if (!newSubareaName.trim()) return;
     
     try {
+      console.log('Adding subarea:', { areaId, name: newSubareaName, description: newSubareaDescription });
       await addSubarea(areaId, newSubareaName, newSubareaDescription);
+      console.log('Subarea added successfully');
       setIsAddingSubarea(null);
       setNewSubareaName('');
       setNewSubareaDescription('');
     } catch (err) {
       console.error('Error adding subarea:', err);
+      toast.error('Failed to add subarea: ' + (err as Error).message);
     }
   };
 
   const handleDeleteSubarea = async (id: string) => {
     try {
       await deleteSubarea(id);
+      setDeletingSubarea(null);
+      toast.success('Subarea deleted successfully');
     } catch (err) {
       console.error('Error deleting subarea:', err);
+      toast.error('Failed to delete subarea');
     }
   };
 
@@ -191,102 +202,141 @@ export default function AreaManager() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {areas.map((area) => {
-          console.log('Rendering area:', { id: area.id, name: area.name, subareas: area.subareas?.length });
-          return (
-            <Card key={area.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
+        {areas.map((area) => (
+          <Card key={area.id} className="relative">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
                   <CardTitle>{area.name}</CardTitle>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        console.log('Edit area clicked:', area.id);
-                        setEditingArea(area.id);
-                        setEditAreaName(area.name);
-                        setEditAreaDescription(area.description || '');
-                      }}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteArea(area.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {area.description && (
-                  <p className="text-sm text-gray-600 mb-4">{area.description}</p>
-                )}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-500">Subareas</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsAddingSubarea(area.id)}
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Add Subarea
-                    </Button>
-                  </div>
-                  {area.subareas && area.subareas.length > 0 ? (
-                    <ul className="space-y-2">
-                      {area.subareas.map((subarea) => {
-                        console.log('Rendering subarea:', { id: subarea.id, name: subarea.name });
-                        return (
-                          <li
-                            key={subarea.id}
-                            onClick={() => handleSubareaClick(subarea.id)}
-                            className="flex justify-between items-center p-2 rounded-lg border hover:bg-gray-50 cursor-pointer"
-                          >
-                            <span>{subarea.name}</span>
-                            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  console.log('Edit subarea clicked:', subarea.id);
-                                  setEditingSubarea(subarea.id);
-                                  setEditSubareaName(subarea.name);
-                                  setEditSubareaDescription(subarea.description || '');
-                                }}
-                              >
-                                <Edit2 className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteSubarea(subarea.id)}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-gray-500">No subareas yet</p>
+                  {area.description && (
+                    <p className="text-sm text-gray-600 mt-1">{area.description}</p>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setEditingArea(area.id);
+                      setEditAreaName(area.name);
+                      setEditAreaDescription(area.description || '');
+                    }}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeletingArea(area.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-medium text-gray-500">Subareas</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAddingSubarea(area.id)}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    Add Subarea
+                  </Button>
+                </div>
+                
+                {area.subareas && area.subareas.length > 0 ? (
+                  <div className="space-y-3">
+                    {area.subareas.map((subarea) => (
+                      <div
+                        key={subarea.id}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-medium">{subarea.name}</h4>
+                            {subarea.description && (
+                              <p className="text-sm text-gray-600 mt-1">
+                                {subarea.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingSubarea(subarea.id);
+                                setEditSubareaName(subarea.name);
+                                setEditSubareaDescription(subarea.description || '');
+                              }}
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeletingSubarea(subarea.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Goals Summary */}
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm text-gray-600">Goals</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                // Navigate to Goals tab with this subarea selected
+                                window.history.pushState({}, '', `/dashboard/goal?subarea=${subarea.id}`);
+                                window.location.reload();
+                              }}
+                            >
+                              View Goals ({subarea.goals?.length || 0})
+                            </Button>
+                          </div>
+                          {subarea.goals && subarea.goals.length > 0 ? (
+                            <ul className="space-y-1">
+                              {subarea.goals.slice(0, 3).map((goal: LifeGoal) => (
+                                <li key={goal.id} className="text-sm text-gray-600">
+                                  • {goal.title}
+                                </li>
+                              ))}
+                              {subarea.goals.length > 3 && (
+                                <li className="text-sm text-gray-500 italic">
+                                  +{subarea.goals.length - 3} more...
+                                </li>
+                              )}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-gray-500">No goals yet</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No subareas yet. Click "Add Subarea" to get started.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
         {areas.length === 0 && (
           <div className="col-span-2 text-center py-8">
             <p className="text-gray-500">No life areas defined yet.</p>
             <p className="text-sm text-gray-400">
-              Click &quot;Add Area&quot; to get started.
+              Click "Add Area" to get started.
             </p>
           </div>
         )}
@@ -430,6 +480,52 @@ export default function AreaManager() {
               disabled={!editSubareaName.trim()}
             >
               Update Subarea
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Area Confirmation Dialog */}
+      <Dialog open={!!deletingArea} onOpenChange={(open) => !open && setDeletingArea(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Area</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-500">Are you sure you want to delete this area? This will also delete all subareas, goals, milestones, and metrics within it. This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setDeletingArea(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingArea && handleDeleteArea(deletingArea)}
+            >
+              Delete Area
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Subarea Confirmation Dialog */}
+      <Dialog open={!!deletingSubarea} onOpenChange={(open) => !open && setDeletingSubarea(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Subarea</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-500">Are you sure you want to delete this subarea? This will also delete all goals, milestones, and metrics within it. This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setDeletingSubarea(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingSubarea && handleDeleteSubarea(deletingSubarea)}
+            >
+              Delete Subarea
             </Button>
           </div>
         </DialogContent>
