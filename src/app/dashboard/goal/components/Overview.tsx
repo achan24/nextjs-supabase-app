@@ -3,15 +3,9 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { Spinner } from '@/components/ui/spinner';
-import { Metric } from '@/types/goal';
+import { LifeGoalMetric } from '@/types/goal';
 
-interface MetricWithContext extends Metric {
-  id: string;
-  name: string;
-  type: 'time' | 'count' | 'streak' | 'custom';
-  currentValue: number;
-  targetValue?: number;
-  unit?: string;
+interface MetricWithContext extends LifeGoalMetric {
   goal: {
     id: string;
     title: string;
@@ -240,17 +234,17 @@ export default function Overview() {
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">{metric.name}</span>
                           <span className="text-sm text-gray-500">
-                            {metric.currentValue}
+                            {metric.current_value}
                             {metric.unit && ` ${metric.unit}`}
                           </span>
                         </div>
-                        {metric.targetValue && (
+                        {metric.thresholds.length > 0 && (
                           <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-green-500 rounded-full"
                               style={{
                                 width: `${Math.min(
-                                  (metric.currentValue / metric.targetValue) * 100,
+                                  (metric.current_value / metric.thresholds[0].target_value) * 100,
                                   100
                                 )}%`,
                               }}
