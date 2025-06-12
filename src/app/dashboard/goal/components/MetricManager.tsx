@@ -66,10 +66,15 @@ export default function MetricManager() {
     if (!editMetricValue.trim()) return;
 
     try {
-      await updateMetric(id, { current_value: parseFloat(editMetricValue) || 0 });
+      // Split by spaces and convert each part to a number
+      const values = editMetricValue.trim().split(/\s+/).map(Number);
+      // Use the first value as the current_value
+      await updateMetric(id, { current_value: values[0] || 0 });
       setEditingMetric(null);
       setEditMetricValue('');
+      toast.success('Metric value updated successfully');
     } catch (err) {
+      toast.error('Failed to update metric value');
       console.error('Error updating metric value:', err);
     }
   };
@@ -268,9 +273,14 @@ export default function MetricManager() {
               </label>
               <Input
                 id="metric-value"
-                type="number"
                 value={editMetricValue}
-                onChange={(e) => setEditMetricValue(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow numbers, spaces, and decimal points
+                  if (/^[\d\s.]*$/.test(value)) {
+                    setEditMetricValue(value);
+                  }
+                }}
                 placeholder="Enter new value"
               />
             </div>

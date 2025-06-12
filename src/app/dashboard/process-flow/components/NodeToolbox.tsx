@@ -46,6 +46,12 @@ const nodeTypes = [
     icon: '📊',
   },
   {
+    type: 'calculation',
+    label: 'Calculation',
+    description: 'Sum up values from connected nodes',
+    icon: '🧮',
+  },
+  {
     type: 'link',
     label: 'Node Link',
     description: 'Jump to a node in another map',
@@ -203,6 +209,14 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
             draggable
           >
             📊 Analytics
+          </div>
+          <div
+            className="p-3 bg-teal-50 border-2 border-teal-200 rounded-md cursor-pointer hover:bg-teal-100"
+            onDragStart={(event) => onDragStart(event, 'calculation')}
+            onClick={() => addNode('calculation')}
+            draggable
+          >
+            🧮 Calculation
           </div>
           <div
             className="p-3 bg-blue-50 border-2 border-blue-200 rounded-md cursor-pointer hover:bg-blue-100"

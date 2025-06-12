@@ -178,10 +178,10 @@ export function useGoalSystem() {
     await fetchAreas();
   }, [fetchAreas]);
 
-  const addMilestone = useCallback(async (goalId: string, title: string, description?: string) => {
+  const addMilestone = useCallback(async (goalId: string, title: string, description?: string, due_date?: string) => {
     const { data, error } = await supabase
       .from('life_goal_milestones')
-      .insert({ goal_id: goalId, title, description })
+      .insert({ goal_id: goalId, title, description, due_date })
       .select()
       .single();
 

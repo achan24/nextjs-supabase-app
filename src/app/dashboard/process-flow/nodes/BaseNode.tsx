@@ -22,6 +22,8 @@ export interface BaseNodeData {
   isTestMode?: boolean;
   clozeStats?: Record<string, ClozeStats>;
   tags?: string[];
+  value?: number;
+  isCalculationNode?: boolean;
 }
 
 const nodeTypeStyles = {
@@ -42,6 +44,12 @@ const nodeTypeStyles = {
     bgClass: 'bg-purple-50',
     borderClass: 'border-purple-200',
     selectedBorderClass: 'border-purple-500',
+  },
+  calculation: {
+    icon: '🧮',
+    bgClass: 'bg-teal-50',
+    borderClass: 'border-teal-200',
+    selectedBorderClass: 'border-teal-500',
   },
   skill: {
     icon: '🎯',

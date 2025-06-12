@@ -22,6 +22,7 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
   BezierEdge,
+  EdgeTypes,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -34,6 +35,7 @@ import { ProcessNode } from './nodes/ProcessNode';
 import { SkillNode } from './nodes/SkillNode';
 import { TechniqueNode } from './nodes/TechniqueNode';
 import { AnalyticsNode } from './nodes/AnalyticsNode';
+import CalculationNode from './nodes/CalculationNode';
 import FlashcardReview from './components/FlashcardReview';
 import LinkNode from './nodes/LinkNode';
 import NoteReferenceNode from './nodes/NoteReferenceNode';
@@ -57,12 +59,13 @@ const nodeTypes = {
   skill: SkillNode,
   technique: TechniqueNode,
   analytics: AnalyticsNode,
+  calculation: CalculationNode,
   link: LinkNode,
   noteRef: NoteReferenceNode,
   checklist: ChecklistNode,
 };
 
-const edgeTypes = {
+const edgeTypes: EdgeTypes = {
   default: BezierEdge,
   bezier: BezierEdge,
 };
@@ -234,7 +237,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
         addEdge({
           ...params,
           id: `edge-${params.source}-${params.target}-${Date.now()}`,
-          type: 'bezier',
+          type: 'default',
           animated: false,
           style: { 
             strokeWidth: 2,
@@ -243,18 +246,43 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
         }, eds)
       );
 
-      // Update analytics node if target is an analytics node
+      // Update target node based on type
       const targetNode = nodes.find(n => n.id === params.target);
-      if (targetNode?.type === 'analytics') {
         const sourceNode = nodes.find(n => n.id === params.source);
-        if (sourceNode?.type === 'task' && sourceNode.data.completionHistory) {
+
+      if (targetNode && sourceNode) {
+        // Handle analytics nodes
+        if (targetNode.type === 'analytics' && sourceNode.type === 'task' && sourceNode.data.completionHistory) {
           updateNode(targetNode.id, {
             completionHistory: sourceNode.data.completionHistory
           });
         }
+        
+        // Handle calculation nodes
+        if (targetNode.type === 'calculation' && sourceNode.type === 'task') {
+          // If the source node is completed and has a value, trigger a recalculation
+          if (sourceNode.data.status === 'completed' && typeof sourceNode.data.value === 'number') {
+            // Get all source nodes connected to the calculation node
+            const connectedSourceNodes = edges
+              .filter(e => e.target === targetNode.id)
+              .map(e => nodes.find(n => n.id === e.source))
+              .filter((n): n is Node => n !== undefined);
+
+            // Calculate the sum of completed nodes' values
+            const sum = connectedSourceNodes.reduce((total, node) => {
+              if (node.data.status === 'completed' && typeof node.data.value === 'number') {
+                return total + node.data.value;
+              }
+              return total;
+            }, 0);
+
+            // Update the calculation node with the new sum
+            updateNode(targetNode.id, { value: sum });
+          }
+        }
       }
     },
-    [nodes, updateNode]
+    [nodes, edges, updateNode]
   );
 
   const isValidConnection = useCallback((connection: Connection) => {
@@ -364,6 +392,12 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
             data: '',
           };
           break;
+        case 'calculation':
+          nodeData = {
+            ...baseData,
+            value: 0,
+          };
+          break;
         default:
           nodeData = baseData;
       }
@@ -381,7 +415,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   );
 
   const defaultEdgeOptions = {
-    type: 'bezier',
+    type: 'default',
     style: { 
       strokeWidth: 2,
       stroke: '#555',
@@ -1040,7 +1074,13 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
               onInit={onInit}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
-              defaultEdgeOptions={defaultEdgeOptions}
+              defaultEdgeOptions={{
+                type: 'default',
+                style: { 
+                  strokeWidth: 2,
+                  stroke: '#555',
+                },
+              }}
               minZoom={0.1}
               maxZoom={10}
               defaultViewport={{ x: 0, y: 0, zoom: 1 }}

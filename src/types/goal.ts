@@ -36,6 +36,7 @@ export interface LifeGoalMilestone {
   description?: string;
   completed: boolean;
   completed_at?: string;
+  due_date?: string;
   goal_id: string;
   created_at: string;
   updated_at: string;

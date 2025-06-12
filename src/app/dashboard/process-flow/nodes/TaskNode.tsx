@@ -41,6 +41,8 @@ interface TaskNodeData extends BaseNodeData {
   eta?: string;
   reminders?: Reminder[];
   useTargetDuration?: boolean;
+  value?: number;
+  dueDate?: string;
 }
 
 export const TaskNode = memo(({ id, data, dragHandle, selected, type, zIndex, isConnectable, xPos, yPos, dragging }: NodeProps<TaskNodeData>) => {
@@ -51,6 +53,16 @@ export const TaskNode = memo(({ id, data, dragHandle, selected, type, zIndex, is
   const supabase = createClient();
   const [audioContext] = useState(() => new (window.AudioContext || (window as any).webkitAudioContext)());
   
+  // Parse and store value if it's in the label
+  useEffect(() => {
+    if (data.label) {
+      const valueMatch = data.label.match(/VALUE:\s*(-?\d+)/);
+      if (valueMatch && data.value !== Number(valueMatch[1])) {
+        data.value = Number(valueMatch[1]);
+      }
+    }
+  }, [data.label]);
+
   // Calculate average completion time
   const avgTime = useMemo(() => {
     if (data.completionHistory && data.completionHistory.length > 0) {
@@ -295,6 +307,22 @@ export const TaskNode = memo(({ id, data, dragHandle, selected, type, zIndex, is
           <div className="text-sm text-yellow-700">{activeCue.text}</div>
         </div>
       )}
+      <div className="mt-2 space-y-1">
+        {data.value !== undefined && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Value:</span>
+            <span className={`font-medium ${data.value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {data.value > 0 ? '+' : ''}{data.value}
+            </span>
+          </div>
+        )}
+        {data.dueDate && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Due:</span>
+            <span className="text-gray-600">{new Date(data.dueDate).toLocaleDateString()}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 });

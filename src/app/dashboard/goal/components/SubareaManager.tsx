@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -101,113 +101,121 @@ export default function SubareaManager() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Subareas</h2>
       </div>
 
-      {areas.map((area) => (
-        <Card key={area.id}>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>{area.name}</CardTitle>
-              {area.description && (
-                <p className="text-sm text-gray-600 mt-1">{area.description}</p>
-              )}
+      <div className="space-y-6">
+        {areas.map((area) => (
+          <div key={area.id} className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <span>{area.name}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsAddingSubarea(area.id)}
+                  className="h-7 px-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Subarea
+                </Button>
+              </div>
             </div>
-            <Button
-              onClick={() => setIsAddingSubarea(area.id)}
-              className="ml-4"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Subarea
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {area.subareas && area.subareas.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {area.subareas.map((subarea) => (
-                  <Card 
-                    key={subarea.id}
-                    className="group cursor-pointer transition-all hover:shadow-lg hover:border-gray-400"
-                    onClick={() => {
-                      window.history.pushState({}, '', `/dashboard/goal?subarea=${subarea.id}`);
-                      window.location.reload();
-                    }}
-                  >
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="group-hover:text-blue-600 transition-colors">
-                            {subarea.name}
-                          </CardTitle>
-                          {subarea.description && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              {subarea.description}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingSubarea(subarea.id);
-                              setEditSubareaName(subarea.name);
-                              setEditSubareaDescription(subarea.description || '');
-                            }}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingSubarea(subarea.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {area.subareas.map((subarea) => (
+                <Card 
+                  key={subarea.id}
+                  className="group cursor-pointer transition-all hover:shadow-lg hover:border-gray-400"
+                  onClick={() => {
+                    window.history.pushState({}, '', `/dashboard/goal?subarea=${subarea.id}`);
+                    window.location.reload();
+                  }}
+                >
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="group-hover:text-blue-600 transition-colors">
+                          {subarea.name}
+                        </CardTitle>
+                        {subarea.description && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            {subarea.description}
+                          </p>
+                        )}
                       </div>
-                    </CardHeader>
-                    <CardContent>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingSubarea(subarea.id);
+                            setEditSubareaName(subarea.name);
+                            setEditSubareaDescription(subarea.description || '');
+                          }}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingSubarea(subarea.id);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <div className="text-sm text-gray-500">
                           {subarea.goals?.length || 0} goal{subarea.goals?.length !== 1 ? 's' : ''}
                         </div>
-                        <Button
-                          variant="link"
-                          className="px-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.history.pushState({}, '', `/dashboard/goal?subarea=${subarea.id}`);
-                            window.location.reload();
-                          }}
-                        >
-                          View Goals
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm text-gray-500">View All Goals</span>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-4">
-                No subareas yet. Click "Add Subarea" to get started.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+                      {subarea.goals && subarea.goals.length > 0 && (
+                        <div className="border-t pt-4 space-y-2">
+                          {subarea.goals.map(goal => (
+                            <div key={goal.id} className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium">{goal.title}</p>
+                                {goal.description && (
+                                  <p className="text-sm text-gray-600">{goal.description}</p>
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {goal.milestones?.length || 0} milestone{goal.milestones?.length !== 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {area.subareas.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  No subareas yet. Click "Add Subarea" to get started.
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Add Subarea Dialog */}
-      <Dialog 
-        open={!!isAddingSubarea} 
-        onOpenChange={(open) => !open && setIsAddingSubarea(null)}
-      >
+      <Dialog open={isAddingSubarea !== null} onOpenChange={(open) => !open && setIsAddingSubarea(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Subarea</DialogTitle>
@@ -221,7 +229,7 @@ export default function SubareaManager() {
                 id="name"
                 value={newSubareaName}
                 onChange={(e) => setNewSubareaName(e.target.value)}
-                placeholder="e.g., Physical Health"
+                placeholder="Enter subarea name"
               />
             </div>
             <div className="space-y-2">
@@ -232,8 +240,7 @@ export default function SubareaManager() {
                 id="description"
                 value={newSubareaDescription}
                 onChange={(e) => setNewSubareaDescription(e.target.value)}
-                placeholder="Describe this subarea..."
-                rows={3}
+                placeholder="Enter subarea description"
               />
             </div>
           </div>
@@ -252,34 +259,32 @@ export default function SubareaManager() {
       </Dialog>
 
       {/* Edit Subarea Dialog */}
-      <Dialog 
-        open={!!editingSubarea} 
-        onOpenChange={(open) => !open && setEditingSubarea(null)}
-      >
+      <Dialog open={editingSubarea !== null} onOpenChange={(open) => !open && setEditingSubarea(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Subarea</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label htmlFor="edit-name" className="text-sm font-medium">
+              <label htmlFor="editName" className="text-sm font-medium">
                 Name
               </label>
               <Input
-                id="edit-name"
+                id="editName"
                 value={editSubareaName}
                 onChange={(e) => setEditSubareaName(e.target.value)}
+                placeholder="Enter subarea name"
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="edit-description" className="text-sm font-medium">
-                Description
+              <label htmlFor="editDescription" className="text-sm font-medium">
+                Description (optional)
               </label>
               <Textarea
-                id="edit-description"
+                id="editDescription"
                 value={editSubareaDescription}
                 onChange={(e) => setEditSubareaDescription(e.target.value)}
-                rows={3}
+                placeholder="Enter subarea description"
               />
             </div>
           </div>
@@ -291,25 +296,20 @@ export default function SubareaManager() {
               onClick={() => editingSubarea && handleUpdateSubarea(editingSubarea)}
               disabled={!editSubareaName.trim()}
             >
-              Save Changes
+              Update Subarea
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Subarea Confirmation Dialog */}
-      <Dialog 
-        open={!!deletingSubarea} 
-        onOpenChange={(open) => !open && setDeletingSubarea(null)}
-      >
+      {/* Delete Subarea Dialog */}
+      <Dialog open={deletingSubarea !== null} onOpenChange={(open) => !open && setDeletingSubarea(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Subarea</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-gray-500">
-              Are you sure you want to delete this subarea? This will also delete all goals, milestones, and metrics within it. This action cannot be undone.
-            </p>
+            <p>Are you sure you want to delete this subarea? This action cannot be undone.</p>
           </div>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setDeletingSubarea(null)}>
