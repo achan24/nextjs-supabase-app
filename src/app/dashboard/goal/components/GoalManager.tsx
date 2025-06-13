@@ -522,7 +522,7 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
                                     Add Metric
                                   </Button>
                                 </div>
-                                {goal.metrics && goal.metrics.length > 0 ? (
+                                {goal.metrics && goal.metrics.length > 0 && (
                                   <div className="mt-2 space-y-2">
                                     {goal.metrics.map((metric: LifeGoalMetric) => (
                                       <div key={metric.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
@@ -554,8 +554,6 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
                                       </div>
                                     ))}
                                   </div>
-                                ) : (
-                                  <p className="text-sm text-gray-500 mt-2">No metrics yet</p>
                                 )}
                               </div>
                             </div>
@@ -817,13 +815,13 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* Show existing metrics first */}
-            {selectedGoal?.metrics?.length > 0 && (
+            {Array.isArray(selectedGoal?.metrics) && selectedGoal?.metrics?.length > 0 && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Use Existing Metric
                 </label>
                 <div className="space-y-2">
-                  {selectedGoal?.metrics.map((metric: LifeGoalMetric) => (
+                  {selectedGoal?.metrics?.map((metric: LifeGoalMetric) => (
                     <div 
                       key={metric.id} 
                       className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer"

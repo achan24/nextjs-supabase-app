@@ -23,6 +23,7 @@ interface ActiveSequenceContextType {
   startTimer: () => void;
   pauseTimer: () => void;
   resetTimer: () => void;
+  completeParallelTask: (taskId: string) => void;
 }
 
 const ActiveSequenceContext = createContext<ActiveSequenceContextType | undefined>(undefined);
@@ -32,8 +33,8 @@ export function ActiveSequenceProvider({ children }: { children: React.ReactNode
   const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
   const [timeSpent, setTimeSpent] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [completedParallelTasks, setCompletedParallelTasks] = useState<string[]>([]);
 
-  // Timer logic
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
@@ -46,6 +47,18 @@ export function ActiveSequenceProvider({ children }: { children: React.ReactNode
 
     return () => clearInterval(interval);
   }, [isRunning, activeSequence]);
+
+  const getNextTasks = () => {
+    if (!activeSequence) return [];
+    const tasks = activeSequence.tasks;
+    if (currentTaskIndex < 0 || currentTaskIndex >= tasks.length) return [];
+    const currentTask = tasks[currentTaskIndex];
+    if (currentTask.parallelGroupId) {
+      return tasks.filter(t => t.parallelGroupId === currentTask.parallelGroupId);
+    } else {
+      return [currentTask];
+    }
+  };
 
   const startTimer = () => {
     if (activeSequence) {
@@ -72,6 +85,24 @@ export function ActiveSequenceProvider({ children }: { children: React.ReactNode
     setIsRunning(false);
   };
 
+  const completeParallelTask = (taskId: string) => {
+    setCompletedParallelTasks(prev => [...prev, taskId]);
+    if (activeSequence) {
+      const groupId = activeSequence.tasks.find(t => t.id === taskId)?.parallelGroupId;
+      if (groupId) {
+        const groupTasks = activeSequence.tasks.filter(t => t.parallelGroupId === groupId);
+        const allDone = groupTasks.every(t => completedParallelTasks.includes(t.id) || t.id === taskId);
+        if (allDone) {
+          const lastIndex = Math.max(...groupTasks.map(t => activeSequence.tasks.findIndex(x => x.id === t.id)));
+          setCurrentTaskIndex(lastIndex + 1);
+          setCompletedParallelTasks(prev => prev.filter(id => !groupTasks.some(t => t.id === id)));
+        }
+      } else {
+        setCurrentTaskIndex(idx => idx + 1);
+      }
+    }
+  };
+
   return (
     <ActiveSequenceContext.Provider
       value={{
@@ -86,6 +117,7 @@ export function ActiveSequenceProvider({ children }: { children: React.ReactNode
         startTimer,
         pauseTimer,
         resetTimer,
+        completeParallelTask,
       }}
     >
       {children}
