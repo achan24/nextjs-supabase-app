@@ -188,10 +188,18 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === nodeId) {
+          // Handle style updates separately to preserve existing styles
+          const updatedStyle = data.style ? {
+            ...(node.style || {}),
+            ...data.style
+          } : node.style;
+
           const updatedNode = {
             ...node,
             data: { ...node.data, ...data },
+            style: updatedStyle
           };
+          
           if (selectedNode?.id === nodeId) {
             setSelectedNode(updatedNode);
           }

@@ -1172,6 +1172,62 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
           </div>
         </div>
       )}
+
+      {/* Node Appearance Options */}
+      <div className="pt-4 mt-4 border-t">
+        <h4 className="text-sm font-medium mb-2">Node Appearance</h4>
+        <div className="space-y-2">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={!!node?.style?.border}
+              onChange={(e) => {
+                updateNode(node.id, {
+                  style: {
+                    border: e.target.checked ? '4px solid #2563eb' : undefined,
+                    borderRadius: e.target.checked ? '12px' : undefined
+                  }
+                });
+              }}
+              className="rounded"
+            />
+            <span className="text-sm">Highlight Border</span>
+          </label>
+          
+          <div className="flex items-center space-x-2">
+            <label className="text-sm">Border Color:</label>
+            <input
+              type="color"
+              value={node?.style?.borderColor || '#2563eb'}
+              onChange={(e) => {
+                updateNode(node.id, {
+                  style: {
+                    border: `4px solid ${e.target.value}`,
+                    borderRadius: '12px'
+                  }
+                });
+              }}
+              className="w-8 h-8 p-0 rounded"
+            />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <label className="text-sm">Background Color:</label>
+            <input
+              type="color"
+              value={node?.style?.backgroundColor || '#ffffff'}
+              onChange={(e) => {
+                updateNode(node.id, {
+                  style: {
+                    backgroundColor: e.target.value
+                  }
+                });
+              }}
+              className="w-8 h-8 p-0 rounded"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 
