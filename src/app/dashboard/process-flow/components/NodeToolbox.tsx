@@ -159,7 +159,7 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4">Add Nodes</h3>
+      <h3 className="text-sm font-medium mb-2">Add Nodes</h3>
       <div className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <div

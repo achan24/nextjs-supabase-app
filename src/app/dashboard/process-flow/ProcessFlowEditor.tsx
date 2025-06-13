@@ -972,7 +972,6 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
               </div>
 
               <div className="border-t pt-4">
-                <h4 className="text-sm font-medium mb-2">Add Nodes</h4>
                 <NodeToolbox setNodes={setNodes} reactFlowInstance={reactFlowInstance} />
               </div>
             </div>
@@ -997,6 +996,37 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
               </button>
               {showOptionsMenu && (
                 <div className="mt-2 space-y-2">
+                  <button
+                    onClick={() => {
+                      setNodes(nds => 
+                        nds.map(node => {
+                          if (node.type === 'task') {
+                            return {
+                              ...node,
+                              data: {
+                                ...node.data,
+                                status: 'ready',
+                                timeSpent: 0,
+                                isRunning: false
+                              }
+                            };
+                          }
+                          return node;
+                        })
+                      );
+                    }}
+                    className="w-full px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-50 flex items-center justify-center gap-2"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reset All Tasks
+                  </button>
                   <button
                     onClick={() => setShowDeleteModal(true)}
                     className="w-full px-3 py-2 text-sm text-red-600 bg-white border border-red-200 rounded-md hover:bg-red-50 flex items-center justify-center gap-2"
