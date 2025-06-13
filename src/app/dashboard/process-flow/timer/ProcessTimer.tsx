@@ -62,16 +62,11 @@ interface SequenceCompletion {
   notes?: string;
 }
 
-// Extend Node type locally to include parallelGroupId
-interface SequenceNode extends Node {
-  parallelGroupId?: string;
-}
-
 export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [selectedTasks, setSelectedTasks] = useState<SequenceNode[]>([]);
+  const [selectedTasks, setSelectedTasks] = useState<Node[]>([]);
   const { 
     activeSequence: selectedSequence,
     setActiveSequence: setSelectedSequence,
@@ -83,8 +78,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     setIsRunning,
     startTimer,
     pauseTimer,
-    resetTimer,
-    completeParallelTask
+    resetTimer
   } = useActiveSequence();
   const [isTimerView, setIsTimerView] = useState(false);
   const [isCompletionView, setIsCompletionView] = useState(false);
@@ -557,16 +551,6 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     }
   };
 
-  // Helper to get current parallel group
-  const getCurrentParallelGroup = () => {
-    if (!selectedTasks[currentTaskIndex]) return null;
-    const groupId = (selectedTasks[currentTaskIndex] as SequenceNode).parallelGroupId;
-    if (!groupId) return null;
-    return selectedTasks.filter(t => (t as SequenceNode).parallelGroupId === groupId);
-  };
-  const currentParallelGroup = getCurrentParallelGroup();
-  const isParallel = currentParallelGroup && currentParallelGroup.length > 1;
-
   // If there's a completion error
   if (completionError) {
     return (
@@ -940,34 +924,31 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
   return (
     <div className="max-w-2xl mx-auto py-8">
-      {(isParallel || currentTask) && (
+      {currentTask && (
         <div className="space-y-8">
           {/* Progress */}
           <div className="flex justify-between items-center text-sm text-gray-500">
-            <div>{isParallel ? `Parallel Tasks (${currentTaskIndex + 1} of ${selectedTasks.length})` : `Task ${currentTaskIndex + 1} of ${selectedTasks.length}`}</div>
-            <div className="text-base font-medium">{selectedSequence?.title}</div>
+            <div>Task {currentTaskIndex + 1} of {selectedTasks.length}</div>
+            <div className="text-base font-medium">
+              {selectedSequence?.title}
+            </div>
           </div>
+
           {/* Task Title and Description */}
           <div className="text-center">
-            <h1 className="text-4xl font-bold">
-              {isParallel
-                ? currentParallelGroup.map(t => t.data.label).join(' + ')
-                : currentTask.data.label}
-            </h1>
-            {isParallel && (
-              <div className="mt-2 text-blue-700 font-medium">
-                You are working on these tasks in parallel:
-                <ul className="mt-1 text-base text-blue-900 font-normal">
-                  {currentParallelGroup.map(t => (
-                    <li key={t.id}>• {t.data.label}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {!isParallel && currentTask.data.description && (
+            <h1 className="text-4xl font-bold">{currentTask.data.label}</h1>
+            {currentTask.data.description && (
               <p className="mt-2 text-gray-600">{currentTask.data.description}</p>
             )}
           </div>
+          
+          {/* Active Cue */}
+          {activeCue && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+              <p className="text-blue-800">{activeCue.text}</p>
+            </div>
+          )}
+
           {/* Timer */}
           <div className="bg-gray-900 text-white rounded-2xl p-4 sm:p-8">
             <div className="text-5xl sm:text-8xl font-mono font-bold tabular-nums text-center">
@@ -1013,6 +994,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
               </div>
             </div>
           </div>
+
           {/* Controls */}
           <div className="flex justify-center gap-4">
             {isRunning ? (
@@ -1034,48 +1016,79 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                 Start
               </Button>
             )}
+
             {currentTaskIndex < selectedTasks.length - 1 ? (
               <Button
                 variant="default"
                 size="lg"
                 onClick={() => {
-                  // Save completion record for all tasks in the parallel group or the single task
-                  const tasksToComplete = isParallel ? currentParallelGroup : [currentTask];
-                  tasksToComplete.forEach(task => {
+                  // Save completion record for current task
+                  const currentTask = selectedTasks[currentTaskIndex];
+                  if (currentTask) {
                     const elapsedTime = timeSpent;
                     const newHistory = [
-                      ...(task.data.completionHistory || []),
+                      ...(currentTask.data.completionHistory || []),
                       {
                         completedAt: Date.now(),
                         timeSpent: elapsedTime
                       }
                     ];
+                    
                     // Update task in database first
-                    if (task.data.flowId) {
+                    if (currentTask.data.flowId) {
                       supabase
                         .from('process_flows')
                         .select('nodes')
-                        .eq('id', task.data.flowId)
+                        .eq('id', currentTask.data.flowId)
                         .single()
-                        .then(({ data: flow }) => {
-                          if (flow && flow.nodes) {
-                            const nodeIdx = flow.nodes.findIndex((n: any) => n.id === task.id);
-                            if (nodeIdx !== -1) {
-                              flow.nodes[nodeIdx].data.completionHistory = newHistory;
-                              supabase
-                                .from('process_flows')
-                                .update({ nodes: flow.nodes })
-                                .eq('id', task.data.flowId);
-                            }
+                        .then(({ data: flow, error }) => {
+                          if (error) {
+                            console.error('Error fetching flow:', error);
+                            return;
                           }
+
+                          const updatedNodes = flow.nodes.map((n: any) => {
+                            if (n.id === currentTask.id) {
+                              return {
+                                ...n,
+                                data: {
+                                  ...n.data,
+                                  completionHistory: newHistory,
+                                  lastTimeSpent: elapsedTime
+                                }
+                              };
+                            }
+                            return n;
+                          });
+                          
+                          supabase
+                            .from('process_flows')
+                            .update({ nodes: updatedNodes })
+                            .eq('id', currentTask.data.flowId)
+                            .then(({ error }) => {
+                              if (error) {
+                                console.error('Error updating flow:', error);
+                              }
+                            });
                         });
                     }
+                    
+                    const updatedTask = {
+                      ...currentTask,
+                      data: {
+                        ...currentTask.data,
+                        completionHistory: newHistory,
+                        lastTimeSpent: elapsedTime
+                      }
+                    };
+                    
                     setSelectedTasks(tasks => 
-                      tasks.map(t => t.id === task.id ? { ...t, data: { ...t.data, completionHistory: newHistory, lastTimeSpent: elapsedTime } } : t)
+                      tasks.map(t => t.id === currentTask.id ? updatedTask : t)
                     );
-                  });
-                  // Move to next task after the group
-                  setCurrentTaskIndex(currentTaskIndex + (isParallel ? currentParallelGroup.length : 1));
+                  }
+                  
+                  // Move to next task
+                  setCurrentTaskIndex(currentTaskIndex + 1);
                   resetTimer();
                 }}
                 className="w-32"
@@ -1087,44 +1100,73 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                 variant="default"
                 size="lg"
                 onClick={() => {
-                  // Save completion record for all tasks in the parallel group or the single task
-                  const tasksToComplete = isParallel ? currentParallelGroup : [currentTask];
-                  tasksToComplete.forEach(task => {
+                  // Save completion record for current task
+                  const currentTask = selectedTasks[currentTaskIndex];
+                  if (currentTask) {
                     const elapsedTime = timeSpent;
                     const newHistory = [
-                      ...(task.data.completionHistory || []),
+                      ...(currentTask.data.completionHistory || []),
                       {
                         completedAt: Date.now(),
                         timeSpent: elapsedTime
                       }
                     ];
+                    
                     // Update task in database first
-                    if (task.data.flowId) {
+                    if (currentTask.data.flowId) {
                       supabase
                         .from('process_flows')
                         .select('nodes')
-                        .eq('id', task.data.flowId)
+                        .eq('id', currentTask.data.flowId)
                         .single()
-                        .then(({ data: flow }) => {
-                          if (flow && flow.nodes) {
-                            const nodeIdx = flow.nodes.findIndex((n: any) => n.id === task.id);
-                            if (nodeIdx !== -1) {
-                              flow.nodes[nodeIdx].data.completionHistory = newHistory;
-                              supabase
-                                .from('process_flows')
-                                .update({ nodes: flow.nodes })
-                                .eq('id', task.data.flowId);
-                            }
+                        .then(({ data: flow, error }) => {
+                          if (error) {
+                            console.error('Error fetching flow:', error);
+                            return;
                           }
+
+                          const updatedNodes = flow.nodes.map((n: any) => {
+                            if (n.id === currentTask.id) {
+                              return {
+                                ...n,
+                                data: {
+                                  ...n.data,
+                                  completionHistory: newHistory,
+                                  lastTimeSpent: elapsedTime
+                                }
+                              };
+                            }
+                            return n;
+                          });
+                          
+                          supabase
+                            .from('process_flows')
+                            .update({ nodes: updatedNodes })
+                            .eq('id', currentTask.data.flowId)
+                            .then(({ error }) => {
+                              if (error) {
+                                console.error('Error updating flow:', error);
+                              }
+                            });
                         });
                     }
+                    
+                    const updatedTask = {
+                      ...currentTask,
+                      data: {
+                        ...currentTask.data,
+                        completionHistory: newHistory,
+                        lastTimeSpent: elapsedTime
+                      }
+                    };
+                    
                     setSelectedTasks(tasks => 
-                      tasks.map(t => t.id === task.id ? { ...t, data: { ...t.data, completionHistory: newHistory, lastTimeSpent: elapsedTime } } : t)
+                      tasks.map(t => t.id === currentTask.id ? updatedTask : t)
                     );
-                  });
-                  // Complete sequence
-                  setIsCompletionView(true);
-                  resetTimer();
+                  }
+                  
+                  // Complete the sequence
+                  handleCompleteSequence();
                 }}
                 className="w-32"
               >

@@ -22,7 +22,6 @@ import ReactFlow, {
   useReactFlow,
   ReactFlowProvider,
   BezierEdge,
-  EdgeTypes,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -65,7 +64,7 @@ const nodeTypes = {
   checklist: ChecklistNode,
 };
 
-const edgeTypes: EdgeTypes = {
+const edgeTypes = {
   default: BezierEdge,
   bezier: BezierEdge,
 };
@@ -237,7 +236,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
         addEdge({
           ...params,
           id: `edge-${params.source}-${params.target}-${Date.now()}`,
-          type: 'default',
+          type: 'bezier',
           animated: false,
           style: { 
             strokeWidth: 2,
@@ -415,7 +414,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   );
 
   const defaultEdgeOptions = {
-    type: 'default',
+    type: 'bezier',
     style: { 
       strokeWidth: 2,
       stroke: '#555',
@@ -1074,13 +1073,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
               onInit={onInit}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
-              defaultEdgeOptions={{
-                type: 'default',
-                style: { 
-                  strokeWidth: 2,
-                  stroke: '#555',
-                },
-              }}
+              defaultEdgeOptions={defaultEdgeOptions}
               minZoom={0.1}
               maxZoom={10}
               defaultViewport={{ x: 0, y: 0, zoom: 1 }}

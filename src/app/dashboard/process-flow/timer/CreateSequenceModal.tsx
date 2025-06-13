@@ -24,7 +24,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { v4 as uuidv4 } from 'uuid';
 
 interface CreateSequenceModalProps {
   isOpen: boolean;
@@ -38,10 +37,6 @@ interface SortableTaskItemProps {
   task: Node;
   onRemove: (task: Node) => void;
   onJump: (flowId: string, nodeId: string) => void;
-}
-
-interface SequenceNode extends Node {
-  parallelGroupId?: string;
 }
 
 function SortableTaskItem({ task, onRemove, onJump }: SortableTaskItemProps) {
@@ -105,9 +100,8 @@ function SortableTaskItem({ task, onRemove, onJump }: SortableTaskItemProps) {
 
 export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, initialTasks }: CreateSequenceModalProps) {
   const router = useRouter();
-  const [selectedTasks, setSelectedTasks] = useState<SequenceNode[]>([]);
+  const [selectedTasks, setSelectedTasks] = useState<Node[]>([]);
   const [expandedFlow, setExpandedFlow] = useState<string | null>(null);
-  const [parallelBlocks, setParallelBlocks] = useState<{ id: string, taskIds: string[] }[]>([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -128,9 +122,9 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
-      setSelectedTasks((tasks: SequenceNode[]) => {
-        const oldIndex = tasks.findIndex((task: SequenceNode) => task.id === active.id);
-        const newIndex = tasks.findIndex((task: SequenceNode) => task.id === over.id);
+      setSelectedTasks((tasks: Node[]) => {
+        const oldIndex = tasks.findIndex((task: Node) => task.id === active.id);
+        const newIndex = tasks.findIndex((task: Node) => task.id === over.id);
         return arrayMove(tasks, oldIndex, newIndex);
       });
     }
@@ -140,11 +134,11 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
     setExpandedFlow(expandedFlow === flowId ? null : flowId);
   };
 
-  const toggleTaskSelection = (task: SequenceNode, flowId: string) => {
+  const toggleTaskSelection = (task: Node, flowId: string) => {
     setSelectedTasks(prev => {
-      const isSelected = prev.some((t: SequenceNode) => t.id === task.id);
+      const isSelected = prev.some((t: Node) => t.id === task.id);
       if (isSelected) {
-        return prev.filter((t: SequenceNode) => t.id !== task.id);
+        return prev.filter((t: Node) => t.id !== task.id);
       } else {
         return [...prev, { ...task, data: { ...task.data, flowId } }];
       }
@@ -154,25 +148,6 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
   const handleJumpToNode = (flowId: string, nodeId: string) => {
     onClose();
     router.push(`/dashboard/process-flow?flowId=${flowId}&nodeId=${nodeId}`);
-  };
-
-  const addParallelBlock = () => {
-    setParallelBlocks(blocks => [...blocks, { id: uuidv4(), taskIds: [] }]);
-  };
-
-  const addToParallelBlock = (blockId: string, task: SequenceNode) => {
-    setParallelBlocks(blocks => blocks.map(b => b.id === blockId ? { ...b, taskIds: [...b.taskIds, task.id] } : b));
-    setSelectedTasks(tasks => tasks.map(t => t.id === task.id ? { ...t, parallelGroupId: blockId } : t));
-  };
-
-  const removeFromParallelBlock = (blockId: string, taskId: string) => {
-    setParallelBlocks(blocks => blocks.map(b => b.id === blockId ? { ...b, taskIds: b.taskIds.filter(id => id !== taskId) } : b));
-    setSelectedTasks(tasks => tasks.map(t => t.id === taskId ? { ...t, parallelGroupId: undefined } : t));
-  };
-
-  const removeParallelBlock = (blockId: string) => {
-    setParallelBlocks(blocks => blocks.filter(b => b.id !== blockId));
-    setSelectedTasks(tasks => tasks.map(t => t.parallelGroupId === blockId ? { ...t, parallelGroupId: undefined } : t));
   };
 
   return (
@@ -223,50 +198,17 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
           <div className="flex flex-col h-full">
             <Card className="p-4 flex-1 overflow-y-auto">
               <h2 className="text-xl font-semibold mb-4">Timer Sequence</h2>
-              <Button variant="secondary" className="mb-4" onClick={addParallelBlock}>+ Parallel Block</Button>
-              {parallelBlocks.map(block => (
-                <div key={block.id} className="border-2 border-dashed border-blue-400 rounded-lg p-3 mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-semibold text-blue-700">Parallel Block</span>
-                    <Button variant="ghost" size="sm" onClick={() => removeParallelBlock(block.id)} className="text-red-500">Remove Block</Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {block.taskIds.map(taskId => {
-                      const task = selectedTasks.find(t => t.id === taskId);
-                      if (!task) return null;
-                      return (
-                        <div key={task.id} className="bg-blue-100 px-3 py-1 rounded flex items-center gap-2">
-                          <span>{task.data.label}</span>
-                          <Button variant="ghost" size="sm" onClick={() => removeFromParallelBlock(block.id, task.id)} className="text-red-500">x</Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-2">
-                    <span className="text-xs text-gray-500">Add task:</span>
-                    <select onChange={e => {
-                      const task = selectedTasks.find(t => t.id === e.target.value);
-                      if (task) addToParallelBlock(block.id, task);
-                    }} value="">
-                      <option value="">Select task</option>
-                      {selectedTasks.filter(t => !t.parallelGroupId).map(t => (
-                        <option key={t.id} value={t.id}>{t.data.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext
-                  items={selectedTasks.filter(t => !t.parallelGroupId).map(task => task.id)}
+                  items={selectedTasks.map(task => task.id)}
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="space-y-2">
-                    {selectedTasks.filter(t => !t.parallelGroupId).map((task) => (
+                    {selectedTasks.map((task) => (
                       <SortableTaskItem
                         key={task.id}
                         task={task}

@@ -1,15 +1,15 @@
 'use client';
 
 import type { Node } from 'reactflow';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ClozeText from './ClozeText';
 import FlashcardReview from './FlashcardReview';
 import { createClient } from '@/lib/supabase';
 import { useNotifications } from '@/contexts/NotificationContext';
 
 interface CompletionRecord {
+  completedAt: number;
   timeSpent: number;
-  completedAt: number; // Unix timestamp in milliseconds
   note?: string;
 }
 
@@ -40,7 +40,7 @@ interface NodeDetailsProps {
 
 export default function NodeDetails({ node, setNodes, updateNode, onStartReview, jumpToNode }: NodeDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [historyOrder, setHistoryOrder] = useState<'asc' | 'desc'>('desc');
+  const [historyOrder, setHistoryOrder] = useState<'desc' | 'asc'>('desc');
   const [newNote, setNewNote] = useState('');
   const [label, setLabel] = useState(node?.data?.label || '');
   const [description, setDescription] = useState(node?.data?.description || '');
@@ -62,14 +62,6 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
   const supabase = createClient();
   const notificationContext = useNotifications();
-
-  // Calculate average time from completion history
-  const avgTime = useMemo(() => {
-    if (!node?.data?.completionHistory?.length) return null;
-    const total = node.data.completionHistory.reduce((sum: number, record: CompletionRecord) => 
-      sum + (record.timeSpent || 0), 0);
-    return Math.round(total / node.data.completionHistory.length);
-  }, [node?.data?.completionHistory]);
 
   useEffect(() => {
     if (node) {
@@ -290,8 +282,11 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   };
 
   const handleCompleteTask = () => {
-    const now = Date.now(); // Get current timestamp in milliseconds
-    const currentTimeSpent = node.data.timeSpent || 0;
+    if (!node) return;
+    const now = Date.now();
+    const currentTimeSpent = node.data.isRunning 
+      ? (node.data.timeSpent || 0) + (now - (node.data.startTime || now))
+      : node.data.timeSpent || 0;
 
     const completionRecord: CompletionRecord = {
       completedAt: now,
@@ -776,126 +771,340 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
       )}
 
       {node.type === 'task' && (
-        <div className="mt-4 space-y-4">
-          {/* Timer Controls */}
-          <div className="flex items-center justify-between">
-            <div className="text-sm">
-              Time Spent: {formatTime(node.data.timeSpent || 0)}
-              {avgTime !== null && ` / Avg: ${formatTime(avgTime)}`}
-            </div>
-            <div className="space-x-2">
+        <>
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Timer Controls</h4>
+            <div className="flex flex-wrap gap-2">
               {!node.data.isRunning ? (
                 <button
                   onClick={handleStartTimer}
-                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
                 >
-                  Start
+                  Start Timer
                 </button>
               ) : (
                 <button
                   onClick={handleStopTimer}
-                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                  className="px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
                 >
-                  Stop
+                  Stop Timer
                 </button>
               )}
-            </div>
-          </div>
-
-          {/* Metric Value Input */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Metric Value
-            </label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                value={node.data.value || ''}
-                onChange={(e) => {
-                  const value = e.target.value ? Number(e.target.value) : undefined;
-                  updateNode(node.id, { 
-                    value,
-                    label: value !== undefined ? 
-                      `${node.data.label.split('VALUE:')[0]}VALUE: ${value}`.trim() :
-                      node.data.label.split('VALUE:')[0].trim()
-                  });
-                }}
-                placeholder="Enter value"
-                className="flex-1 px-3 py-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
+              <div className="w-full mt-2">
+                <textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Add a note about this completion..."
+                  className="w-full p-2 text-sm border rounded-md"
+                  rows={2}
+                />
+              </div>
               <button
-                onClick={() => updateNode(node.id, { 
-                  value: undefined,
-                  label: node.data.label.split('VALUE:')[0].trim()
-                })}
-                className="px-3 py-2 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                onClick={handleCompleteTask}
+                className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
-                Clear
+                Complete Task
+              </button>
+              <button
+                onClick={handleResetTask}
+                className="px-3 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                Reset Timer
+              </button>
+              <button
+                onClick={async () => {
+                  console.log('[NodeDetails] Testing notification system');
+                  
+                  // First check if notifications are supported
+                  if (!("Notification" in window)) {
+                    console.error("[NodeDetails] Notifications not supported");
+                    alert("This browser does not support notifications");
+                    return;
+                  }
+
+                  // Check notification permission
+                  let permission = Notification.permission;
+                  console.log('[NodeDetails] Current notification permission:', permission);
+                  
+                  if (permission === "denied") {
+                    console.error("[NodeDetails] Notifications denied");
+                    alert("Please enable notifications in your browser settings");
+                    return;
+                  }
+
+                  if (permission === "default") {
+                    permission = await Notification.requestPermission();
+                    console.log('[NodeDetails] Requested permission result:', permission);
+                  }
+
+                  if (permission === "granted") {
+                    try {
+                      console.log('[NodeDetails] Attempting to send test notification');
+                      
+                      // Try direct browser notification first
+                      new Notification("Test Notification", {
+                        body: "This is a test notification from the task node"
+                      });
+
+                      // Also try through the notification context
+                      notificationContext.addNotification({
+                        title: "Test Notification (Context)",
+                        body: "This is a test notification through the context system",
+                        type: "task",
+                        url: `/dashboard/process-flow?task=${node.id}`
+                      });
+
+                      console.log('[NodeDetails] Test notifications sent');
+                    } catch (err) {
+                      const error = err as Error;
+                      console.error('[NodeDetails] Error sending notification:', error);
+                      alert("Error sending notification: " + error.message);
+                    }
+                  }
+                }}
+                className="px-3 py-2 text-sm bg-yellow-600 text-white rounded-md hover:bg-yellow-700"
+              >
+                Test Notification
               </button>
             </div>
-            <p className="text-sm text-gray-500">
-              This value will be used in calculations when the task is completed
-            </p>
           </div>
 
-          {/* Task Status Controls */}
-          <div className="flex justify-between items-center">
-            <div className="text-sm">
-              Status: <span className="font-medium">{node.data.status || 'ready'}</span>
-            </div>
-            <div className="space-x-2">
-              {node.data.status !== 'completed' ? (
-                <button
-                  onClick={handleCompleteTask}
-                  className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-                >
-                  Complete
-                </button>
-              ) : (
-                <button
-                  onClick={handleResetTask}
-                  className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                >
-                  Reset
-                </button>
+          <div className="pt-4 border-t">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Value</label>
+            <input
+              type="number"
+              value={node.data.value || 0}
+              onChange={(e) => {
+                const value = parseInt(e.target.value);
+                if (!isNaN(value)) {
+                  updateNode(node.id, { value });
+                }
+              }}
+              className="w-full px-2 py-1 border rounded text-sm"
+              placeholder="Enter task value..."
+            />
+          </div>
+
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Time Settings</h4>
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  id="useTargetDuration"
+                  checked={node.data.useTargetDuration || false}
+                  onChange={(e) => {
+                    updateNode(node.id, { 
+                      useTargetDuration: e.target.checked,
+                    });
+                  }}
+                  className="h-4 w-4 text-blue-600 rounded border-gray-300"
+                />
+                <label htmlFor="useTargetDuration" className="ml-2 text-sm text-gray-600">
+                  Use target duration for notifications (unchecked will use average completion time)
+                </label>
+              </div>
+              <label className="block text-sm text-gray-600 mb-1">Target Duration</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="480"
+                  value={Math.floor((node.data.targetDuration || 0) / 60)}
+                  onChange={(e) => {
+                    const minutes = parseInt(e.target.value);
+                    const seconds = node.data.targetDuration ? node.data.targetDuration % 60 : 0;
+                    if (minutes >= 0) {
+                      const duration = minutes * 60 + seconds;
+                      const now = new Date();
+                      const targetTime = new Date(now.getTime() + duration * 1000);
+                      updateNode(node.id, { 
+                        targetDuration: duration,
+                        targetTime: targetTime.toISOString(),
+                        reminders: [{
+                          type: 'at',
+                          time: targetTime.toISOString()
+                        }]
+                      });
+                    }
+                  }}
+                  className="w-20 p-2 text-sm border rounded-md"
+                  placeholder="0"
+                />
+                <span className="text-sm text-gray-500">minutes</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={node.data.targetDuration ? node.data.targetDuration % 60 : 0}
+                  onChange={(e) => {
+                    const minutes = Math.floor((node.data.targetDuration || 0) / 60);
+                    const seconds = parseInt(e.target.value);
+                    if (seconds >= 0 && seconds <= 59) {
+                      const duration = minutes * 60 + seconds;
+                      const now = new Date();
+                      const targetTime = new Date(now.getTime() + duration * 1000);
+                      updateNode(node.id, { 
+                        targetDuration: duration,
+                        targetTime: targetTime.toISOString(),
+                        reminders: [{
+                          type: 'at',
+                          time: targetTime.toISOString()
+                        }]
+                      });
+                    }
+                  }}
+                  className="w-20 p-2 text-sm border rounded-md"
+                  placeholder="0"
+                />
+                <span className="text-sm text-gray-500">seconds</span>
+              </div>
+              {node.data.targetDuration && (
+                <p className="mt-1 text-sm text-gray-500">
+                  Timer will complete in {Math.floor(node.data.targetDuration / 60)} minutes and {node.data.targetDuration % 60} seconds
+                </p>
               )}
             </div>
           </div>
 
-          {/* Completion History */}
           {node.data.completionHistory && node.data.completionHistory.length > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-medium text-gray-700">Completion History</h4>
+            <div className="pt-4 border-t">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    Completion History ({node.data.completionHistory.length})
+                  </h4>
+                  <span className="text-sm text-blue-600">
+                    Avg: {formatTime(node.data.completionHistory.reduce((sum: number, rec: CompletionRecord) => sum + rec.timeSpent, 0) / node.data.completionHistory.length)}
+                  </span>
+                </div>
                 <button
-                  onClick={() => setHistoryOrder(order => order === 'desc' ? 'asc' : 'desc')}
-                  className="text-sm text-blue-500 hover:text-blue-600"
+                  onClick={() => setHistoryOrder(historyOrder === 'desc' ? 'asc' : 'desc')}
+                  className="text-xs text-blue-600 hover:text-blue-800"
                 >
-                  {historyOrder === 'desc' ? '↓ Latest First' : '↑ Earliest First'}
+                  {historyOrder === 'desc' ? 'Oldest First' : 'Newest First'}
                 </button>
               </div>
               <div className="space-y-2 max-h-40 overflow-y-auto">
-                {node.data.completionHistory?.sort((a: CompletionRecord, b: CompletionRecord) => {
-                  return historyOrder === 'desc' 
-                    ? b.completedAt - a.completedAt 
-                    : a.completedAt - b.completedAt;
-                }).map((record: CompletionRecord) => (
-                  <div key={record.completedAt} className="p-2 bg-gray-50 rounded">
-                    <div className="flex justify-between items-center">
-                      <span>{formatDate(record.completedAt)}</span>
-                      <span className="text-gray-500">
-                        Time: {formatTime(record.timeSpent)}
-                      </span>
+                {[...node.data.completionHistory]
+                  .sort((a, b) => historyOrder === 'desc' ? b.completedAt - a.completedAt : a.completedAt - b.completedAt)
+                  .map((record: CompletionRecord, index: number) => (
+                    <div 
+                      key={record.completedAt}
+                      className="text-xs p-2 bg-gray-50 rounded"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span>{formatDate(record.completedAt)}</span>
+                        <span className="text-gray-500">
+                          Time: {formatTime(record.timeSpent)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-gray-600">
+                        {editingNoteId === record.completedAt ? (
+                          <div className="flex flex-col space-y-2">
+                            <textarea
+                              value={editingNoteText}
+                              onChange={(e) => setEditingNoteText(e.target.value)}
+                              className="w-full p-1 text-sm border rounded"
+                              rows={2}
+                              autoFocus
+                              placeholder="Add a note about this completion..."
+                            />
+                            <div className="flex justify-end space-x-2">
+                              <button
+                                onClick={() => setEditingNoteId(null)}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleEditNote(record, editingNoteText)}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-start">
+                            <span>{record.note || 'No note added'}</span>
+                            <button
+                              onClick={() => {
+                                setEditingNoteId(record.completedAt);
+                                setEditingNoteText(record.note || '');
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 ml-2"
+                            >
+                              {record.note ? 'Edit' : 'Add Note'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {record.note && (
-                      <div className="mt-1 text-sm text-gray-600">{record.note}</div>
-                    )}
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {Array.isArray(node?.data?.referencedBy) && node.data.referencedBy.length > 0 && (
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Referenced by</h4>
+              <div className="space-y-2">
+                {node.data.referencedBy.map((ref: any) => (
+                  <div key={ref.linkNodeId + ref.flowId} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                    <span>
+                      <span className="font-bold">{ref.flowTitle || 'Unknown Map'}</span>
+                      <span className="mx-1">–</span>
+                      <span>{ref.linkNodeLabel || 'Link'}</span>
+                      {ref.createdAt && (
+                        <span className="ml-2 text-xs text-gray-500">{new Date(ref.createdAt).toLocaleDateString()}</span>
+                      )}
+                    </span>
+                    <button
+                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      onClick={() => jumpToNode && jumpToNode(ref.flowId, ref.linkNodeId)}
+                    >
+                      Jump to Link
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
-        </div>
+
+          {/* Flashcard Review History */}
+          {node.data.clozeStats && Object.keys(node.data.clozeStats).length > 0 && (
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                Flashcard Review History
+              </h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {Object.entries(node.data.clozeStats).map(([id, card]: [string, any]) => (
+                  <div 
+                    key={id}
+                    className="text-xs p-2 bg-gray-50 rounded"
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium text-gray-900">{card.content}</span>
+                      <span className="text-gray-500">
+                        {card.stats.lastReviewed ? formatDate(card.stats.lastReviewed) : 'Never reviewed'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Correct: {card.stats.correctCount}</span>
+                      <span>Incorrect: {card.stats.incorrectCount}</span>
+                      {card.stats.correctCount + card.stats.incorrectCount > 0 && (
+                        <span>
+                          Accuracy: {Math.round((card.stats.correctCount / (card.stats.correctCount + card.stats.incorrectCount)) * 100)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {node.type === 'noteRef' && (
@@ -933,47 +1142,34 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
         </div>
       )}
 
-      {/* Calculation Node Controls */}
       {node.type === 'calculation' && (
-        <div className="mt-4 space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium text-gray-700">Current Value:</span>
-            <span className="text-lg font-bold text-teal-600">{node.data.value || 0}</span>
-          </div>
-          
-          <div className="flex space-x-2">
-            <button
-              onClick={() => {
-                // Trigger recalculation by updating a dummy value
-                updateNode(node.id, { lastProcessed: Date.now() });
-              }}
-              className="flex-1 px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
-            >
-              Process
-            </button>
-            <button
-              onClick={() => {
-                const showDetails = !node.data.showDetails;
-                updateNode(node.id, { 
-                  showDetails,
-                  description: showDetails && node.data.calculationSteps ? 
-                    node.data.calculationSteps.join('\n') : ''
-                });
-              }}
-              className="flex-1 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-            >
-              {node.data.showDetails ? 'Hide Details' : 'Show Details'}
-            </button>
-          </div>
-
-          {node.data.showDetails && node.data.calculationSteps && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Calculation Details:</h4>
-              <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-3 rounded border">
-                {node.data.calculationSteps.join('\n')}
-              </pre>
+        <div className="pt-4 border-t">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Calculation Details</h4>
+          <div className="text-sm space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Total Value:</span>
+              <span className="font-medium text-teal-600">{node.data.value || 0}</span>
             </div>
-          )}
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  const event = new CustomEvent('recalculate', { detail: { nodeId: node.id } });
+                  window.dispatchEvent(event);
+                }}
+                className="px-3 py-1 text-sm bg-teal-500 text-white rounded hover:bg-teal-600"
+              >
+                Process
+              </button>
+            </div>
+            {node.data.calculationSteps && node.data.calculationSteps.length > 0 && (
+              <div className="mt-2">
+                <div className="text-gray-600 mb-1">Calculation Steps:</div>
+                <pre className="text-xs bg-gray-50 p-2 rounded whitespace-pre-wrap font-mono">
+                  {node.data.calculationSteps.join('\n')}
+                </pre>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

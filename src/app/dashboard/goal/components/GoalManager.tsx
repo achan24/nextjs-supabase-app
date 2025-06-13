@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,12 +68,6 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
   const [editMilestoneDescription, setEditMilestoneDescription] = useState('');
   const [editMilestoneDueDate, setEditMilestoneDueDate] = useState('');
 
-  // Add state for metric dialog
-  const [isAddingMetric, setIsAddingMetric] = useState(false);
-  const [newMetricName, setNewMetricName] = useState('');
-  const [newMetricType, setNewMetricType] = useState<'time' | 'count' | 'streak' | 'custom'>('count');
-  const [newMetricUnit, setNewMetricUnit] = useState('');
-
   // Find the area that contains the selected subarea
   useEffect(() => {
     if (selectedSubareaId) {
@@ -87,15 +81,6 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
       }
     }
   }, [selectedSubareaId, areas]);
-
-  // Find the selected goal from areas
-  const selectedGoal = useMemo(() => {
-    if (!selectedGoalId) return null;
-    return areas
-      .flatMap(area => area.subareas)
-      .flatMap(subarea => subarea.goals)
-      .find(g => g.id === selectedGoalId);
-  }, [areas, selectedGoalId]);
 
   const handleAddGoal = async () => {
     console.log('Adding goal for subarea:', selectedSubareaId);
@@ -451,10 +436,10 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
                                             size="icon"
                                             onClick={() => {
                                               setSelectedMilestoneId(milestone.id);
-                                              setIsAddingMetric(true);
+                                              setIsAddingMetricThreshold(true);
                                             }}
                                           >
-                                            <Plus className="w-3 h-3" />
+                                            <Target className="w-3 h-3" />
                                           </Button>
                                           <Button
                                             variant="ghost"
@@ -466,96 +451,33 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
                                         </div>
                                       </div>
                                       {/* Show associated metric thresholds */}
-                                      <div className="mt-2 pl-4 border-l-2 border-gray-200">
-                                        <p className="text-xs text-gray-500 mb-1">Target Metrics:</p>
-                                        <ul className="space-y-1">
-                                          {goal.metrics
-                                            .filter((metric: LifeGoalMetric) => 
-                                              metric.thresholds.some(t => t.milestone_id === milestone.id)
-                                            )
-                                            .map((metric: LifeGoalMetric) => {
+                                      {goal.metrics.some((metric: LifeGoalMetric) => 
+                                        metric.thresholds.some(threshold => threshold.milestone_id === milestone.id)
+                                      ) && (
+                                        <div className="mt-2 pl-4 border-l-2 border-gray-200">
+                                          <p className="text-xs text-gray-500 mb-1">Target Metrics:</p>
+                                          <ul className="space-y-1">
+                                            {goal.metrics.map((metric: LifeGoalMetric) => {
                                               const threshold = metric.thresholds.find(t => t.milestone_id === milestone.id);
+                                              if (!threshold) return null;
                                               return (
                                                 <li key={metric.id} className="text-sm flex justify-between items-center">
                                                   <span>{metric.name}</span>
-                                                  <div className="flex items-center gap-2">
-                                                    <span className="text-gray-600">
-                                                      {metric.current_value}/{threshold?.target_value} {metric.unit || ''}
-                                                    </span>
-                                                    <Button
-                                                      variant="ghost"
-                                                      size="icon"
-                                                      onClick={() => {
-                                                        setSelectedMetricId(metric.id);
-                                                        setSelectedMilestoneId(milestone.id);
-                                                        setIsAddingMetricThreshold(true);
-                                                      }}
-                                                    >
-                                                      <Target className="w-3 h-3" />
-                                                    </Button>
-                                                  </div>
+                                                  <span className="text-gray-600">
+                                                    {metric.current_value}/{threshold.target_value} {metric.unit || ''}
+                                                  </span>
                                                 </li>
                                               );
                                             })}
-                                        </ul>
-                                      </div>
+                                          </ul>
+                                        </div>
+                                      )}
                                     </li>
                                   ))}
                                 </ul>
                               ) : (
                                 <p className="text-sm text-gray-500">No milestones yet</p>
                               )}
-
-                              {/* Metrics Section */}
-                              <div className="mt-4">
-                                <div className="flex justify-between items-center">
-                                  <h4 className="text-sm font-medium text-gray-500">Metrics</h4>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedGoalId(goal.id);
-                                      setIsAddingMetric(true);
-                                    }}
-                                  >
-                                    <Plus className="w-3 h-3 mr-1" />
-                                    Add Metric
-                                  </Button>
-                                </div>
-                                {goal.metrics && goal.metrics.length > 0 && (
-                                  <div className="mt-2 space-y-2">
-                                    {goal.metrics.map((metric: LifeGoalMetric) => (
-                                      <div key={metric.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                        <div>
-                                          <div className="font-medium">{metric.name}</div>
-                                          <div className="text-sm text-gray-500">
-                                            {metric.current_value} {metric.unit || metric.type}
-                                          </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => {
-                                              setSelectedMetricId(metric.id);
-                                              setIsAddingMetricThreshold(true);
-                                            }}
-                                          >
-                                            <Target className="w-3 h-3" />
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => handleDeleteMetric(metric.id)}
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
                             </div>
                           </CardContent>
                         </Card>
@@ -802,185 +724,6 @@ export default function GoalManager({ selectedSubareaId }: GoalManagerProps) {
               disabled={!selectedMetricId || !newThresholdValue.trim()}
             >
               Add Target
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Metric Dialog */}
-      <Dialog open={isAddingMetric} onOpenChange={setIsAddingMetric}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Set Metric Target</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Show existing metrics first */}
-            {Array.isArray(selectedGoal?.metrics) && selectedGoal?.metrics?.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Use Existing Metric
-                </label>
-                <div className="space-y-2">
-                  {selectedGoal?.metrics?.map((metric: LifeGoalMetric) => (
-                    <div 
-                      key={metric.id} 
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        setSelectedMetricId(metric.id);
-                        setNewMetricName(metric.name);
-                        setNewMetricType(metric.type);
-                        setNewMetricUnit(metric.unit || '');
-                      }}
-                    >
-                      <div>
-                        <div className="font-medium">{metric.name}</div>
-                        <div className="text-sm text-gray-500">
-                          {metric.current_value} {metric.unit || metric.type}
-                        </div>
-                      </div>
-                      <div className={`w-2 h-2 rounded-full ${selectedMetricId === metric.id ? 'bg-blue-500' : 'bg-gray-300'}`} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-gray-500">Or</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Create New Metric
-              </label>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium">
-                    Name
-                  </label>
-                  <Input
-                    id="name"
-                    value={newMetricName}
-                    onChange={(e) => {
-                      setNewMetricName(e.target.value);
-                      setSelectedMetricId(null); // Clear selection when typing new name
-                    }}
-                    placeholder="e.g., Tasks Completed"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="type" className="text-sm font-medium">
-                    Type
-                  </label>
-                  <select
-                    id="type"
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                    value={newMetricType}
-                    onChange={(e) => {
-                      setNewMetricType(e.target.value as 'time' | 'count' | 'streak' | 'custom');
-                      setSelectedMetricId(null); // Clear selection when changing type
-                    }}
-                  >
-                    <option value="count">Count</option>
-                    <option value="time">Time</option>
-                    <option value="streak">Streak</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="unit" className="text-sm font-medium">
-                    Unit (optional)
-                  </label>
-                  <Input
-                    id="unit"
-                    value={newMetricUnit}
-                    onChange={(e) => {
-                      setNewMetricUnit(e.target.value);
-                      setSelectedMetricId(null); // Clear selection when typing new unit
-                    }}
-                    placeholder="e.g., tasks, hours, points"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="target" className="text-sm font-medium">
-                Target Value
-              </label>
-              <Input
-                id="target"
-                type="number"
-                value={newThresholdValue}
-                onChange={(e) => setNewThresholdValue(e.target.value)}
-                placeholder="Enter target value"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => {
-              setIsAddingMetric(false);
-              setSelectedMetricId(null);
-              setNewMetricName('');
-              setNewMetricType('count');
-              setNewMetricUnit('');
-              setNewThresholdValue('');
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!selectedMilestoneId) return;
-                
-                try {
-                  let metricId = selectedMetricId;
-                  
-                  // If no existing metric selected, create a new one
-                  if (!metricId) {
-                    if (!newMetricName.trim()) {
-                      toast.error('Please select a metric or enter a name for a new one');
-                      return;
-                    }
-                    
-                    const goal = areas
-                      .flatMap(area => area.subareas)
-                      .flatMap(subarea => subarea.goals)
-                      .find(g => g.milestones.some(m => m.id === selectedMilestoneId));
-                    
-                    if (!goal) throw new Error('Goal not found');
-                    
-                    const metric = await addMetric(goal.id, newMetricName, newMetricType, newMetricUnit || undefined);
-                    metricId = metric.id;
-                  }
-                  
-                  if (!metricId) throw new Error('No metric ID available');
-                  
-                  // Set the threshold
-                  const targetValue = parseFloat(newThresholdValue);
-                  if (isNaN(targetValue)) throw new Error('Invalid target value');
-                  
-                  await addMetricThreshold(metricId, selectedMilestoneId, targetValue);
-                  
-                  setIsAddingMetric(false);
-                  setSelectedMetricId(null);
-                  setNewMetricName('');
-                  setNewMetricType('count');
-                  setNewMetricUnit('');
-                  setNewThresholdValue('');
-                  toast.success('Metric target set successfully');
-                } catch (err) {
-                  console.error('Error setting metric target:', err);
-                  toast.error('Failed to set metric target');
-                }
-              }}
-              disabled={!newThresholdValue.trim() || !selectedMilestoneId || (!selectedMetricId && !newMetricName.trim())}
-            >
-              Set Target
             </Button>
           </div>
         </DialogContent>
