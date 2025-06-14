@@ -53,6 +53,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // State for link node editing
   const HARDCODED_USER_ID = '875d44ba-8794-4d12-ba86-48e5e90dc796';
@@ -421,6 +422,97 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
     });
   };
 
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    console.log('Paste event triggered');
+    console.log('Clipboard items:', Array.from(e.clipboardData.items).map(item => ({ type: item.type, kind: item.kind })));
+    const items = e.clipboardData.items;
+    const imageItem = Array.from(items).find(item => item.type.startsWith('image/'));
+    
+    console.log('Found image item:', imageItem?.type);
+    if (!imageItem || !node) {
+      console.log('No image item found or no node selected');
+      return; // Not an image or no node selected
+    }
+
+    e.preventDefault();
+    setIsUploading(true);
+
+    try {
+      const file = imageItem.getAsFile();
+      if (!file) throw new Error('Failed to get image file from clipboard');
+
+      // Generate a unique filename
+      const timestamp = Date.now();
+      const filename = `node-images/${node.id}/${timestamp}-${file.name || 'clipboard-image.png'}`;
+      console.log('Generated filename:', filename);
+
+      // Upload to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('process-flow')
+        .upload(filename, file);
+
+      if (error) {
+        console.error('Upload error:', error);
+        throw error;
+      }
+      console.log('Upload successful:', data);
+
+      // Store canonical URL format instead of signed URL
+      const canonicalUrl = `supabase://process-flow/${filename}`;
+      console.log('Generated canonical URL:', canonicalUrl);
+
+      // Test if URL is accessible via signed URL (for immediate feedback)
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('process-flow')
+        .createSignedUrl(filename, 60 * 60); // 1 hour for testing
+
+      if (signedUrlError) {
+        console.error('Signed URL error:', signedUrlError);
+        throw signedUrlError;
+      }
+
+      // Test accessibility
+      try {
+        const response = await fetch(signedUrlData.signedUrl, { method: 'HEAD' });
+        console.log('URL accessibility test:', response.status, response.ok);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: Image not accessible`);
+        }
+      } catch (error) {
+        console.error('URL accessibility test failed:', error);
+        throw new Error('Uploaded image is not accessible. This might be due to authentication or storage bucket configuration.');
+      }
+
+      // Insert the canonical URL format at cursor position or at the end
+      const textarea = textareaRef.current;
+      if (textarea) {
+        const cursorPos = textarea.selectionStart;
+        const textBefore = textarea.value.substring(0, cursorPos);
+        const textAfter = textarea.value.substring(textarea.selectionEnd);
+        const imageMarkdown = `![Pasted Image](${canonicalUrl})`;
+        
+        const newValue = textBefore + imageMarkdown + textAfter;
+        textarea.value = newValue;
+        
+        // Update the node
+        const updatedNode = {
+          ...node,
+          description: newValue
+        };
+        await updateNode(updatedNode);
+        
+        // Set cursor position after the inserted text
+        const newCursorPos = cursorPos + imageMarkdown.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    } catch (error) {
+      console.error('Error handling paste:', error);
+      alert('Failed to upload image: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Show link reference if node is a link node */}
@@ -665,8 +757,10 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
             value={description}
             onChange={handleTextareaChange}
             onKeyDown={(e) => handleKeyDown(e, 'description')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base p-2 min-h-[100px] overflow-hidden resize-none"
-            placeholder="Use {{...}} to create cloze deletions"
+            onPaste={handlePaste}
+            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base p-2 min-h-[100px] overflow-hidden resize-none ${isUploading ? 'opacity-50 cursor-wait' : ''}`}
+            placeholder="Use {{...}} to create cloze deletions. Paste images to add them to your description."
+            disabled={isUploading}
           />
         ) : (
           <div 
