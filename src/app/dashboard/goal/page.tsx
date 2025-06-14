@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import * as Tabs from '@radix-ui/react-tabs';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import AreaManager from './components/AreaManager';
@@ -12,22 +12,23 @@ import { useGoalSystem } from '@/hooks/useGoalSystem';
 import type { LifeGoalArea, LifeGoalSubarea, LifeGoal } from '@/types/goal';
 
 export default function GOALSystem() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState('areas');
+  const tab = searchParams?.get('tab') || 'areas';
   const subareaId = searchParams?.get('subarea') || null;
   const goalId = searchParams?.get('goal') || null;
-  const areaId = searchParams?.get('area') || null;
-  const tab = searchParams?.get('tab') || null;
+  const filter = searchParams?.get('filter') || null;
   const { areas } = useGoalSystem();
 
-  // Switch to appropriate tab based on URL parameters
-  useEffect(() => {
-    if (tab) {
-      setActiveTab(tab);
-    } else if (subareaId || goalId) {
-      setActiveTab('goals');
+  const handleTabChange = (newTab: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', newTab);
+    // Clear filter when switching tabs unless going to subareas with a filter
+    if (newTab !== 'subareas' || !filter) {
+      url.searchParams.delete('filter');
     }
-  }, [tab, subareaId, goalId]);
+    router.push(url.toString(), { scroll: false });
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -38,7 +39,7 @@ export default function GOALSystem() {
         </p>
       </div>
 
-      <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
+      <Tabs.Root value={tab} onValueChange={handleTabChange}>
         <Tabs.List className="inline-flex h-10 items-center justify-center rounded-lg bg-gray-100 p-1 text-gray-500 mb-4">
           <Tabs.Trigger
             value="areas"
@@ -73,7 +74,7 @@ export default function GOALSystem() {
         </Tabs.List>
 
         <Tabs.Content value="areas" className="mt-2">
-          <AreaManager selectedAreaId={areaId} />
+          <AreaManager selectedAreaId={filter} />
         </Tabs.Content>
 
         <Tabs.Content value="subareas" className="mt-2">

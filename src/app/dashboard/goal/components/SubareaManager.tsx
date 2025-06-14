@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Link as LinkIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, Link as LinkIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -15,16 +15,20 @@ import {
 } from '@/components/ui/dialog';
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Spinner } from '@/components/ui/spinner';
 import { LifeGoalArea, Note } from '@/types/goal';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
+import { NoteLinkButton } from '@/components/ui/note-link-button';
 
 export default function SubareaManager() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const filterSubareaId = searchParams?.get('filter');
+
   const {
     areas,
     loading,
@@ -36,6 +40,12 @@ export default function SubareaManager() {
     unlinkNoteFromSubarea,
     updateNoteLinkOrder,
   } = useGoalSystem();
+
+  // Filter areas to only show the specific subarea if filter is present
+  const filteredAreas = filterSubareaId ? areas.map(area => ({
+    ...area,
+    subareas: area.subareas.filter(subarea => subarea.id === filterSubareaId)
+  })).filter(area => area.subareas.length > 0) : areas;
 
   const [isAddingSubarea, setIsAddingSubarea] = useState<string | null>(null);
   const [newSubareaName, setNewSubareaName] = useState('');
@@ -49,6 +59,7 @@ export default function SubareaManager() {
   const [selectedSubareaId, setSelectedSubareaId] = useState<string | null>(null);
   const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
   const [showFullContent, setShowFullContent] = useState<string | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const supabase = createClient();
 
   const handleAddSubarea = async (areaId: string) => {
@@ -184,24 +195,49 @@ export default function SubareaManager() {
 
   return (
     <div className="space-y-8">
-      {areas.map(area => (
+      <div className="flex justify-between items-center mb-4">
+        {filterSubareaId ? (
+          <>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => router.push('/dashboard/goal?tab=subareas')}
+              >
+                ← All Subareas
+              </Button>
+              <span className="text-gray-500">|</span>
+              {filteredAreas.map(area => (
+                <span key={area.id} className="text-lg font-semibold">
+                  {area.name}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <h2 className="text-2xl font-bold">Subareas</h2>
+        )}
+      </div>
+
+      {filteredAreas.map(area => (
         <div key={area.id} className="mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <Link 
-              href={`/dashboard/goal?tab=areas&area=${area.id}`}
-              className="text-xl font-semibold hover:text-blue-600"
-            >
-              {area.name}
-            </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAddingSubarea(area.id)}
-            >
-              + Add Subarea
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {!filterSubareaId && (
+            <div className="flex justify-between items-center mb-4">
+              <Link 
+                href={`/dashboard/goal?tab=areas&area=${area.id}`}
+                className="text-xl font-semibold hover:text-blue-600"
+              >
+                {area.name}
+              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddingSubarea(area.id)}
+              >
+                + Add Subarea
+              </Button>
+            </div>
+          )}
+          <div className={`grid grid-cols-1 ${!filterSubareaId ? 'md:grid-cols-2' : ''} gap-4`}>
             {area.subareas.map(subarea => (
               <Card key={subarea.id}>
                 <CardHeader>
@@ -215,31 +251,40 @@ export default function SubareaManager() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          fetchAvailableNotes();
-                          setSelectedSubareaId(subarea.id);
-                          setIsLinkingNote(true);
-                        }}
-                      >
-                        <LinkIcon className="w-4 h-4" />
-                      </Button>
+                      <NoteLinkButton
+                        type="subarea"
+                        id={subarea.id}
+                        name={subarea.name}
+                      />
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {subarea.goals && subarea.goals.length > 0 ? (
-                    <div className="space-y-3">
-                      {subarea.goals.map(goal => (
+                  {/* Goals Section */}
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-medium text-gray-500">Goals</h3>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsAddingGoal(subarea.id)}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Goals List */}
+                  {subarea.goals && subarea.goals.length > 0 && (
+                    <div className="space-y-2">
+                      {subarea.goals.map((goal) => (
                         <div 
                           key={goal.id} 
                           className="flex justify-between items-start border-b pb-2 last:border-0"
                         >
                           <div className="flex-1">
                             <Link 
-                              href={`/dashboard/goal?subarea=${subarea.id}&goal=${goal.id}`}
+                              href={`/dashboard/goal?tab=goals&subarea=${subarea.id}&goal=${goal.id}`}
                               className="text-sm font-medium hover:text-blue-600"
                             >
                               {goal.title}
@@ -264,70 +309,70 @@ export default function SubareaManager() {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No goals yet</p>
                   )}
 
-                  {/* Notes Section */}
+                  {/* Notes Section - Only show if there are linked notes */}
                   {subarea.subarea_notes && subarea.subarea_notes.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-sm font-medium text-gray-500 mb-3">Linked Notes</h4>
-                      <DragDropContext onDragEnd={(result) => handleNoteReorder(result, subarea.id)}>
-                        <Droppable droppableId={`subarea-notes-${subarea.id}`}>
-                          {(provided) => (
-                            <div
-                              {...provided.droppableProps}
-                              ref={provided.innerRef}
-                              className="space-y-3"
+                    <div className="mt-6 pt-4 border-t">
+                      <div 
+                        className="flex items-center gap-2 cursor-pointer mb-2"
+                        onClick={() => setExpandedNotes(prev => ({
+                          ...prev,
+                          [subarea.id]: !prev[subarea.id]
+                        }))}
+                      >
+                        {expandedNotes[subarea.id] ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                        <h3 className="text-sm font-medium text-gray-500">
+                          Linked Notes ({subarea.subarea_notes.length})
+                        </h3>
+                      </div>
+                      
+                      {expandedNotes[subarea.id] && (
+                        <div className="space-y-2 pl-6">
+                          {subarea.subarea_notes.map((noteLink) => (
+                            <div 
+                              key={noteLink.id} 
+                              className="bg-gray-50 rounded-lg p-3"
                             >
-                              {subarea.subarea_notes.map((noteLink, index) => (
-                                <Draggable
-                                  key={noteLink.id}
-                                  draggableId={noteLink.id}
-                                  index={index}
-                                >
-                                  {(provided) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                      {...provided.dragHandleProps}
-                                      className="bg-gray-50 rounded-lg p-3"
+                              <div className="flex justify-between items-start">
+                                <div className="flex-grow">
+                                  <h4 className="font-medium">{noteLink.note.title}</h4>
+                                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                    {noteLink.note.content}
+                                  </p>
+                                  {noteLink.note.content.length > 150 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setShowFullContent(showFullContent === noteLink.id ? null : noteLink.id)}
+                                      className="mt-1 text-blue-600 hover:text-blue-800"
                                     >
-                                      <div className="flex justify-between items-start">
-                                        <div className="flex-grow">
-                                          <h5 className="font-medium">{noteLink.note.title}</h5>
-                                          <p className={`text-sm text-gray-600 mt-1 ${showFullContent === noteLink.id ? '' : 'line-clamp-2'}`}>
-                                            {noteLink.note.content}
-                                          </p>
-                                          {noteLink.note.content.length > 150 && (
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => setShowFullContent(showFullContent === noteLink.id ? null : noteLink.id)}
-                                              className="mt-1 text-blue-600 hover:text-blue-800"
-                                            >
-                                              {showFullContent === noteLink.id ? 'Show less' : 'Show more'}
-                                            </Button>
-                                          )}
-                                        </div>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleUnlinkNote(noteLink.id)}
-                                          className="text-red-600 hover:text-red-800"
-                                        >
-                                          Unlink
-                                        </Button>
-                                      </div>
-                                    </div>
+                                      {showFullContent === noteLink.id ? 'Show less' : 'Show more'}
+                                    </Button>
                                   )}
-                                </Draggable>
-                              ))}
-                              {provided.placeholder}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleUnlinkNote(noteLink.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  Unlink
+                                </Button>
+                              </div>
+                              {showFullContent === noteLink.id && (
+                                <p className="text-sm text-gray-600 mt-2">
+                                  {noteLink.note.content}
+                                </p>
+                              )}
                             </div>
-                          )}
-                        </Droppable>
-                      </DragDropContext>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>

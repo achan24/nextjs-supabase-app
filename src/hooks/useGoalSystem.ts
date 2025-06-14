@@ -7,6 +7,7 @@ import {
   LifeGoalMilestone,
   LifeGoalMetric,
   LifeGoalMetricThreshold,
+  LifeGoalTask,
   Note,
   AreaNoteLink,
   SubareaNoteLink,
@@ -49,6 +50,10 @@ export function useGoalSystem() {
               metrics:life_goal_metrics (
                 *,
                 thresholds:life_goal_metric_thresholds (*)
+              ),
+              tasks:life_goal_tasks (
+                *,
+                task:tasks (*)
               )
             )
           )
@@ -61,51 +66,14 @@ export function useGoalSystem() {
       }
 
       console.log('Raw areas data:', areasData);
-      
-      // Sort nested data
-      const sortedData = areasData?.map(area => ({
-        ...area,
-        area_notes: (area.area_notes || [])
-          .map((link: any) => ({
-            ...link,
-            note: Array.isArray(link.note) ? link.note[0] : link.note
-          }))
-          .sort((a: AreaNoteLink, b: AreaNoteLink) => a.display_order - b.display_order),
-        subareas: area.subareas?.map((subarea: LifeGoalSubarea) => ({
-          ...subarea,
-          subarea_notes: (subarea.subarea_notes || [])
-            .map((link: any) => ({
-              ...link,
-              note: Array.isArray(link.note) ? link.note[0] : link.note
-            }))
-            .sort((a: SubareaNoteLink, b: SubareaNoteLink) => a.display_order - b.display_order),
-          goals: subarea.goals?.map((goal: LifeGoal) => ({
-            ...goal,
-            goal_notes: (goal.goal_notes || [])
-              .map((link: any) => ({
-                ...link,
-                note: Array.isArray(link.note) ? link.note[0] : link.note
-              }))
-              .sort((a: GoalNoteLink, b: GoalNoteLink) => a.display_order - b.display_order),
-            milestones: goal.milestones || [],
-            metrics: goal.metrics || []
-          })).sort((a: LifeGoal, b: LifeGoal) => 
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          ) || []
-        })).sort((a: LifeGoalSubarea, b: LifeGoalSubarea) => 
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        ) || []
-      })) || [];
-
-      console.log('Sorted areas data:', sortedData);
-      setAreas(sortedData);
-    } catch (err) {
-      console.error('Error in fetchAreas:', err);
-      setError(err as Error);
+      setAreas(areasData || []);
+    } catch (error) {
+      console.error('Error in fetchAreas:', error);
+      setError(error as Error);
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchAreas();
@@ -440,10 +408,65 @@ export function useGoalSystem() {
     await fetchAreas();
   }, [fetchAreas]);
 
+  const addTaskToGoal = useCallback(async (goalId: string, taskId: string, timeWorth: number = 1) => {
+    try {
+      const { data, error } = await supabase
+        .from('life_goal_tasks')
+        .insert({
+          goal_id: goalId,
+          task_id: taskId,
+          time_worth: timeWorth
+        })
+        .select('*, task:tasks(*)')
+        .single();
+
+      if (error) throw error;
+
+      await fetchAreas();
+      return data;
+    } catch (error) {
+      console.error('Error adding task to goal:', error);
+      throw error;
+    }
+  }, [supabase, fetchAreas]);
+
+  const updateTaskInGoal = useCallback(async (taskLinkId: string, updates: Partial<LifeGoalTask>) => {
+    try {
+      const { error } = await supabase
+        .from('life_goal_tasks')
+        .update(updates)
+        .eq('id', taskLinkId);
+
+      if (error) throw error;
+
+      await fetchAreas();
+    } catch (error) {
+      console.error('Error updating task in goal:', error);
+      throw error;
+    }
+  }, [supabase, fetchAreas]);
+
+  const removeTaskFromGoal = useCallback(async (taskLinkId: string) => {
+    try {
+      const { error } = await supabase
+        .from('life_goal_tasks')
+        .delete()
+        .eq('id', taskLinkId);
+
+      if (error) throw error;
+
+      await fetchAreas();
+    } catch (error) {
+      console.error('Error removing task from goal:', error);
+      throw error;
+    }
+  }, [supabase, fetchAreas]);
+
   return {
     areas,
     loading,
     error,
+    fetchAreas,
     addArea,
     updateArea,
     deleteArea,
@@ -469,5 +492,8 @@ export function useGoalSystem() {
     linkNoteToGoal,
     unlinkNoteFromGoal,
     updateNoteLinkOrder,
+    addTaskToGoal,
+    updateTaskInGoal,
+    removeTaskFromGoal
   };
 } 

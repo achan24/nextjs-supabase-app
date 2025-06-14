@@ -85,15 +85,19 @@ const ResizableImage = ({
   alt,
   initialWidth = 200,
   initialHeight = 200,
-  onResize
+  onResize,
+  onDelete
 }: { 
   src: string; 
   alt: string;
   initialWidth?: number;
   initialHeight?: number;
   onResize?: (width: number, height: number) => void;
+  onDelete?: () => void;
 }) => {
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight });
+  const [naturalSize, setNaturalSize] = useState<{ width: number, height: number } | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
   const supabase = createClient();
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
@@ -129,12 +133,67 @@ const ResizableImage = ({
     getSignedUrl();
   }, [src]);
 
+  // Handle image load to get natural dimensions
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.target as HTMLImageElement;
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+    
+    // Store natural dimensions
+    setNaturalSize({ width: naturalWidth, height: naturalHeight });
+    
+    // Calculate initial size maintaining aspect ratio
+    let newWidth = 200; // Default width
+    let newHeight = Math.round((newWidth * naturalHeight) / naturalWidth);
+    
+    // If height is too tall, scale down proportionally
+    if (newHeight > 300) {
+      newHeight = 300;
+      newWidth = Math.round((newHeight * naturalWidth) / naturalHeight);
+    }
+    
+    setSize({ width: newWidth, height: newHeight });
+  };
+
+  const handleDelete = async () => {
+    if (!src.startsWith('supabase://')) {
+      // For non-Supabase images, just call onDelete
+      onDelete?.();
+      return;
+    }
+
+    try {
+      const [bucketName, ...pathParts] = src.replace('supabase://', '').split('/');
+      const filePath = pathParts.join('/');
+      
+      // Delete from Supabase storage
+      const { error } = await supabase.storage
+        .from(bucketName)
+        .remove([filePath]);
+
+      if (error) {
+        console.error('Error deleting image:', error);
+        throw error;
+      }
+
+      // Call onDelete to update the node's description
+      onDelete?.();
+    } catch (error) {
+      console.error('Error handling delete:', error);
+      alert('Failed to delete image: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
   if (!signedUrl) {
     return null; // Don't render anything until we have the URL
   }
 
   return (
-    <div className="my-2">
+    <div 
+      className="my-2 relative group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <ResizableBox
         width={size.width}
         height={size.height}
@@ -149,7 +208,11 @@ const ResizableImage = ({
             onPointerDownCapture={e => e.stopPropagation()}
           />
         }
-        onResizeStop={(_, { size: newSize }) => {
+        onResizeStop={(e, data) => {
+          const newSize = {
+            width: data.size.width,
+            height: data.size.height
+          };
           setSize(newSize);
           onResize?.(newSize.width, newSize.height);
         }}
@@ -160,7 +223,18 @@ const ResizableImage = ({
           draggable={false}
           className="w-full h-full object-contain select-none rounded-lg shadow-sm"
           crossOrigin="anonymous"
+          onLoad={handleImageLoad}
         />
+        {isHovered && (
+          <button
+            onClick={handleDelete}
+            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-[100]"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        )}
       </ResizableBox>
     </div>
   );
@@ -170,11 +244,13 @@ const ResizableImage = ({
 const NodeContent = ({ 
   text, 
   isTestMode,
-  onImageResize
+  onImageResize,
+  onImageDelete
 }: { 
   text: string; 
   isTestMode: boolean;
   onImageResize?: (originalMarkdown: string, width: number, height: number) => void;
+  onImageDelete?: (originalMarkdown: string) => void;
 }) => {
   // Find image markdown in the text - fixed regex without escaped backslashes
   const parts = text.split(/(!\[.*?\]\(.*?\))/g);
@@ -195,6 +271,9 @@ const NodeContent = ({
               initialHeight={height ? parseInt(height) : 200}
               onResize={(width, height) => {
                 onImageResize?.(fullMatch, width, height);
+              }}
+              onDelete={() => {
+                onImageDelete?.(fullMatch);
               }}
             />
           );
@@ -241,6 +320,19 @@ const BaseNode = ({
     );
   }, [data.description, id, setNodes]);
 
+  const handleImageDelete = useCallback((originalMarkdown: string) => {
+    if (!data.description) return;
+    
+    // Remove the image markdown from the description
+    const newDescription = data.description.replace(originalMarkdown, '');
+    
+    setNodes(nodes => 
+      nodes.map(node => 
+        node.id === id ? { ...node, data: { ...node.data, description: newDescription } } : node
+      )
+    );
+  }, [data.description, id, setNodes]);
+
   const statusColors = {
     ready: 'bg-yellow-100 border-yellow-400',
     active: 'bg-blue-100 border-blue-400',
@@ -279,6 +371,7 @@ const BaseNode = ({
                 text={data.description} 
                 isTestMode={!!data.isTestMode}
                 onImageResize={handleImageResize}
+                onImageDelete={handleImageDelete}
               />
             </div>
           )}

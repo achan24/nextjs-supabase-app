@@ -8,6 +8,12 @@ import TaskTimer from '@/components/TaskTimer'
 import Modal from '@/components/Modal'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import type { Reminder } from '@/types/task'
+import { Label } from '@/components/ui/label'
+import { PlusCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { toast } from 'sonner'
 
 interface Task {
   id?: string;
@@ -61,6 +67,20 @@ interface TaskFormData {
     minutes_before?: number;
     time?: string;
   }[];
+}
+
+interface LifeGoal {
+  id: string;
+  title: string;
+  description?: string;
+  subarea?: {
+    id: string;
+    name: string;
+    area?: {
+      id: string;
+      name: string;
+    }
+  }
 }
 
 const isInProgress = (status: Task['status']): status is 'in_progress' => status === 'in_progress';
@@ -128,11 +148,17 @@ export default function TaskManager({ user }: { user: User }) {
   const [sortBy, setSortBy] = useState<'created' | 'priority'>('priority')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [isLinkingToLifeGoal, setIsLinkingToLifeGoal] = useState(false)
+  const [selectedLifeGoal, setSelectedLifeGoal] = useState<string | null>(null)
+  const [selectedTaskForLifeGoal, setSelectedTaskForLifeGoal] = useState<string | null>(null)
+  const [selectedTaskTimeWorth, setSelectedTaskTimeWorth] = useState<number>(1)
+  const [lifeGoals, setLifeGoals] = useState<LifeGoal[]>([])
 
   useEffect(() => {
     fetchTasks()
     fetchTags()
     fetchProjects()
+    fetchLifeGoals()
   }, [])
 
   const fetchProjects = async () => {
@@ -197,6 +223,31 @@ export default function TaskManager({ user }: { user: User }) {
     }
   }
 
+  const fetchLifeGoals = async () => {
+    const { data: goals, error } = await supabase
+      .from('life_goals')
+      .select(`
+        *,
+        subarea:life_goal_subareas (
+          id,
+          name,
+          area:life_goal_areas (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching life goals:', error);
+      return;
+    }
+
+    setLifeGoals(goals || []);
+  };
+
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -207,7 +258,7 @@ export default function TaskManager({ user }: { user: User }) {
 
       const taskData: Task = {
         title: newTaskForm.title,
-        description: newTaskForm.description,
+        description: newTaskForm.description || '',
         priority: newTaskForm.priority,
         due_date: utcDueDate.toISOString(),
         status: newTaskForm.status,
@@ -438,7 +489,7 @@ export default function TaskManager({ user }: { user: User }) {
     try {
       console.log('Updating task with data:', {
         title: editForm.title,
-        description: editForm.description,
+        description: editForm.description || null,
         priority: editForm.priority,
         due_date: editForm.due_date || null
       });
@@ -448,7 +499,7 @@ export default function TaskManager({ user }: { user: User }) {
         .from('tasks')
         .update({
           title: editForm.title,
-          description: editForm.description,
+          description: editForm.description || null,
           priority: editForm.priority,
           due_date: editForm.due_date || null
         })
@@ -606,6 +657,31 @@ export default function TaskManager({ user }: { user: User }) {
       console.error('Error deleting task:', error);
       setError('Failed to delete task');
       setDeleteConfirmId(null);
+    }
+  };
+
+  const handleLinkToLifeGoal = async () => {
+    if (!selectedTaskForLifeGoal || !selectedLifeGoal) return;
+
+    try {
+      const { error } = await supabase
+        .from('life_goal_tasks')
+        .insert({
+          task_id: selectedTaskForLifeGoal,
+          goal_id: selectedLifeGoal,
+          time_worth: selectedTaskTimeWorth
+        });
+
+      if (error) throw error;
+
+      setIsLinkingToLifeGoal(false);
+      setSelectedTaskForLifeGoal(null);
+      setSelectedLifeGoal(null);
+      setSelectedTaskTimeWorth(1);
+      toast.success('Task linked to goal successfully');
+    } catch (error) {
+      console.error('Error linking task to goal:', error);
+      toast.error('Failed to link task to goal');
     }
   };
 
@@ -847,6 +923,19 @@ export default function TaskManager({ user }: { user: User }) {
                     >
                       Delete
                     </button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (task.id) {
+                          setSelectedTaskForLifeGoal(task.id);
+                          setIsLinkingToLifeGoal(true);
+                        }
+                      }}
+                    >
+                      <PlusCircle className="h-4 w-4 mr-1" />
+                      Link to Life Goal
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1392,6 +1481,65 @@ export default function TaskManager({ user }: { user: User }) {
           </div>
         </Modal>
       )}
+
+      {/* Add Link to Life Goal Dialog */}
+      <Dialog open={isLinkingToLifeGoal} onOpenChange={setIsLinkingToLifeGoal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Task to Life Goal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Goal</Label>
+              <Select
+                value={selectedLifeGoal || ''}
+                onValueChange={(value: string) => {
+                  if (value === '') {
+                    setSelectedLifeGoal(null);
+                  } else {
+                    setSelectedLifeGoal(value);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a goal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lifeGoals.map(goal => (
+                    <SelectItem key={goal.id} value={goal.id}>
+                      {goal.subarea?.area?.name} › {goal.subarea?.name} › {goal.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Time Worth Multiplier</Label>
+              <Input
+                type="number"
+                min={0.1}
+                step={0.1}
+                value={selectedTaskTimeWorth}
+                onChange={(e) => setSelectedTaskTimeWorth(parseFloat(e.target.value))}
+              />
+              <p className="text-xs text-gray-500">
+                How much should this task count towards the goal's metrics?
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsLinkingToLifeGoal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLinkToLifeGoal}
+              disabled={!selectedLifeGoal}
+            >
+              Link to Goal
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

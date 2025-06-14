@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Link as LinkIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, Link as LinkIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,15 +21,20 @@ import Link from 'next/link';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
+import { NoteLinkButton } from '@/components/ui/note-link-button';
 
 interface AreaManagerProps {
   selectedAreaId: string | null;
 }
 
 export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
-  console.log('AreaManager render');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab = searchParams?.get('tab') || 'areas';
+  const activeFilter = searchParams?.get('filter');
   const [focusedAreaId, setFocusedAreaId] = useState<string | null>(null);
+  const [linkingAreaId, setLinkingAreaId] = useState<string | null>(null);
+  const [linkingAreaName, setLinkingAreaName] = useState<string | null>(null);
 
   const {
     areas,
@@ -67,6 +72,12 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
   const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
   const [showFullContent, setShowFullContent] = useState<string | null>(null);
   const supabase = createClient();
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+
+  // Monitor URL changes
+  useEffect(() => {
+    console.log("URL changed:", window.location.href);
+  }, [searchParams]);
 
   useEffect(() => {
     if (selectedAreaId) {
@@ -156,8 +167,10 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
   };
 
   const handleSubareaClick = (subareaId: string) => {
-    console.log('Subarea clicked:', subareaId);
-    router.push(`/dashboard/goal?subarea=${subareaId}`);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', 'subareas');
+    url.searchParams.set('filter', subareaId);
+    router.push(url.toString(), { scroll: false });
   };
 
   const fetchAvailableNotes = async () => {
@@ -308,174 +321,238 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
     );
   }
 
+  const renderAreas = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {areas
+        .filter(area => !focusedAreaId || area.id === focusedAreaId)
+        .map((area) => {
+          const filteredSubareas = activeTab === 'subareas' && activeFilter
+            ? area.subareas.filter(subarea => subarea.id === activeFilter)
+            : area.subareas;
+          
+          return (
+            <Card key={`area-${area.id}`} className="relative">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{area.name}</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Description */}
+                  {area.description && (
+                    <p className="text-sm text-gray-600">{area.description}</p>
+                  )}
+
+                  {/* Subareas List */}
+                  {filteredSubareas && filteredSubareas.length > 0 && (
+                    <div className="space-y-2">
+                      {filteredSubareas.map((subarea) => (
+                        <div
+                          key={`subarea-${subarea.id}`}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <button
+                                onClick={() => handleSubareaClick(subarea.id)}
+                                className="font-medium hover:text-blue-600 transition-colors text-left"
+                              >
+                                {subarea.name}
+                              </button>
+                              {subarea.description && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                  {subarea.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingSubarea(subarea.id);
+                                  setEditSubareaName(subarea.name);
+                                  setEditSubareaDescription(subarea.description || '');
+                                }}
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeletingSubarea(subarea.id)}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Goals Summary */}
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm text-gray-600">Goals</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const url = new URL(window.location.href);
+                                  url.searchParams.set('tab', 'goals');
+                                  url.searchParams.set('subarea', subarea.id);
+                                  router.push(url.toString(), { scroll: false });
+                                }}
+                              >
+                                View Goals ({subarea.goals?.length || 0})
+                              </Button>
+                            </div>
+                            {subarea.goals && subarea.goals.length > 0 ? (
+                              <ul className="space-y-1">
+                                {subarea.goals.slice(0, 3).map((goal: LifeGoal) => (
+                                  <li 
+                                    key={goal.id} 
+                                    onClick={() => {
+                                      const url = new URL(window.location.href);
+                                      url.searchParams.set('tab', 'goals');
+                                      url.searchParams.set('subarea', subarea.id);
+                                      url.searchParams.set('goal', goal.id);
+                                      router.push(url.toString(), { scroll: false });
+                                    }}
+                                    className="text-sm text-gray-600 hover:text-blue-600 cursor-pointer"
+                                  >
+                                    • {goal.title}
+                                  </li>
+                                ))}
+                                {subarea.goals.length > 3 && (
+                                  <li className="text-sm text-gray-500 italic">
+                                    +{subarea.goals.length - 3} more...
+                                  </li>
+                                )}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-gray-500">No goals yet</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Notes Section */}
+                  {area.area_notes && area.area_notes.length > 0 && (
+                    <div className="mt-4">
+                      <button 
+                        type="button"
+                        className="flex items-center gap-2 w-full text-left hover:bg-gray-50 rounded-lg p-2 transition-colors"
+                        onClick={() => setExpandedNotes(prev => ({
+                          ...prev,
+                          [area.id]: !prev[area.id]
+                        }))}
+                      >
+                        {expandedNotes[area.id] ? (
+                          <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                        )}
+                        <span className="text-sm font-medium text-gray-500">
+                          Linked Notes ({area.area_notes.length})
+                        </span>
+                      </button>
+                      
+                      {expandedNotes[area.id] && (
+                        <div className="space-y-2 pl-6 mt-2">
+                          {area.area_notes.map((noteLink) => (
+                            <div 
+                              key={noteLink.id} 
+                              className="bg-gray-50 rounded-lg p-3"
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-grow">
+                                  <h4 className="font-medium">{noteLink.note.title}</h4>
+                                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                    {noteLink.note.content}
+                                  </p>
+                                  {noteLink.note.content.length > 150 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setShowFullContent(showFullContent === noteLink.id ? null : noteLink.id)}
+                                      className="mt-1 text-blue-600 hover:text-blue-800"
+                                    >
+                                      {showFullContent === noteLink.id ? 'Show less' : 'Show more'}
+                                    </Button>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleUnlinkNote(noteLink.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  Unlink
+                                </Button>
+                              </div>
+                              {showFullContent === noteLink.id && (
+                                <p className="text-sm text-gray-600 mt-2">
+                                  {noteLink.note.content}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsAddingSubarea(area.id)}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setEditingArea(area.id);
+                        setEditAreaName(area.name);
+                        setEditAreaDescription(area.description || '');
+                      }}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDeletingArea(area.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                    <NoteLinkButton type="area" id={area.id} name={area.name} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+
+      {areas.length === 0 && (
+        <div className="col-span-2 text-center py-8">
+          <p className="text-gray-500">No life areas defined yet.</p>
+          <p className="text-sm text-gray-400">
+            Click "Add Area" to get started.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {renderHeader()}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {areas
-          .filter(area => !focusedAreaId || area.id === focusedAreaId)
-          .map((area) => (
-          <Card key={area.id} className="relative">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div 
-                  className="cursor-pointer group"
-                  onClick={() => setFocusedAreaId(area.id)}
-                >
-                  <CardTitle className="group-hover:text-blue-600 transition-colors">{area.name}</CardTitle>
-                  {area.description && (
-                    <p className="text-sm text-gray-600 mt-1">{area.description}</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingArea(area.id);
-                      setEditAreaName(area.name);
-                      setEditAreaDescription(area.description || '');
-                    }}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeletingArea(area.id);
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      fetchAvailableNotes();
-                      setIsLinkingNote(true);
-                    }}
-                  >
-                    <LinkIcon className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-sm font-medium text-gray-500">Subareas</h3>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsAddingSubarea(area.id)}
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    Add Subarea
-                  </Button>
-                </div>
-                
-                {area.subareas && area.subareas.length > 0 ? (
-                  <div className="space-y-3">
-                    {area.subareas.map((subarea) => (
-                      <div
-                        key={subarea.id}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium">{subarea.name}</h4>
-                            {subarea.description && (
-                              <p className="text-sm text-gray-600 mt-1">
-                                {subarea.description}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingSubarea(subarea.id);
-                                setEditSubareaName(subarea.name);
-                                setEditSubareaDescription(subarea.description || '');
-                              }}
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDeletingSubarea(subarea.id)}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Goals Summary */}
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-gray-600">Goals</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                // Navigate to Goals tab with this subarea selected
-                                window.history.pushState({}, '', `/dashboard/goal?subarea=${subarea.id}`);
-                                window.location.reload();
-                              }}
-                            >
-                              View Goals ({subarea.goals?.length || 0})
-                            </Button>
-                          </div>
-                          {subarea.goals && subarea.goals.length > 0 ? (
-                            <ul className="space-y-1">
-                              {subarea.goals.slice(0, 3).map((goal: LifeGoal) => (
-                                <li key={goal.id} className="text-sm text-gray-600">
-                                  • <Link 
-                                      href={`/dashboard/goal?subarea=${subarea.id}&goal=${goal.id}`}
-                                      className="hover:text-blue-600 hover:underline cursor-pointer"
-                                    >
-                                      {goal.title}
-                                    </Link>
-                                </li>
-                              ))}
-                              {subarea.goals.length > 3 && (
-                                <li className="text-sm text-gray-500 italic">
-                                  +{subarea.goals.length - 3} more...
-                                </li>
-                              )}
-                            </ul>
-                          ) : (
-                            <p className="text-sm text-gray-500">No goals yet</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    No subareas yet. Click "Add Subarea" to get started.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-
-        {areas.length === 0 && (
-          <div className="col-span-2 text-center py-8">
-            <p className="text-gray-500">No life areas defined yet.</p>
-            <p className="text-sm text-gray-400">
-              Click "Add Area" to get started.
-            </p>
-          </div>
-        )}
-      </div>
+      {renderAreas()}
 
       {/* Edit Area Dialog */}
       <Dialog open={!!editingArea} onOpenChange={(open) => !open && setEditingArea(null)}>
@@ -667,10 +744,18 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
       </Dialog>
 
       {/* Note Linking Dialog */}
-      <Dialog open={isLinkingNote} onOpenChange={setIsLinkingNote}>
+      <Dialog open={isLinkingNote} onOpenChange={(open) => {
+        if (!open) {
+          setIsLinkingNote(false);
+          setLinkingAreaId(null);
+          setLinkingAreaName(null);
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Link Note to Area</DialogTitle>
+            <DialogTitle>
+              Link Note to {linkingAreaName} Area
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -700,12 +785,16 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
             </div>
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setIsLinkingNote(false)}>
+            <Button variant="outline" onClick={() => {
+              setIsLinkingNote(false);
+              setLinkingAreaId(null);
+              setLinkingAreaName(null);
+            }}>
               Cancel
             </Button>
             <Button
-              onClick={() => focusedAreaId && handleLinkNote(focusedAreaId)}
-              disabled={!selectedNoteId || !focusedAreaId}
+              onClick={() => linkingAreaId && handleLinkNote(linkingAreaId)}
+              disabled={!selectedNoteId || !linkingAreaId}
             >
               Link Note
             </Button>

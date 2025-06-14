@@ -20,6 +20,26 @@ export interface LifeGoalSubarea {
   subarea_notes: SubareaNoteLink[];
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'completed';
+  due_date?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LifeGoalTask {
+  id: string;
+  goal_id: string;
+  task_id: string;
+  time_worth: number;
+  created_at: string;
+  updated_at: string;
+  task?: Task;
+}
+
 export interface LifeGoal {
   id: string;
   title: string;
@@ -31,6 +51,7 @@ export interface LifeGoal {
   milestones: LifeGoalMilestone[];
   metrics: LifeGoalMetric[];
   goal_notes: GoalNoteLink[];
+  tasks: LifeGoalTask[];
 }
 
 export interface LifeGoalMilestone {

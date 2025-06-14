@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,12 +16,14 @@ import {
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
-import { LifeGoal, LifeGoalMilestone, LifeGoalMetric, Note } from '@/types/goal';
+import { LifeGoal, LifeGoalMilestone, LifeGoalMetric, LifeGoalTask, Note } from '@/types/goal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
+import { NoteLinkButton } from '@/components/ui/note-link-button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface GoalManagerProps {
   selectedSubareaId: string | null;
@@ -52,6 +54,8 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     linkNoteToGoal,
     unlinkNoteFromGoal,
     updateNoteLinkOrder,
+    addTaskToGoal,
+    removeTaskFromGoal,
   } = useGoalSystem();
 
   const [isAddingGoal, setIsAddingGoal] = useState(false);
@@ -92,6 +96,27 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [editGoalTitle, setEditGoalTitle] = useState('');
   const [editGoalDescription, setEditGoalDescription] = useState('');
   const supabase = createClient();
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+
+  // Memoize area and subarea lookups
+  const currentArea = useMemo(() => 
+    areas.find(area => area.subareas.some(sub => sub.id === selectedSubareaId)),
+    [areas, selectedSubareaId]
+  );
+
+  const currentSubarea = useMemo(() => 
+    areas.flatMap(a => a.subareas).find(sub => sub.id === selectedSubareaId),
+    [areas, selectedSubareaId]
+  );
+
+  // Add state for task dialog
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskTimeWorth, setSelectedTaskTimeWorth] = useState<number>(1);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDescription, setNewTaskDescription] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('');
 
   // Find the area that contains the selected subarea
   useEffect(() => {
@@ -341,6 +366,83 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   };
 
+  useEffect(() => {
+    // Fetch available tasks
+    const fetchTasks = async () => {
+      const { data: tasks, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching tasks:', error);
+        return;
+      }
+
+      setTasks(tasks || []);
+    };
+
+    fetchTasks();
+  }, []);
+
+  const handleAddTaskToGoal = async (goalId: string) => {
+    if (!selectedTaskId) return;
+
+    try {
+      await addTaskToGoal(goalId, selectedTaskId, selectedTaskTimeWorth);
+      setIsAddingTask(false);
+      setSelectedTaskId(null);
+      setSelectedTaskTimeWorth(1);
+      toast.success('Task added to goal');
+    } catch (error) {
+      console.error('Error adding task to goal:', error);
+      toast.error('Failed to add task to goal');
+    }
+  };
+
+  const handleRemoveTaskFromGoal = async (taskId: string) => {
+    try {
+      await removeTaskFromGoal(taskId);
+      toast.success('Task removed from goal');
+    } catch (error) {
+      console.error('Error removing task from goal:', error);
+      toast.error('Failed to remove task from goal');
+    }
+  };
+
+  const handleCreateAndAddTask = async () => {
+    try {
+      // First create the task
+      const { data: newTask, error: taskError } = await supabase
+        .from('tasks')
+        .insert({
+          title: newTaskTitle,
+          description: newTaskDescription,
+          due_date: newTaskDueDate || null,
+          status: 'todo'
+        })
+        .select()
+        .single();
+
+      if (taskError) throw taskError;
+
+      // Then link it to the goal
+      if (selectedGoal && newTask) {
+        await addTaskToGoal(selectedGoal.id, newTask.id, selectedTaskTimeWorth);
+      }
+
+      // Reset form
+      setNewTaskTitle('');
+      setNewTaskDescription('');
+      setNewTaskDueDate('');
+      setIsAddingTask(false);
+      toast.success('Task created and added to goal');
+    } catch (error) {
+      console.error('Error creating task:', error);
+      toast.error('Failed to create task');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -358,87 +460,51 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="flex flex-col gap-1">
-          {selectedGoal && goalContext ? (
-            <>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Link href="/dashboard/goal" className="hover:text-blue-600">
-                  {goalContext.area.name}
-                </Link>
-                <span>›</span>
-                <Link 
-                  href={`/dashboard/goal?subarea=${goalContext.subarea.id}`}
-                  className="hover:text-blue-600"
-                >
-                  {goalContext.subarea.name}
-                </Link>
-                <span>›</span>
-                <span className="text-gray-900 font-medium">{selectedGoal.title}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => router.push(`/dashboard/goal?subarea=${goalContext.subarea.id}`)}
-                  size="sm"
-                  className="text-blue-600 hover:text-blue-800 -ml-2"
-                >
-                  Show all goals in {goalContext.subarea.name}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <h2 className="text-2xl font-bold">
-              {selectedSubareaId ? 
-                areas.flatMap(area => 
-                  area.subareas
-                    .filter(subarea => subarea.id === selectedSubareaId)
-                    .map(subarea => (
-                      <div key={subarea.id} className="flex items-center gap-2">
-                        <Link href="/dashboard/goal" className="text-gray-600 hover:text-blue-600 text-lg">
-                          {area.name}
-                        </Link>
-                        <span className="text-gray-600">›</span>
-                        <Link 
-                          href={`/dashboard/goal?subarea=${subarea.id}`}
-                          className="text-lg hover:text-blue-600"
-                        >
-                          {subarea.name}
-                        </Link>
-                      </div>
-                    ))
-                ) : 'Goals'
-              }
-            </h2>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {!selectedGoal && (
-            <>
-              {selectedSubareaId && (
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/dashboard/goal')}
-                >
-                  View All Goals
-                </Button>
-              )}
-              <Button 
-                onClick={() => setIsAddingGoal(true)} 
-                disabled={!selectedSubareaId}
-                title={!selectedSubareaId ? "Select a subarea in the Areas tab first" : "Add a new goal"}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Goal
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+    <div>
+      {loading && <div>Loading...</div>}
+      {error && <div>Error: {error.message}</div>}
 
       {selectedGoal ? (
         <div className="space-y-6">
+          {/* Area and Subarea Context */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2 text-sm">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push('/dashboard/goal?tab=areas')}
+                className="hover:text-blue-600"
+              >
+                {currentArea?.name || 'Areas'}
+              </Button>
+              <span className="text-gray-500">/</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/dashboard/goal?tab=subareas&filter=${selectedSubareaId}`)}
+                className="hover:text-blue-600"
+              >
+                {currentSubarea?.name || 'Subarea'}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/dashboard/goal?tab=goals&subarea=${selectedSubareaId}`)}
+              >
+                Subarea Goals
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/dashboard/goal?tab=goals')}
+              >
+                All Goals
+              </Button>
+            </div>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex justify-between items-start">
@@ -467,101 +533,33 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      fetchAvailableNotes();
-                      setIsLinkingNote(true);
-                    }}
-                  >
-                    <LinkIcon className="w-4 h-4" />
-                  </Button>
+                  <NoteLinkButton
+                    type="goal"
+                    id={selectedGoal.id}
+                    name={selectedGoal.title}
+                  />
                 </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {/* Notes Section */}
-              {selectedGoal.goal_notes && selectedGoal.goal_notes.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="text-sm font-medium text-gray-500 mb-3">Linked Notes</h4>
-                  <DragDropContext onDragEnd={(result) => handleNoteReorder(result, selectedGoal.id)}>
-                    <Droppable droppableId={`goal-notes-${selectedGoal.id}`}>
-                      {(provided) => (
-                        <div
-                          {...provided.droppableProps}
-                          ref={provided.innerRef}
-                          className="space-y-3"
-                        >
-                          {selectedGoal.goal_notes.map((noteLink, index) => (
-                            <Draggable
-                              key={noteLink.id}
-                              draggableId={noteLink.id}
-                              index={index}
-                            >
-                              {(provided) => (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.draggableProps}
-                                  {...provided.dragHandleProps}
-                                  className="bg-gray-50 rounded-lg p-3"
-                                >
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-grow">
-                                      <h5 className="font-medium">{noteLink.note.title}</h5>
-                                      <p className={`text-sm text-gray-600 mt-1 ${showFullContent === noteLink.id ? '' : 'line-clamp-2'}`}>
-                                        {noteLink.note.content}
-                                      </p>
-                                      {noteLink.note.content.length > 150 && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => setShowFullContent(showFullContent === noteLink.id ? null : noteLink.id)}
-                                          className="mt-1 text-blue-600 hover:text-blue-800"
-                                        >
-                                          {showFullContent === noteLink.id ? 'Show less' : 'Show more'}
-                                        </Button>
-                                      )}
-                                    </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleUnlinkNote(noteLink.id)}
-                                      className="text-red-600 hover:text-red-800"
-                                    >
-                                      Unlink
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
-                </div>
-              )}
-
               {/* Milestones Section */}
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Milestones</h3>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-medium text-gray-500">Milestones</h3>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsAddingMilestone(true);
-                    }}
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsAddingMilestone(true)}
                   >
-                    Add Milestone
+                    <Plus className="w-4 h-4" />
                   </Button>
                 </div>
-                {selectedGoal.milestones && selectedGoal.milestones.length > 0 ? (
-                  <ul className="space-y-2">
-                    {selectedGoal.milestones.map((milestone: LifeGoalMilestone) => (
-                      <li
+
+                {/* Milestones List */}
+                {selectedGoal.milestones && selectedGoal.milestones.length > 0 && (
+                  <div className="space-y-2">
+                    {selectedGoal.milestones.map((milestone) => (
+                      <div 
                         key={milestone.id}
                         className="flex flex-col p-3 rounded-lg border"
                       >
@@ -623,18 +621,81 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                             </Button>
                           </div>
                         </div>
-                      </li>
+                      </div>
                     ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-gray-500">No milestones yet</p>
+                  </div>
+                )}
+
+                {/* Notes Section - Only show if there are linked notes */}
+                {selectedGoal.goal_notes && selectedGoal.goal_notes.length > 0 && (
+                  <div className="mt-6 pt-4 border-t">
+                    <div 
+                      className="flex items-center gap-2 cursor-pointer mb-2"
+                      onClick={() => setExpandedNotes(prev => ({
+                        ...prev,
+                        [selectedGoal.id]: !prev[selectedGoal.id]
+                      }))}
+                    >
+                      {expandedNotes[selectedGoal.id] ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                      <h3 className="text-sm font-medium text-gray-500">
+                        Linked Notes ({selectedGoal.goal_notes.length})
+                      </h3>
+                    </div>
+                    
+                    {expandedNotes[selectedGoal.id] && (
+                      <div className="space-y-2 pl-6">
+                        {selectedGoal.goal_notes.map((noteLink) => (
+                          <div 
+                            key={noteLink.id} 
+                            className="bg-gray-50 rounded-lg p-3"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-grow">
+                                <h4 className="font-medium">{noteLink.note.title}</h4>
+                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                  {noteLink.note.content}
+                                </p>
+                                {noteLink.note.content.length > 150 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowFullContent(showFullContent === noteLink.id ? null : noteLink.id)}
+                                    className="mt-1 text-blue-600 hover:text-blue-800"
+                                  >
+                                    {showFullContent === noteLink.id ? 'Show less' : 'Show more'}
+                                  </Button>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleUnlinkNote(noteLink.id)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                Unlink
+                              </Button>
+                            </div>
+                            {showFullContent === noteLink.id && (
+                              <p className="text-sm text-gray-600 mt-2">
+                                {noteLink.note.content}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
               {/* Metrics Section */}
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Metrics</h3>
+              <div className="space-y-4 mt-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-medium text-gray-500">Metrics</h3>
                   <Button
                     variant="outline"
                     size="sm"
@@ -671,12 +732,75 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                   <p className="text-sm text-gray-500">No metrics yet</p>
                 )}
               </div>
+
+              {/* Tasks Section */}
+              <div className="space-y-4 mt-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-medium text-gray-500">Tasks</h3>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsAddingTask(true)}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Tasks List */}
+                {selectedGoal.tasks && selectedGoal.tasks.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedGoal.tasks.map((goalTask: LifeGoalTask) => {
+                      const task = tasks.find(t => t.id === goalTask.task_id);
+                      if (!task) return null;
+
+                      return (
+                        <div 
+                          key={goalTask.id}
+                          className="flex items-center justify-between p-3 rounded-lg border"
+                        >
+                          <div className="flex items-center gap-3">
+                            <CheckCircle2 
+                              className={`w-5 h-5 ${task.status === 'completed' ? 'text-green-500' : 'text-gray-300'}`} 
+                            />
+                            <div>
+                              <span className="font-medium">{task.title}</span>
+                              {task.description && (
+                                <p className="text-sm text-gray-600">{task.description}</p>
+                              )}
+                              {task.due_date && (
+                                <p className="text-xs text-gray-500 flex items-center mt-1">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  Due: {new Date(task.due_date).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">
+                              Worth: {goalTask.time_worth}x
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveTaskFromGoal(goalTask.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-2">No tasks yet</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
       ) : (
         <>
-          {!selectedSubareaId && (
+          {!selectedSubareaId ? (
             <div className="space-y-8">
               {areas.map(area => (
                 <div key={area.id}>
@@ -687,14 +811,12 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                         key={subarea.id}
                         href={`/dashboard/goal?subarea=${subarea.id}`}
                         className="block no-underline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/dashboard/goal?subarea=${subarea.id}`);
-                        }}
                       >
                         <Card className="transition-colors hover:border-blue-600">
                           <CardHeader>
-                            <CardTitle className="transition-colors hover:text-blue-600">{subarea.name}</CardTitle>
+                            <CardTitle className="transition-colors hover:text-blue-600">
+                              {subarea.name}
+                            </CardTitle>
                           </CardHeader>
                           <CardContent>
                             {subarea.goals && subarea.goals.length > 0 ? (
@@ -703,6 +825,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                                   <li 
                                     key={goal.id} 
                                     onClick={(e) => {
+                                      e.preventDefault();
                                       e.stopPropagation();
                                       router.push(`/dashboard/goal?goal=${goal.id}`);
                                     }}
@@ -732,9 +855,38 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                 </div>
               ))}
             </div>
-          )}
-          {selectedSubareaId && (
+          ) : (
             <div className="space-y-4">
+              {/* Area/Subarea Context Header */}
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2 text-sm">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push('/dashboard/goal?tab=areas')}
+                    className="hover:text-blue-600"
+                  >
+                    {currentArea?.name}
+                  </Button>
+                  <span className="text-gray-500">/</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/dashboard/goal?tab=subareas&filter=${selectedSubareaId}`)}
+                    className="hover:text-blue-600"
+                  >
+                    {currentSubarea?.name}
+                  </Button>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push('/dashboard/goal?tab=goals')}
+                >
+                  All Goals
+                </Button>
+              </div>
+
               {areas.map(area => 
                 area.subareas
                   .filter(subarea => subarea.id === selectedSubareaId)
@@ -746,7 +898,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                             <div 
                               key={goal.id} 
                               className="flex flex-col p-6 rounded-lg border group relative cursor-pointer hover:border-blue-600 transition-colors"
-                              onClick={() => router.push(`/dashboard/goal?goal=${goal.id}`)}
+                              onClick={() => router.push(`/dashboard/goal?tab=goals&subarea=${subarea.id}&goal=${goal.id}`)}
                             >
                               <div className="flex justify-between items-start">
                                 <div className="flex-grow">
@@ -880,6 +1032,124 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
           )}
         </>
       )}
+
+      {/* Add Task Dialog */}
+      <Dialog 
+        open={isAddingTask} 
+        onOpenChange={(open: boolean) => setIsAddingTask(open)}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add Task to Goal</DialogTitle>
+          </DialogHeader>
+          <Tabs defaultValue="existing">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="existing">Select Existing Task</TabsTrigger>
+              <TabsTrigger value="new">Create New Task</TabsTrigger>
+            </TabsList>
+            <TabsContent value="existing" className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Task</label>
+                <Select
+                  value={selectedTaskId || ''}
+                  onValueChange={(value: string) => {
+                    if (value === '') {
+                      setSelectedTaskId(null);
+                    } else {
+                      setSelectedTaskId(value);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a task" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tasks.map(task => (
+                      <SelectItem key={task.id} value={task.id}>
+                        {task.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Time Worth Multiplier</label>
+                <Input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={selectedTaskTimeWorth}
+                  onChange={(e) => setSelectedTaskTimeWorth(parseFloat(e.target.value))}
+                />
+                <p className="text-xs text-gray-500">
+                  How much should this task count towards the goal's metrics?
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setIsAddingTask(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => selectedGoal && handleAddTaskToGoal(selectedGoal.id)}
+                  disabled={!selectedTaskId}
+                >
+                  Add Task
+                </Button>
+              </div>
+            </TabsContent>
+            <TabsContent value="new" className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Task Title</label>
+                <Input
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  placeholder="Enter task title"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  value={newTaskDescription}
+                  onChange={(e) => setNewTaskDescription(e.target.value)}
+                  placeholder="Enter task description"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Due Date</label>
+                <Input
+                  type="date"
+                  value={newTaskDueDate}
+                  onChange={(e) => setNewTaskDueDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Time Worth Multiplier</label>
+                <Input
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  value={selectedTaskTimeWorth}
+                  onChange={(e) => setSelectedTaskTimeWorth(parseFloat(e.target.value))}
+                />
+                <p className="text-xs text-gray-500">
+                  How much should this task count towards the goal's metrics?
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setIsAddingTask(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateAndAddTask}
+                  disabled={!newTaskTitle}
+                >
+                  Create & Add Task
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Goal Dialog */}
       <Dialog open={isAddingGoal} onOpenChange={setIsAddingGoal}>
