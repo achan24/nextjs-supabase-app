@@ -26,6 +26,7 @@ interface AreaManagerProps {
 export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
   console.log('AreaManager render');
   const router = useRouter();
+  const [focusedAreaId, setFocusedAreaId] = useState<string | null>(null);
 
   const {
     areas,
@@ -148,6 +149,76 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
     router.push(`/dashboard/goal?subarea=${subareaId}`);
   };
 
+  // Add a back button when an area is focused
+  const renderHeader = () => (
+    <div className="flex justify-between items-center">
+      <div className="flex items-center gap-2">
+        <h2 className="text-2xl font-bold">
+          {focusedAreaId ? 
+            areas.find(a => a.id === focusedAreaId)?.name : 
+            'Life Areas'
+          }
+        </h2>
+        {focusedAreaId && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFocusedAreaId(null)}
+            className="text-blue-600 hover:text-blue-800 -ml-2"
+          >
+            View All Areas
+          </Button>
+        )}
+      </div>
+      <Dialog open={isAddingArea} onOpenChange={setIsAddingArea}>
+        <DialogTrigger asChild>
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Area
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Life Area</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="name" className="text-sm font-medium">
+                Name
+              </label>
+              <Input
+                id="name"
+                value={newAreaName}
+                onChange={(e) => setNewAreaName(e.target.value)}
+                placeholder="e.g., Health & Fitness"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="description" className="text-sm font-medium">
+                Description
+              </label>
+              <Textarea
+                id="description"
+                value={newAreaDescription}
+                onChange={(e) => setNewAreaDescription(e.target.value)}
+                placeholder="Describe this life area..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsAddingArea(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddArea} disabled={!newAreaName.trim()}>
+              Add Area
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -166,63 +237,20 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Life Areas</h2>
-        <Dialog open={isAddingArea} onOpenChange={setIsAddingArea}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Area
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Life Area</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label htmlFor="name" className="text-sm font-medium">
-                  Name
-                </label>
-                <Input
-                  id="name"
-                  value={newAreaName}
-                  onChange={(e) => setNewAreaName(e.target.value)}
-                  placeholder="e.g., Health & Fitness"
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="description" className="text-sm font-medium">
-                  Description
-                </label>
-                <Textarea
-                  id="description"
-                  value={newAreaDescription}
-                  onChange={(e) => setNewAreaDescription(e.target.value)}
-                  placeholder="Describe this life area..."
-                  rows={3}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setIsAddingArea(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddArea} disabled={!newAreaName.trim()}>
-                Add Area
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+      {renderHeader()}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {areas.map((area) => (
+        {areas
+          .filter(area => !focusedAreaId || area.id === focusedAreaId)
+          .map((area) => (
           <Card key={area.id} className="relative">
             <CardHeader>
               <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle>{area.name}</CardTitle>
+                <div 
+                  className="cursor-pointer group"
+                  onClick={() => setFocusedAreaId(area.id)}
+                >
+                  <CardTitle className="group-hover:text-blue-600 transition-colors">{area.name}</CardTitle>
                   {area.description && (
                     <p className="text-sm text-gray-600 mt-1">{area.description}</p>
                   )}
@@ -231,7 +259,8 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setEditingArea(area.id);
                       setEditAreaName(area.name);
                       setEditAreaDescription(area.description || '');
@@ -242,7 +271,10 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setDeletingArea(area.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingArea(area.id);
+                    }}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
