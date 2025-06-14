@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import AddHabitModal from '../AddHabitModal';
 import HabitHeatmap from '../HabitHeatmap';
+import { useRouter } from 'next/navigation';
 
 const HABIT_ICONS = [
   { emoji: '💧', label: 'Water' },
@@ -56,6 +57,7 @@ export default function AllHabitsPageClient({ user }: { user: any }) {
   const [selectedFlowId, setSelectedFlowId] = useState<string>('');
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+  const router = useRouter();
 
   const fetchHabits = async () => {
     if (!user) return;
@@ -211,6 +213,10 @@ export default function AllHabitsPageClient({ user }: { user: any }) {
     if (!error) fetchHabits();
   };
 
+  const handleProcessFlowClick = (flowId: string, nodeId: string) => {
+    router.push(`/dashboard/process-flow?flowId=${flowId}&nodeId=${nodeId}`);
+  };
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-4">
       {/* Habits Subnav */}
@@ -262,9 +268,7 @@ export default function AllHabitsPageClient({ user }: { user: any }) {
                 <Link href={`/dashboard/habits/${habit.id}/detail`} className="text-blue-600 hover:underline text-xs">Details</Link>
                 {habit.linked_flow_id && habit.linked_node_id && (
                   <button
-                    onClick={() => {
-                      window.location.href = `/dashboard/process-flow?flowId=${habit.linked_flow_id}&nodeId=${habit.linked_node_id}`;
-                    }}
+                    onClick={() => handleProcessFlowClick(habit.linked_flow_id, habit.linked_node_id)}
                     className="text-blue-600 hover:text-blue-700"
                     title="Jump to linked node"
                   >

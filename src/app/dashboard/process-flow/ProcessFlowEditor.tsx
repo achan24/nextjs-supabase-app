@@ -24,6 +24,9 @@ import ReactFlow, {
   BezierEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 import NodeToolbox from './components/NodeToolbox';
 import NodeDetails from './components/NodeDetails';
@@ -95,6 +98,7 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const router = useRouter();
 
   // Handle URL parameters
   useEffect(() => {
@@ -506,12 +510,48 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
     }
   }, [supabase, user.id, rf]);
 
-  const createNewFlow = () => {
-    setCurrentFlow(null);
-    setNodes([]);
-    setEdges([]);
-    setFlowTitle('Untitled Flow');
-    setFlowDescription('');
+  const createNewFlow = async () => {
+    try {
+      const flowData = {
+        user_id: user.id,
+        title: 'Untitled Flow',
+        description: '',
+        nodes: [],
+        edges: [],
+      };
+
+      const { data, error } = await supabase
+        .from('process_flows')
+        .insert(flowData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update state with the new flow
+      setCurrentFlow(data);
+      setNodes([]);
+      setEdges([]);
+      setFlowTitle('Untitled Flow');
+      setFlowDescription('');
+
+      // Update URL
+      router.push(`/dashboard/process-flow?flowId=${data.id}`);
+
+      // Refresh flows list
+      const { data: updatedFlows, error: flowsError } = await supabase
+        .from('process_flows')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (flowsError) throw flowsError;
+      setFlows(updatedFlows || []);
+
+    } catch (error) {
+      console.error('Error creating new flow:', error);
+      toast.error('Failed to create new flow');
+    }
   };
 
   const loadFlow = async (flow: ProcessFlow) => {
@@ -737,9 +777,8 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
   const jumpToNode = async (flowId: string, nodeId: string) => {
     console.log('[jump][step1] jumpToNode called with', { flowId, nodeId });
     
-    // First, update the URL
-    const url = `/dashboard/process-flow?flowId=${flowId}&nodeId=${nodeId}`;
-    window.location.href = url;
+    // Use router.push instead of window.location.href
+    router.push(`/dashboard/process-flow?flowId=${flowId}&nodeId=${nodeId}`);
   };
 
   // Helper to load a flow (no need to pass nodeId)

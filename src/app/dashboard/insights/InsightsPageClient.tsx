@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ChevronDown, ChevronRight, Link2, ChevronLeft, Plus } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface ProcessFlow {
   id: string;
@@ -73,6 +74,7 @@ export default function InsightsPageClient({ user }: InsightsPageProps) {
     daysBetweenCompletions?: number
   }>>([]);
   const supabase = createClient();
+  const router = useRouter();
 
   const toggleTag = (tag: string) => {
     const newExpanded = new Set(expandedTags);
