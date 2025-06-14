@@ -530,10 +530,10 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
 
       // Update state with the new flow
       setCurrentFlow(data);
-      setNodes([]);
-      setEdges([]);
-      setFlowTitle('Untitled Flow');
-      setFlowDescription('');
+    setNodes([]);
+    setEdges([]);
+    setFlowTitle('Untitled Flow');
+    setFlowDescription('');
 
       // Update URL
       router.push(`/dashboard/process-flow?flowId=${data.id}`);

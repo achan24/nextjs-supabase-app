@@ -429,59 +429,59 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
           </ResizableBox>
         );
       case 'text':
-        const textContent = typeof part.content === 'string' ? part.content : '';
-        const clozeParts = textContent.split(/(\{\{.*?\}\})/g);
-        return (
-          <span key={index}>
-            {clozeParts.map((clozePart: string, clozeIndex: number) => {
-              if (clozePart.startsWith('{{') && clozePart.endsWith('}}')) {
-                const word = clozePart.slice(2, -2);
-                const isRevealed = revealedWords.has(word);
-                if (isTestMode && !isRevealed) {
-                  return (
-                    <span
-                      key={`${index}-${clozeIndex}`}
-                      onClick={(e) => toggleReveal(word, e)}
-                      className="inline-block px-1 mx-0.5 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
-                    >
-                      {'_'.repeat(word.length)}
-                    </span>
-                  );
-                }
+      const textContent = typeof part.content === 'string' ? part.content : '';
+      const clozeParts = textContent.split(/(\{\{.*?\}\})/g);
+      return (
+        <span key={index}>
+          {clozeParts.map((clozePart: string, clozeIndex: number) => {
+            if (clozePart.startsWith('{{') && clozePart.endsWith('}}')) {
+              const word = clozePart.slice(2, -2);
+              const isRevealed = revealedWords.has(word);
+              if (isTestMode && !isRevealed) {
                 return (
                   <span
                     key={`${index}-${clozeIndex}`}
                     onClick={(e) => toggleReveal(word, e)}
-                    className={`inline-block px-1 mx-0.5 rounded cursor-pointer ${
-                      isTestMode ? 'bg-green-100 hover:bg-green-200' : ''
-                    }`}
+                    className="inline-block px-1 mx-0.5 bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
                   >
-                    {word}
+                    {'_'.repeat(word.length)}
                   </span>
                 );
               }
-              return <span key={`${index}-${clozeIndex}`}>{clozePart}</span>;
-            })}
-          </span>
-        );
+              return (
+                <span
+                  key={`${index}-${clozeIndex}`}
+                  onClick={(e) => toggleReveal(word, e)}
+                  className={`inline-block px-1 mx-0.5 rounded cursor-pointer ${
+                    isTestMode ? 'bg-green-100 hover:bg-green-200' : ''
+                  }`}
+                >
+                  {word}
+                </span>
+              );
+            }
+            return <span key={`${index}-${clozeIndex}`}>{clozePart}</span>;
+          })}
+        </span>
+      );
       case 'bold':
         return <strong key={index}>{renderInlinePart({ type: 'text', content: part.content }, `${index}-bold`)}</strong>;
       case 'italic':
         return <em key={index}>{renderInlinePart({ type: 'text', content: part.content }, `${index}-italic`)}</em>;
       case 'code':
-        return <code key={index} className="bg-gray-100 px-1 rounded">{part.content}</code>;
+      return <code key={index} className="bg-gray-100 px-1 rounded">{part.content}</code>;
       case 'link':
-        return (
-          <a
-            key={index}
-            href={part.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline"
-          >
+      return (
+        <a
+          key={index}
+          href={part.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline"
+        >
             {renderInlinePart({ type: 'text', content: part.content }, `${index}-link`)}
-          </a>
-        );
+        </a>
+      );
       case 'h1':
         return <h1 key={index} className="text-3xl font-bold">{renderInlinePart({ type: 'text', content: part.content }, `${index}-h1`)}</h1>;
       case 'h2':
@@ -489,7 +489,7 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
       case 'h3':
         return <h3 key={index} className="text-xl font-bold">{renderInlinePart({ type: 'text', content: part.content }, `${index}-h3`)}</h3>;
       default:
-        return null;
+    return null;
     }
   };
 

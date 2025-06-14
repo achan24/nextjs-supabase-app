@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, Link as LinkIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,11 @@ import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Spinner } from '@/components/ui/spinner';
+import { LifeGoalArea, Note } from '@/types/goal';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createClient } from '@/lib/supabase/client';
 
 export default function SubareaManager() {
   const router = useRouter();
@@ -27,6 +32,9 @@ export default function SubareaManager() {
     addSubarea,
     updateSubarea,
     deleteSubarea,
+    linkNoteToSubarea,
+    unlinkNoteFromSubarea,
+    updateNoteLinkOrder,
   } = useGoalSystem();
 
   const [isAddingSubarea, setIsAddingSubarea] = useState<string | null>(null);
@@ -36,6 +44,12 @@ export default function SubareaManager() {
   const [editSubareaName, setEditSubareaName] = useState('');
   const [editSubareaDescription, setEditSubareaDescription] = useState('');
   const [deletingSubarea, setDeletingSubarea] = useState<string | null>(null);
+  const [isLinkingNote, setIsLinkingNote] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState('');
+  const [selectedSubareaId, setSelectedSubareaId] = useState<string | null>(null);
+  const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
+  const [showFullContent, setShowFullContent] = useState<string | null>(null);
+  const supabase = createClient();
 
   const handleAddSubarea = async (areaId: string) => {
     if (!newSubareaName.trim()) {
@@ -84,6 +98,71 @@ export default function SubareaManager() {
     } catch (err) {
       console.error('Error deleting subarea:', err);
       toast.error('Failed to delete subarea');
+    }
+  };
+
+  const fetchAvailableNotes = async () => {
+    const { data: notes, error } = await supabase
+      .from('notes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notes:', error);
+      return;
+    }
+
+    setAvailableNotes(notes || []);
+  };
+
+  const handleLinkNote = async () => {
+    if (!selectedNoteId || !selectedSubareaId) return;
+
+    try {
+      await linkNoteToSubarea(selectedSubareaId, selectedNoteId);
+      toast.success('Note linked successfully');
+      setIsLinkingNote(false);
+      setSelectedNoteId('');
+      setSelectedSubareaId(null);
+    } catch (error) {
+      console.error('Error linking note:', error);
+      toast.error('Failed to link note');
+    }
+  };
+
+  const handleUnlinkNote = async (linkId: string) => {
+    try {
+      await unlinkNoteFromSubarea(linkId);
+      toast.success('Note unlinked successfully');
+    } catch (error) {
+      console.error('Error unlinking note:', error);
+      toast.error('Failed to unlink note');
+    }
+  };
+
+  const handleNoteReorder = async (result: any, subareaId: string) => {
+    if (!result.destination) return;
+
+    const { source, destination } = result;
+    const subarea = areas
+      .flatMap(area => area.subareas)
+      .find(s => s.id === subareaId);
+    if (!subarea) return;
+
+    const newNotes = Array.from(subarea.subarea_notes);
+    const [removed] = newNotes.splice(source.index, 1);
+    newNotes.splice(destination.index, 0, removed);
+
+    // Update the display order in the database
+    try {
+      await Promise.all(
+        newNotes.map((note, index) =>
+          updateNoteLinkOrder('subarea', note.id, index)
+        )
+      );
+    } catch (error) {
+      console.error('Error updating note order:', error);
+      toast.error('Failed to update note order');
     }
   };
 
@@ -136,6 +215,17 @@ export default function SubareaManager() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          fetchAvailableNotes();
+                          setSelectedSubareaId(subarea.id);
+                          setIsLinkingNote(true);
+                        }}
+                      >
+                        <LinkIcon className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -176,6 +266,69 @@ export default function SubareaManager() {
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">No goals yet</p>
+                  )}
+
+                  {/* Notes Section */}
+                  {subarea.subarea_notes && subarea.subarea_notes.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-sm font-medium text-gray-500 mb-3">Linked Notes</h4>
+                      <DragDropContext onDragEnd={(result) => handleNoteReorder(result, subarea.id)}>
+                        <Droppable droppableId={`subarea-notes-${subarea.id}`}>
+                          {(provided) => (
+                            <div
+                              {...provided.droppableProps}
+                              ref={provided.innerRef}
+                              className="space-y-3"
+                            >
+                              {subarea.subarea_notes.map((noteLink, index) => (
+                                <Draggable
+                                  key={noteLink.id}
+                                  draggableId={noteLink.id}
+                                  index={index}
+                                >
+                                  {(provided) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      {...provided.dragHandleProps}
+                                      className="bg-gray-50 rounded-lg p-3"
+                                    >
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex-grow">
+                                          <h5 className="font-medium">{noteLink.note.title}</h5>
+                                          <p className={`text-sm text-gray-600 mt-1 ${showFullContent === noteLink.id ? '' : 'line-clamp-2'}`}>
+                                            {noteLink.note.content}
+                                          </p>
+                                          {noteLink.note.content.length > 150 && (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => setShowFullContent(showFullContent === noteLink.id ? null : noteLink.id)}
+                                              className="mt-1 text-blue-600 hover:text-blue-800"
+                                            >
+                                              {showFullContent === noteLink.id ? 'Show less' : 'Show more'}
+                                            </Button>
+                                          )}
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleUnlinkNote(noteLink.id)}
+                                          className="text-red-600 hover:text-red-800"
+                                        >
+                                          Unlink
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -290,6 +443,53 @@ export default function SubareaManager() {
               onClick={() => deletingSubarea && handleDeleteSubarea(deletingSubarea)}
             >
               Delete Subarea
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Note Linking Dialog */}
+      <Dialog open={isLinkingNote} onOpenChange={setIsLinkingNote}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Note to Subarea</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="note-select" className="text-sm font-medium">
+                Select Note
+              </label>
+              <Select
+                value={selectedNoteId}
+                onValueChange={setSelectedNoteId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a note..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableNotes.map(note => (
+                    <SelectItem key={note.id} value={note.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{note.title}</span>
+                        <span className="text-sm text-gray-500 truncate">
+                          {note.content}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsLinkingNote(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLinkNote}
+              disabled={!selectedNoteId || !selectedSubareaId}
+            >
+              Link Note
             </Button>
           </div>
         </DialogContent>

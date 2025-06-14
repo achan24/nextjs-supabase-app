@@ -683,52 +683,52 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                 const eta = totalEstimatedTime ? new Date(Date.now() + totalEstimatedTime) : null;
 
                 return (
-                  <Card key={sequence.id} className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="font-semibold">{sequence.title}</h3>
-                        <p className="text-sm text-gray-500">{sequence.description}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setIsHistoryModalOpen(true);
-                            setHistorySequenceId(sequence.id);
-                          }}
-                        >
-                          <Clock className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditSequence(sequence)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedSequence(sequence);
-                            setIsDeleteModalOpen(true);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                <Card key={sequence.id} className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="font-semibold">{sequence.title}</h3>
+                      <p className="text-sm text-gray-500">{sequence.description}</p>
                     </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setIsHistoryModalOpen(true);
+                          setHistorySequenceId(sequence.id);
+                        }}
+                      >
+                        <Clock className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditSequence(sequence)}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setSelectedSequence(sequence);
+                          setIsDeleteModalOpen(true);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
 
-                    <div className="space-y-2 mb-4">
-                      <p className="text-sm">
-                        {sequence.tasks.length} tasks
+                  <div className="space-y-2 mb-4">
+                    <p className="text-sm">
+                      {sequence.tasks.length} tasks
+                    </p>
+                    {completions.filter(c => c.sequence_id === sequence.id).length > 0 && (
+                      <p className="text-sm text-gray-500">
+                        {completions.filter(c => c.sequence_id === sequence.id).length} completions
                       </p>
-                      {completions.filter(c => c.sequence_id === sequence.id).length > 0 && (
-                        <p className="text-sm text-gray-500">
-                          {completions.filter(c => c.sequence_id === sequence.id).length} completions
-                        </p>
-                      )}
+                    )}
                       {totalEstimatedTime > 0 && (
                         <p className="text-sm text-blue-600">
                           Estimated time: {formatTime(totalEstimatedTime)}
@@ -743,26 +743,26 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                           )}
                         </p>
                       )}
-                    </div>
+                  </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        onClick={() => handleStartSequence(sequence)}
-                        className="flex-1"
-                        disabled={selectedSequence !== null}
-                      >
-                        {selectedSequence ? (
-                          'Another sequence is active'
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4 mr-2" />
-                            Start
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </Card>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="default"
+                      onClick={() => handleStartSequence(sequence)}
+                      className="flex-1"
+                      disabled={selectedSequence !== null}
+                    >
+                      {selectedSequence ? (
+                        'Another sequence is active'
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Start
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </Card>
                 );
               })}
             </div>
@@ -1046,7 +1046,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             console.error('Error fetching flow:', error);
                             return;
                           }
-
+                          
                           const updatedNodes = flow.nodes.map((n: any) => {
                             if (n.id === currentTask.id) {
                               return {
@@ -1124,7 +1124,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                             console.error('Error fetching flow:', error);
                             return;
                           }
-
+                          
                           const updatedNodes = flow.nodes.map((n: any) => {
                             if (n.id === currentTask.id) {
                               return {

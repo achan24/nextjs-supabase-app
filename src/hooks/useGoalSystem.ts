@@ -7,6 +7,10 @@ import {
   LifeGoalMilestone,
   LifeGoalMetric,
   LifeGoalMetricThreshold,
+  Note,
+  AreaNoteLink,
+  SubareaNoteLink,
+  GoalNoteLink,
 } from '@/types/goal';
 
 export function useGoalSystem() {
@@ -25,10 +29,22 @@ export function useGoalSystem() {
         .from('life_goal_areas')
         .select(`
           *,
+          area_notes:area_note_links (
+            *,
+            note:notes (*)
+          ),
           subareas:life_goal_subareas (
             *,
+            subarea_notes:subarea_note_links (
+              *,
+              note:notes (*)
+            ),
             goals:life_goals (
               *,
+              goal_notes:goal_note_links (
+                *,
+                note:notes (*)
+              ),
               milestones:life_goal_milestones (*),
               metrics:life_goal_metrics (
                 *,
@@ -49,9 +65,31 @@ export function useGoalSystem() {
       // Sort nested data
       const sortedData = areasData?.map(area => ({
         ...area,
+        area_notes: (area.area_notes || [])
+          .map((link: any) => ({
+            ...link,
+            note: Array.isArray(link.note) ? link.note[0] : link.note
+          }))
+          .sort((a: AreaNoteLink, b: AreaNoteLink) => a.display_order - b.display_order),
         subareas: area.subareas?.map((subarea: LifeGoalSubarea) => ({
           ...subarea,
-          goals: subarea.goals?.sort((a: LifeGoal, b: LifeGoal) => 
+          subarea_notes: (subarea.subarea_notes || [])
+            .map((link: any) => ({
+              ...link,
+              note: Array.isArray(link.note) ? link.note[0] : link.note
+            }))
+            .sort((a: SubareaNoteLink, b: SubareaNoteLink) => a.display_order - b.display_order),
+          goals: subarea.goals?.map((goal: LifeGoal) => ({
+            ...goal,
+            goal_notes: (goal.goal_notes || [])
+              .map((link: any) => ({
+                ...link,
+                note: Array.isArray(link.note) ? link.note[0] : link.note
+              }))
+              .sort((a: GoalNoteLink, b: GoalNoteLink) => a.display_order - b.display_order),
+            milestones: goal.milestones || [],
+            metrics: goal.metrics || []
+          })).sort((a: LifeGoal, b: LifeGoal) => 
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           ) || []
         })).sort((a: LifeGoalSubarea, b: LifeGoalSubarea) => 
@@ -284,6 +322,124 @@ export function useGoalSystem() {
     await fetchAreas();
   }, [fetchAreas]);
 
+  // Add note linking functions
+  const linkNoteToArea = useCallback(async (areaId: string, noteId: string) => {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData.session?.user?.id) throw new Error('No authenticated user');
+
+    const { data, error } = await supabase
+      .from('area_note_links')
+      .insert({
+        area_id: areaId,
+        note_id: noteId,
+        user_id: sessionData.session.user.id,
+        display_order: 0 // Will be updated after fetching
+      })
+      .select(`
+        *,
+        note:notes (*)
+      `)
+      .single();
+
+    if (error) throw error;
+    await fetchAreas();
+    return data;
+  }, [fetchAreas]);
+
+  const unlinkNoteFromArea = useCallback(async (linkId: string) => {
+    const { error } = await supabase
+      .from('area_note_links')
+      .delete()
+      .eq('id', linkId);
+
+    if (error) throw error;
+    await fetchAreas();
+  }, [fetchAreas]);
+
+  const linkNoteToSubarea = useCallback(async (subareaId: string, noteId: string) => {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData.session?.user?.id) throw new Error('No authenticated user');
+
+    const { data, error } = await supabase
+      .from('subarea_note_links')
+      .insert({
+        subarea_id: subareaId,
+        note_id: noteId,
+        user_id: sessionData.session.user.id,
+        display_order: 0 // Will be updated after fetching
+      })
+      .select(`
+        *,
+        note:notes (*)
+      `)
+      .single();
+
+    if (error) throw error;
+    await fetchAreas();
+    return data;
+  }, [fetchAreas]);
+
+  const unlinkNoteFromSubarea = useCallback(async (linkId: string) => {
+    const { error } = await supabase
+      .from('subarea_note_links')
+      .delete()
+      .eq('id', linkId);
+
+    if (error) throw error;
+    await fetchAreas();
+  }, [fetchAreas]);
+
+  const linkNoteToGoal = useCallback(async (goalId: string, noteId: string) => {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData.session?.user?.id) throw new Error('No authenticated user');
+
+    const { data, error } = await supabase
+      .from('goal_note_links')
+      .insert({
+        goal_id: goalId,
+        note_id: noteId,
+        user_id: sessionData.session.user.id,
+        display_order: 0 // Will be updated after fetching
+      })
+      .select(`
+        *,
+        note:notes (*)
+      `)
+      .single();
+
+    if (error) throw error;
+    await fetchAreas();
+    return data;
+  }, [fetchAreas]);
+
+  const unlinkNoteFromGoal = useCallback(async (linkId: string) => {
+    const { error } = await supabase
+      .from('goal_note_links')
+      .delete()
+      .eq('id', linkId);
+
+    if (error) throw error;
+    await fetchAreas();
+  }, [fetchAreas]);
+
+  const updateNoteLinkOrder = useCallback(async (
+    type: 'area' | 'subarea' | 'goal',
+    linkId: string,
+    newOrder: number
+  ) => {
+    const table = `${type}_note_links`;
+    const { error } = await supabase
+      .from(table)
+      .update({ display_order: newOrder })
+      .eq('id', linkId);
+
+    if (error) throw error;
+    await fetchAreas();
+  }, [fetchAreas]);
+
   return {
     areas,
     loading,
@@ -306,5 +462,12 @@ export function useGoalSystem() {
     addMetricThreshold,
     updateMetricThreshold,
     deleteMetricThreshold,
+    linkNoteToArea,
+    unlinkNoteFromArea,
+    linkNoteToSubarea,
+    unlinkNoteFromSubarea,
+    linkNoteToGoal,
+    unlinkNoteFromGoal,
+    updateNoteLinkOrder,
   };
 } 

@@ -6,6 +6,7 @@ export interface LifeGoalArea {
   created_at: string;
   updated_at: string;
   subareas: LifeGoalSubarea[];
+  area_notes: AreaNoteLink[];
 }
 
 export interface LifeGoalSubarea {
@@ -16,6 +17,7 @@ export interface LifeGoalSubarea {
   created_at: string;
   updated_at: string;
   goals: LifeGoal[];
+  subarea_notes: SubareaNoteLink[];
 }
 
 export interface LifeGoal {
@@ -28,6 +30,7 @@ export interface LifeGoal {
   updated_at: string;
   milestones: LifeGoalMilestone[];
   metrics: LifeGoalMetric[];
+  goal_notes: GoalNoteLink[];
 }
 
 export interface LifeGoalMilestone {
@@ -120,4 +123,35 @@ export interface Area {
   subareas: Subarea[];
   created_at: Date;
   updated_at: Date;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  tags: string[];
+  user_id: string;
+}
+
+export interface NoteLink {
+  id: string;
+  note_id: string;
+  user_id: string;
+  created_at: string;
+  display_order: number;
+  note: Note;
+}
+
+export interface AreaNoteLink extends NoteLink {
+  area_id: string;
+}
+
+export interface SubareaNoteLink extends NoteLink {
+  subarea_id: string;
+}
+
+export interface GoalNoteLink extends NoteLink {
+  goal_id: string;
 } 

@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Target, Flag, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,9 +16,12 @@ import {
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
-import { LifeGoal, LifeGoalMilestone, LifeGoalMetric } from '@/types/goal';
+import { LifeGoal, LifeGoalMilestone, LifeGoalMetric, Note } from '@/types/goal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createClient } from '@/lib/supabase/client';
 
 interface GoalManagerProps {
   selectedSubareaId: string | null;
@@ -46,6 +49,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     addMetricThreshold,
     updateMetricThreshold,
     deleteMetricThreshold,
+    linkNoteToGoal,
+    unlinkNoteFromGoal,
+    updateNoteLinkOrder,
   } = useGoalSystem();
 
   const [isAddingGoal, setIsAddingGoal] = useState(false);
@@ -77,6 +83,15 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [editMilestoneTitle, setEditMilestoneTitle] = useState('');
   const [editMilestoneDescription, setEditMilestoneDescription] = useState('');
   const [editMilestoneDueDate, setEditMilestoneDueDate] = useState('');
+
+  const [isLinkingNote, setIsLinkingNote] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState('');
+  const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
+  const [showFullContent, setShowFullContent] = useState<string | null>(null);
+  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  const [editGoalTitle, setEditGoalTitle] = useState('');
+  const [editGoalDescription, setEditGoalDescription] = useState('');
+  const supabase = createClient();
 
   // Find the area that contains the selected subarea
   useEffect(() => {
@@ -261,6 +276,71 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     router.push(selectedSubareaId ? `/dashboard/goal?subarea=${selectedSubareaId}` : '/dashboard/goal');
   };
 
+  const fetchAvailableNotes = async () => {
+    const { data: notes, error } = await supabase
+      .from('notes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notes:', error);
+      return;
+    }
+
+    setAvailableNotes(notes || []);
+  };
+
+  const handleLinkNote = async (goalId: string) => {
+    if (!selectedNoteId) return;
+
+    try {
+      await linkNoteToGoal(goalId, selectedNoteId);
+      toast.success('Note linked successfully');
+      setIsLinkingNote(false);
+      setSelectedNoteId('');
+    } catch (error) {
+      console.error('Error linking note:', error);
+      toast.error('Failed to link note');
+    }
+  };
+
+  const handleUnlinkNote = async (linkId: string) => {
+    try {
+      await unlinkNoteFromGoal(linkId);
+      toast.success('Note unlinked successfully');
+    } catch (error) {
+      console.error('Error unlinking note:', error);
+      toast.error('Failed to unlink note');
+    }
+  };
+
+  const handleNoteReorder = async (result: any, goalId: string) => {
+    if (!result.destination) return;
+
+    const { source, destination } = result;
+    const goal = areas
+      .flatMap(area => area.subareas)
+      .flatMap(subarea => subarea.goals)
+      .find(g => g.id === goalId);
+    if (!goal) return;
+
+    const newNotes = Array.from(goal.goal_notes);
+    const [removed] = newNotes.splice(source.index, 1);
+    newNotes.splice(destination.index, 0, removed);
+
+    // Update the display order in the database
+    try {
+      await Promise.all(
+        newNotes.map((note, index) =>
+          updateNoteLinkOrder('goal', note.id, index)
+        )
+      );
+    } catch (error) {
+      console.error('Error updating note order:', error);
+      toast.error('Failed to update note order');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -358,33 +438,112 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
       </div>
 
       {selectedGoal ? (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-start">
-              <div>
-                <CardTitle>{selectedGoal.title}</CardTitle>
-                {selectedGoal.description && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    {selectedGoal.description}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="icon">
-                  <Edit2 className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteGoal(selectedGoal.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex justify-between items-start">
+                <div className="flex flex-col">
+                  <h3 className="text-2xl">{selectedGoal.title}</h3>
+                  {selectedGoal.description && (
+                    <p className="text-gray-600 mt-1">{selectedGoal.description}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setEditingGoal(selectedGoal.id);
+                      setEditGoalTitle(selectedGoal.title);
+                      setEditGoalDescription(selectedGoal.description || '');
+                    }}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteGoal(selectedGoal.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      fetchAvailableNotes();
+                      setIsLinkingNote(true);
+                    }}
+                  >
+                    <LinkIcon className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Notes Section */}
+              {selectedGoal.goal_notes && selectedGoal.goal_notes.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-gray-500 mb-3">Linked Notes</h4>
+                  <DragDropContext onDragEnd={(result) => handleNoteReorder(result, selectedGoal.id)}>
+                    <Droppable droppableId={`goal-notes-${selectedGoal.id}`}>
+                      {(provided) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className="space-y-3"
+                        >
+                          {selectedGoal.goal_notes.map((noteLink, index) => (
+                            <Draggable
+                              key={noteLink.id}
+                              draggableId={noteLink.id}
+                              index={index}
+                            >
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className="bg-gray-50 rounded-lg p-3"
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-grow">
+                                      <h5 className="font-medium">{noteLink.note.title}</h5>
+                                      <p className={`text-sm text-gray-600 mt-1 ${showFullContent === noteLink.id ? '' : 'line-clamp-2'}`}>
+                                        {noteLink.note.content}
+                                      </p>
+                                      {noteLink.note.content.length > 150 && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => setShowFullContent(showFullContent === noteLink.id ? null : noteLink.id)}
+                                          className="mt-1 text-blue-600 hover:text-blue-800"
+                                        >
+                                          {showFullContent === noteLink.id ? 'Show less' : 'Show more'}
+                                        </Button>
+                                      )}
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUnlinkNote(noteLink.id)}
+                                      className="text-red-600 hover:text-red-800"
+                                    >
+                                      Unlink
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
+                </div>
+              )}
+
               {/* Milestones Section */}
               <div>
                 <div className="flex justify-between items-center mb-4">
@@ -512,9 +671,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                   <p className="text-sm text-gray-500">No metrics yet</p>
                 )}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <>
           {!selectedSubareaId && (
@@ -1138,6 +1297,53 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               }
             >
               Add Target
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Note Linking Dialog */}
+      <Dialog open={isLinkingNote} onOpenChange={setIsLinkingNote}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Note to Goal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="note-select" className="text-sm font-medium">
+                Select Note
+              </label>
+              <Select
+                value={selectedNoteId}
+                onValueChange={setSelectedNoteId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a note..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableNotes.map(note => (
+                    <SelectItem key={note.id} value={note.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{note.title}</span>
+                        <span className="text-sm text-gray-500 truncate">
+                          {note.content}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsLinkingNote(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedGoal && handleLinkNote(selectedGoal.id)}
+              disabled={!selectedNoteId || !selectedGoal}
+            >
+              Link Note
             </Button>
           </div>
         </DialogContent>

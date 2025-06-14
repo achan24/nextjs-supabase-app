@@ -6,6 +6,7 @@ import ClozeText from './ClozeText';
 import FlashcardReview from './FlashcardReview';
 import { createClient } from '@/lib/supabase';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { toast } from 'sonner';
 
 interface CompletionRecord {
   completedAt: number;
@@ -62,7 +63,6 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
   const supabase = createClient();
-  const notificationContext = useNotifications();
 
   useEffect(() => {
     if (node) {
@@ -490,26 +490,27 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
         const textBefore = textarea.value.substring(0, cursorPos);
         const textAfter = textarea.value.substring(textarea.selectionEnd);
         
-        // Add size parameters to the markdown - ensure no spaces in parameter section
+        // Add markdown without dimensions
         const imageMarkdown = `![Pasted Image|width=200px height=auto](${canonicalUrl})`;
         console.log('Generated image markdown:', imageMarkdown);
         
         const newValue = textBefore + imageMarkdown + textAfter;
         console.log('New textarea value:', newValue);
         
+        // Update the description state
+        setDescription(newValue);
+        
         // Update the node
-        const updatedNode = {
-          ...node,
-          data: {
-            ...node.data,
-            description: newValue
-          }
-        };
-        await updateNode(node.id, updatedNode);
+        updateNode(node.id, {
+          description: newValue
+        });
         
         // Set cursor position after the inserted text
         const newCursorPos = cursorPos + imageMarkdown.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+        // Show success notification
+        toast.success('Image uploaded successfully');
       }
     } catch (error) {
       console.error('Error handling paste:', error);
@@ -947,12 +948,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
                       });
 
                       // Also try through the notification context
-                      notificationContext.addNotification({
-                        title: "Test Notification (Context)",
-                        body: "This is a test notification through the context system",
-                        type: "task",
-                        url: `/dashboard/process-flow?task=${node.id}`
-                      });
+                      toast.success('Test notification sent through the context system');
 
                       console.log('[NodeDetails] Test notifications sent');
                     } catch (err) {

@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Link as LinkIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,11 @@ import {
 } from '@/components/ui/dialog';
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { toast } from 'sonner';
-import { LifeGoalArea, LifeGoal } from '@/types/goal';
+import { LifeGoalArea, LifeGoal, Note } from '@/types/goal';
 import Link from 'next/link';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createClient } from '@/lib/supabase/client';
 
 interface AreaManagerProps {
   selectedAreaId: string | null;
@@ -38,6 +41,9 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
     addSubarea,
     updateSubarea,
     deleteSubarea,
+    linkNoteToArea,
+    unlinkNoteFromArea,
+    updateNoteLinkOrder,
   } = useGoalSystem();
 
   console.log('Areas from hook:', areas);
@@ -56,6 +62,11 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
   const [editSubareaDescription, setEditSubareaDescription] = useState('');
   const [deletingArea, setDeletingArea] = useState<string | null>(null);
   const [deletingSubarea, setDeletingSubarea] = useState<string | null>(null);
+  const [isLinkingNote, setIsLinkingNote] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState('');
+  const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
+  const [showFullContent, setShowFullContent] = useState<string | null>(null);
+  const supabase = createClient();
 
   useEffect(() => {
     if (selectedAreaId) {
@@ -147,6 +158,68 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
   const handleSubareaClick = (subareaId: string) => {
     console.log('Subarea clicked:', subareaId);
     router.push(`/dashboard/goal?subarea=${subareaId}`);
+  };
+
+  const fetchAvailableNotes = async () => {
+    const { data: notes, error } = await supabase
+      .from('notes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching notes:', error);
+      return;
+    }
+
+    setAvailableNotes(notes || []);
+  };
+
+  const handleLinkNote = async (areaId: string) => {
+    if (!selectedNoteId) return;
+
+    try {
+      await linkNoteToArea(areaId, selectedNoteId);
+      toast.success('Note linked successfully');
+      setIsLinkingNote(false);
+      setSelectedNoteId('');
+    } catch (error) {
+      console.error('Error linking note:', error);
+      toast.error('Failed to link note');
+    }
+  };
+
+  const handleUnlinkNote = async (linkId: string) => {
+    try {
+      await unlinkNoteFromArea(linkId);
+      toast.success('Note unlinked successfully');
+    } catch (error) {
+      console.error('Error unlinking note:', error);
+      toast.error('Failed to unlink note');
+    }
+  };
+
+  const handleNoteReorder = async (result: any, areaId: string) => {
+    if (!result.destination) return;
+
+    const { source, destination } = result;
+    const area = areas.find(a => a.id === areaId);
+    if (!area) return;
+
+    const newNotes = Array.from(area.area_notes);
+    const [removed] = newNotes.splice(source.index, 1);
+    newNotes.splice(destination.index, 0, removed);
+
+    // Update the display order in the database
+    try {
+      await Promise.all(
+        newNotes.map((note, index) =>
+          updateNoteLinkOrder('area', note.id, index)
+        )
+      );
+    } catch (error) {
+      console.error('Error updating note order:', error);
+      toast.error('Failed to update note order');
+    }
   };
 
   // Add a back button when an area is focused
@@ -277,6 +350,16 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
                     }}
                   >
                     <Trash2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      fetchAvailableNotes();
+                      setIsLinkingNote(true);
+                    }}
+                  >
+                    <LinkIcon className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -578,6 +661,53 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
               onClick={() => deletingSubarea && handleDeleteSubarea(deletingSubarea)}
             >
               Delete Subarea
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Note Linking Dialog */}
+      <Dialog open={isLinkingNote} onOpenChange={setIsLinkingNote}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Note to Area</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="note-select" className="text-sm font-medium">
+                Select Note
+              </label>
+              <Select
+                value={selectedNoteId}
+                onValueChange={setSelectedNoteId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a note..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableNotes.map(note => (
+                    <SelectItem key={note.id} value={note.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{note.title}</span>
+                        <span className="text-sm text-gray-500 truncate">
+                          {note.content}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsLinkingNote(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => focusedAreaId && handleLinkNote(focusedAreaId)}
+              disabled={!selectedNoteId || !focusedAreaId}
+            >
+              Link Note
             </Button>
           </div>
         </DialogContent>
