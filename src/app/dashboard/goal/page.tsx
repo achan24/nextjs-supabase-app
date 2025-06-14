@@ -15,14 +15,19 @@ export default function GOALSystem() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('areas');
   const subareaId = searchParams?.get('subarea') || null;
+  const goalId = searchParams?.get('goal') || null;
+  const areaId = searchParams?.get('area') || null;
+  const tab = searchParams?.get('tab') || null;
   const { areas } = useGoalSystem();
 
-  // Switch to goals tab when subarea is selected
+  // Switch to appropriate tab based on URL parameters
   useEffect(() => {
-    if (subareaId) {
+    if (tab) {
+      setActiveTab(tab);
+    } else if (subareaId || goalId) {
       setActiveTab('goals');
     }
-  }, [subareaId]);
+  }, [tab, subareaId, goalId]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -68,7 +73,7 @@ export default function GOALSystem() {
         </Tabs.List>
 
         <Tabs.Content value="areas" className="mt-2">
-          <AreaManager />
+          <AreaManager selectedAreaId={areaId} />
         </Tabs.Content>
 
         <Tabs.Content value="subareas" className="mt-2">
@@ -76,7 +81,7 @@ export default function GOALSystem() {
         </Tabs.Content>
 
         <Tabs.Content value="goals" className="mt-2">
-          <GoalManager selectedSubareaId={subareaId} />
+          <GoalManager selectedSubareaId={subareaId} selectedGoalId={goalId} />
         </Tabs.Content>
 
         <Tabs.Content value="metrics" className="mt-2">

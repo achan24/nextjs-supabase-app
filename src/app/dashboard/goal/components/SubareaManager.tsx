@@ -15,8 +15,11 @@ import {
 } from '@/components/ui/dialog';
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function SubareaManager() {
+  const router = useRouter();
   const {
     areas,
     loading,
@@ -101,118 +104,85 @@ export default function SubareaManager() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Subareas</h2>
-      </div>
-
-      <div className="space-y-6">
-        {areas.map((area) => (
-          <div key={area.id} className="space-y-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span>{area.name}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsAddingSubarea(area.id)}
-                  className="h-7 px-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Subarea
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              {area.subareas.map((subarea) => (
-                <Card 
-                  key={subarea.id}
-                  className="group cursor-pointer transition-all hover:shadow-lg hover:border-gray-400"
-                  onClick={() => {
-                    window.history.pushState({}, '', `/dashboard/goal?subarea=${subarea.id}`);
-                    window.location.reload();
-                  }}
-                >
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="group-hover:text-blue-600 transition-colors">
-                          {subarea.name}
-                        </CardTitle>
-                        {subarea.description && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            {subarea.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingSubarea(subarea.id);
-                            setEditSubareaName(subarea.name);
-                            setEditSubareaDescription(subarea.description || '');
-                          }}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingSubarea(subarea.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm text-gray-500">
-                          {subarea.goals?.length || 0} goal{subarea.goals?.length !== 1 ? 's' : ''}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-gray-500">View All Goals</span>
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
-                        </div>
-                      </div>
-                      {subarea.goals && subarea.goals.length > 0 && (
-                        <div className="border-t pt-4 space-y-2">
-                          {subarea.goals.map(goal => (
-                            <div key={goal.id} className="flex justify-between items-start">
-                              <div>
-                                <p className="font-medium">{goal.title}</p>
-                                {goal.description && (
-                                  <p className="text-sm text-gray-600">{goal.description}</p>
-                                )}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {goal.milestones?.length || 0} milestone{goal.milestones?.length !== 1 ? 's' : ''}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {area.subareas.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  No subareas yet. Click "Add Subarea" to get started.
-                </p>
-              )}
-            </div>
+    <div className="space-y-8">
+      {areas.map(area => (
+        <div key={area.id} className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <Link 
+              href={`/dashboard/goal?tab=areas&area=${area.id}`}
+              className="text-xl font-semibold hover:text-blue-600"
+            >
+              {area.name}
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddingSubarea(area.id)}
+            >
+              + Add Subarea
+            </Button>
           </div>
-        ))}
-      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {area.subareas.map(subarea => (
+              <Card key={subarea.id}>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>{subarea.name}</CardTitle>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteSubarea(subarea.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {subarea.goals && subarea.goals.length > 0 ? (
+                    <div className="space-y-3">
+                      {subarea.goals.map(goal => (
+                        <div 
+                          key={goal.id} 
+                          className="flex justify-between items-start border-b pb-2 last:border-0"
+                        >
+                          <div className="flex-1">
+                            <Link 
+                              href={`/dashboard/goal?subarea=${subarea.id}&goal=${goal.id}`}
+                              className="text-sm font-medium hover:text-blue-600"
+                            >
+                              {goal.title}
+                            </Link>
+                            {goal.description && (
+                              <p className="text-xs text-gray-600 mt-1">{goal.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-500">
+                                {goal.milestones?.length || 0} milestone{goal.milestones?.length !== 1 ? 's' : ''}
+                              </span>
+                              {goal.milestones?.length > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-gray-400">•</span>
+                                  <span className="text-xs text-gray-500">
+                                    {goal.milestones.filter(m => m.completed).length} completed
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No goals yet</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {/* Add Subarea Dialog */}
       <Dialog open={isAddingSubarea !== null} onOpenChange={(open) => !open && setIsAddingSubarea(null)}>

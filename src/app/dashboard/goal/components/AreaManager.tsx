@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,13 @@ import {
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { toast } from 'sonner';
 import { LifeGoalArea, LifeGoal } from '@/types/goal';
+import Link from 'next/link';
 
-export default function AreaManager() {
+interface AreaManagerProps {
+  selectedAreaId: string | null;
+}
+
+export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
   console.log('AreaManager render');
   const router = useRouter();
 
@@ -50,6 +55,16 @@ export default function AreaManager() {
   const [editSubareaDescription, setEditSubareaDescription] = useState('');
   const [deletingArea, setDeletingArea] = useState<string | null>(null);
   const [deletingSubarea, setDeletingSubarea] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedAreaId) {
+      // Find the area element and scroll it into view
+      const areaElement = document.getElementById(`area-${selectedAreaId}`);
+      if (areaElement) {
+        areaElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }, [selectedAreaId]);
 
   const handleAddArea = async () => {
     try {
@@ -306,7 +321,12 @@ export default function AreaManager() {
                             <ul className="space-y-1">
                               {subarea.goals.slice(0, 3).map((goal: LifeGoal) => (
                                 <li key={goal.id} className="text-sm text-gray-600">
-                                  • {goal.title}
+                                  • <Link 
+                                      href={`/dashboard/goal?subarea=${subarea.id}&goal=${goal.id}`}
+                                      className="hover:text-blue-600 hover:underline cursor-pointer"
+                                    >
+                                      {goal.title}
+                                    </Link>
                                 </li>
                               ))}
                               {subarea.goals.length > 3 && (
