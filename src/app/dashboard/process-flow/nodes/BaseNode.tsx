@@ -1,8 +1,11 @@
 'use client';
 
-import { memo } from 'react';
-import { Handle, Position, NodeProps } from 'reactflow';
+import { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import ClozeText from '../components/ClozeText';
+import { ResizableBox } from 'react-resizable';
+import 'react-resizable/css/styles.css';
+import { createClient } from '@/lib/supabase';
 
 interface ClozeStats {
   id: string;
@@ -77,13 +80,166 @@ const nodeTypeStyles = {
   },
 };
 
+const ResizableImage = ({ 
+  src, 
+  alt,
+  initialWidth = 200,
+  initialHeight = 200,
+  onResize
+}: { 
+  src: string; 
+  alt: string;
+  initialWidth?: number;
+  initialHeight?: number;
+  onResize?: (width: number, height: number) => void;
+}) => {
+  const [size, setSize] = useState({ width: initialWidth, height: initialHeight });
+  const supabase = createClient();
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  // Get signed URL for Supabase images
+  useEffect(() => {
+    const getSignedUrl = async () => {
+      if (!src.startsWith('supabase://')) {
+        setSignedUrl(src);
+        return;
+      }
+
+      try {
+        const [bucketName, ...pathParts] = src.replace('supabase://', '').split('/');
+        const filePath = pathParts.join('/');
+        
+        const { data, error } = await supabase.storage
+          .from(bucketName)
+          .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year expiry
+
+        if (error) {
+          console.error('Error creating signed URL:', error);
+          return;
+        }
+
+        if (data?.signedUrl) {
+          setSignedUrl(data.signedUrl);
+        }
+      } catch (error) {
+        console.error('Error processing URL:', src, error);
+      }
+    };
+
+    getSignedUrl();
+  }, [src]);
+
+  if (!signedUrl) {
+    return null; // Don't render anything until we have the URL
+  }
+
+  return (
+    <div className="my-2">
+      <ResizableBox
+        width={size.width}
+        height={size.height}
+        minConstraints={[100, 100]}
+        maxConstraints={[500, 500]}
+        lockAspectRatio={true}
+        resizeHandles={['se']}
+        className="nodrag nopan relative"
+        handle={
+          <span 
+            className="react-resizable-handle react-resizable-handle-se nodrag nopan absolute bottom-0 right-0 w-6 h-6 bg-white border-2 border-blue-500 rounded-full cursor-se-resize hover:bg-blue-500 z-[100]"
+            onPointerDownCapture={e => e.stopPropagation()}
+          />
+        }
+        onResizeStop={(_, { size: newSize }) => {
+          setSize(newSize);
+          onResize?.(newSize.width, newSize.height);
+        }}
+      >
+        <img 
+          src={signedUrl}
+          alt={alt}
+          draggable={false}
+          className="w-full h-full object-contain select-none rounded-lg shadow-sm"
+          crossOrigin="anonymous"
+        />
+      </ResizableBox>
+    </div>
+  );
+};
+
+// Custom renderer for node content that handles images specially
+const NodeContent = ({ 
+  text, 
+  isTestMode,
+  onImageResize
+}: { 
+  text: string; 
+  isTestMode: boolean;
+  onImageResize?: (originalMarkdown: string, width: number, height: number) => void;
+}) => {
+  // Find image markdown in the text - fixed regex without escaped backslashes
+  const parts = text.split(/(!\[.*?\]\(.*?\))/g);
+  
+  return (
+    <>
+      {parts.map((part, index) => {
+        // Match both standard markdown and markdown with dimensions
+        const imageMatch = part.match(/!\[(.*?)\]\((.*?)(?:\|(\d+)x(\d+))?\)/);
+        if (imageMatch) {
+          const [fullMatch, alt, src, width, height] = imageMatch;
+          return (
+            <ResizableImage 
+              key={index} 
+              src={src} 
+              alt={alt}
+              initialWidth={width ? parseInt(width) : 200}
+              initialHeight={height ? parseInt(height) : 200}
+              onResize={(width, height) => {
+                onImageResize?.(fullMatch, width, height);
+              }}
+            />
+          );
+        }
+        return (
+          <ClozeText 
+            key={index}
+            text={part} 
+            isTestMode={isTestMode}
+          />
+        );
+      })}
+    </>
+  );
+};
+
 const BaseNode = ({
   data,
+  id,
   isConnectable,
   selected,
   type = 'task',
 }: NodeProps<BaseNodeData>) => {
   const styles = nodeTypeStyles[type as keyof typeof nodeTypeStyles] || nodeTypeStyles.task;
+  const { setNodes } = useReactFlow();
+
+  const handleImageResize = useCallback((originalMarkdown: string, width: number, height: number) => {
+    if (!data.description) return;
+    
+    // Extract the alt and src from the original markdown
+    const match = originalMarkdown.match(/!\[(.*?)\]\((.*?)(?:\|(\d+)x(\d+))?\)/);
+    if (!match) return;
+    
+    const [_, alt, src] = match;
+    
+    // Replace the original markdown with one that includes dimensions
+    const newMarkdown = `![${alt}](${src}|${width}x${height})`;
+    const newDescription = data.description.replace(originalMarkdown, newMarkdown);
+    
+    setNodes(nodes => 
+      nodes.map(node => 
+        node.id === id ? { ...node, data: { ...node.data, description: newDescription } } : node
+      )
+    );
+  }, [data.description, id, setNodes]);
 
   const statusColors = {
     ready: 'bg-yellow-100 border-yellow-400',
@@ -119,9 +275,10 @@ const BaseNode = ({
           <div className="text-sm font-bold">{data.label}</div>
           {data.description && (
             <div className="text-xs text-black whitespace-pre-wrap">
-              <ClozeText 
+              <NodeContent 
                 text={data.description} 
                 isTestMode={!!data.isTestMode}
+                onImageResize={handleImageResize}
               />
             </div>
           )}

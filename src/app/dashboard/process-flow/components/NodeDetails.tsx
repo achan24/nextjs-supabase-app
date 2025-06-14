@@ -489,17 +489,23 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
         const cursorPos = textarea.selectionStart;
         const textBefore = textarea.value.substring(0, cursorPos);
         const textAfter = textarea.value.substring(textarea.selectionEnd);
-        const imageMarkdown = `![Pasted Image](${canonicalUrl})`;
+        
+        // Add size parameters to the markdown - ensure no spaces in parameter section
+        const imageMarkdown = `![Pasted Image|width=200px height=auto](${canonicalUrl})`;
+        console.log('Generated image markdown:', imageMarkdown);
         
         const newValue = textBefore + imageMarkdown + textAfter;
-        textarea.value = newValue;
+        console.log('New textarea value:', newValue);
         
         // Update the node
         const updatedNode = {
           ...node,
-          description: newValue
+          data: {
+            ...node.data,
+            description: newValue
+          }
         };
-        await updateNode(updatedNode);
+        await updateNode(node.id, updatedNode);
         
         // Set cursor position after the inserted text
         const newCursorPos = cursorPos + imageMarkdown.length;

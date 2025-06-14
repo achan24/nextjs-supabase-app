@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase';
+import { ResizableBox } from 'react-resizable';
+import 'react-resizable/css/styles.css';
 
 interface ClozeTextProps {
   text: string;
@@ -9,8 +11,8 @@ interface ClozeTextProps {
   onReveal?: (word: string) => void;
 }
 
-function parseInlineMarkup(text: string): { type: 'text' | 'bold' | 'italic' | 'code' | 'link' | 'h1' | 'h2' | 'h3' | 'image', content: string, url?: string }[] {
-  const parts: { type: 'text' | 'bold' | 'italic' | 'code' | 'link' | 'h1' | 'h2' | 'h3' | 'image', content: string, url?: string }[] = [];
+function parseInlineMarkup(text: string): { type: 'text' | 'bold' | 'italic' | 'code' | 'link' | 'h1' | 'h2' | 'h3' | 'image', content: string, url?: string, style?: Record<string, string> }[] {
+  const parts: { type: 'text' | 'bold' | 'italic' | 'code' | 'link' | 'h1' | 'h2' | 'h3' | 'image', content: string, url?: string, style?: Record<string, string> }[] = [];
   let currentText = '';
   let i = 0;
   while (i < text.length) {
@@ -33,10 +35,39 @@ function parseInlineMarkup(text: string): { type: 'text' | 'bold' | 'italic' | '
         i++;
         continue;
       }
+
+      // Parse image parameters from alt text (e.g., "alt text|width=400px height=auto")
+      const altText = text.slice(i + 2, endBracket);
+      console.log('Parsing image markdown. Full text:', text);
+      console.log('Alt text with params:', altText);
+      const [content, ...params] = altText.split('|');
+      const style: Record<string, string> = {};
+      
+      if (params.length > 0) {
+        console.log('Raw params:', params[0]); // Debug log
+        const paramPairs = params[0].split(' ');
+        console.log('Param pairs:', paramPairs);
+        paramPairs.forEach(param => {
+          const [key, value] = param.split('=');
+          console.log('Processing param:', { key, value });
+          if (key && value) {
+            // Remove any quotes from the value
+            const cleanValue = value.replace(/['"]/g, '');
+            // For width and height, ensure we keep the units
+            if (key === 'width' || key === 'height') {
+              style[key] = cleanValue;
+              console.log('Added style:', key, cleanValue);
+            }
+          }
+        });
+      }
+
+      console.log('Final style object:', style);
       parts.push({
         type: 'image',
-        content: text.slice(i + 2, endBracket),
-        url: text.slice(startParen + 1, endParen)
+        content,
+        url: text.slice(startParen + 1, endParen),
+        style
       });
       i = endParen + 1;
       continue;
@@ -281,7 +312,6 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
               }
 
               signedUrl = data.signedUrl;
-              console.log('Got signed URL:', signedUrl);
             } catch (error) {
               console.error('Error in createSignedUrl:', error);
               retryCount++;
@@ -320,10 +350,8 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
   const getImageUrl = (originalUrl: string) => {
     const signedUrl = signedUrls.get(originalUrl);
     if (signedUrl) {
-      console.log('Using signed URL:', signedUrl);
       return signedUrl;
     }
-    console.log('No signed URL found for:', originalUrl);
     return originalUrl;
   };
 
@@ -369,20 +397,36 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
     switch (part.type) {
       case 'image':
         const imageUrl = part.url ? getImageUrl(part.url) : '';
+        
         return imageErrors.has(imageUrl) ? (
           <span key={index} className="text-red-500">[Failed to load image]</span>
         ) : (
-          <img 
+          <ResizableBox
             key={index}
-            src={imageUrl}
-            alt={part.content}
-            className="max-w-full h-auto my-2 rounded-lg shadow-sm"
-            onError={() => {
-              console.error('Image failed to load:', imageUrl);
-              handleImageError(imageUrl);
-            }}
-            crossOrigin="anonymous"
-          />
+            width={200}
+            height={200}
+            minConstraints={[100, 100]}
+            maxConstraints={[500, 500]}
+            lockAspectRatio={true}
+            resizeHandles={['se']}
+            className="relative"
+          >
+            <img 
+              src={imageUrl}
+              alt={part.content}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain'
+              }}
+              className="rounded-lg shadow-sm"
+              onError={() => {
+                console.error('Image failed to load:', imageUrl);
+                handleImageError(imageUrl);
+              }}
+              crossOrigin="anonymous"
+            />
+          </ResizableBox>
         );
       case 'text':
         const textContent = typeof part.content === 'string' ? part.content : '';
@@ -450,5 +494,28 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
   };
 
   const blocks = parseMarkup(text);
-  return <div className="whitespace-pre-wrap">{blocks.map((block, i) => renderPart(block, i))}</div>;
+  return (
+    <>
+      <style>
+        {`
+          .react-resizable-handle {
+            position: absolute;
+            bottom: -4px;
+            right: -4px;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border: 2px solid #4299e1;
+            border-radius: 50%;
+            cursor: se-resize;
+            z-index: 10;
+          }
+          .react-resizable-handle:hover {
+            background: #4299e1;
+          }
+        `}
+      </style>
+      <div className="whitespace-pre-wrap">{blocks.map((block, i) => renderPart(block, i))}</div>
+    </>
+  );
 } 

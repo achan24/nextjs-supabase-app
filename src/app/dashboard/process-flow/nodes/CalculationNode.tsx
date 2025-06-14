@@ -187,7 +187,7 @@ const CalculationNode = (props: NodeProps<CalculationNodeData>) => {
       if (shouldRecalculate) {
         calculateValue();
       }
-    }, 500);
+    }, 30000); // Changed from 500 to 30000 (30 seconds)
     
     return () => clearInterval(interval);
   }, [id, getEdges, getNode, calculateValue]);
