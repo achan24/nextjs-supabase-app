@@ -36,37 +36,40 @@ function parseInlineMarkup(text: string): { type: 'text' | 'bold' | 'italic' | '
         continue;
       }
 
-      // Parse image parameters from alt text (e.g., "alt text|width=400px height=auto")
+      // Parse image parameters from alt text and URL
       const altText = text.slice(i + 2, endBracket);
-      console.log('Parsing image markdown. Full text:', text);
-      console.log('Alt text with params:', altText);
-      const [content, ...params] = altText.split('|');
+      const urlPart = text.slice(startParen + 1, endParen);
+      
+      // Initialize style object
       const style: Record<string, string> = {};
       
-      if (params.length > 0) {
-        console.log('Raw params:', params[0]); // Debug log
-        const paramPairs = params[0].split(' ');
-        console.log('Param pairs:', paramPairs);
-        paramPairs.forEach(param => {
-          const [key, value] = param.split('=');
-          console.log('Processing param:', { key, value });
-          if (key && value) {
-            // Remove any quotes from the value
-            const cleanValue = value.replace(/['"]/g, '');
-            // For width and height, ensure we keep the units
-            if (key === 'width' || key === 'height') {
-              style[key] = cleanValue;
-              console.log('Added style:', key, cleanValue);
+      // Handle style parameters in alt text (e.g., "alt|width=200px height=auto")
+      if (altText.includes('|')) {
+        const [content, ...params] = altText.split('|');
+        if (params.length > 0) {
+          params[0].split(' ').forEach(param => {
+            const [key, value] = param.split('=');
+            if (key && value) {
+              style[key] = value.replace(/['"]/g, '');
             }
-          }
-        });
+          });
+        }
+      }
+      
+      // Handle dimensions in URL (e.g., "url|400x300")
+      const [url, dimensions] = urlPart.split('|');
+      if (dimensions) {
+        const [width, height] = dimensions.split('x').map(Number);
+        if (!isNaN(width) && !isNaN(height)) {
+          style['width'] = `${Math.round(width)}px`;
+          style['height'] = `${Math.round(height)}px`;
+        }
       }
 
-      console.log('Final style object:', style);
       parts.push({
         type: 'image',
-        content,
-        url: text.slice(startParen + 1, endParen),
+        content: altText.split('|')[0], // Get clean alt text without parameters
+        url: url,
         style
       });
       i = endParen + 1;
@@ -401,23 +404,14 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
         return imageErrors.has(imageUrl) ? (
           <span key={index} className="text-red-500">[Failed to load image]</span>
         ) : (
-          <ResizableBox
-            key={index}
-            width={200}
-            height={200}
-            minConstraints={[100, 100]}
-            maxConstraints={[500, 500]}
-            lockAspectRatio={true}
-            resizeHandles={['se']}
-            className="relative"
-          >
+          <div key={index} className="my-2 relative">
             <img 
               src={imageUrl}
               alt={part.content}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain'
+              style={part.style || {
+                width: '200px',
+                height: 'auto',
+                maxWidth: '100%'
               }}
               className="rounded-lg shadow-sm"
               onError={() => {
@@ -426,7 +420,7 @@ export default function ClozeText({ text, isTestMode, onReveal }: ClozeTextProps
               }}
               crossOrigin="anonymous"
             />
-          </ResizableBox>
+          </div>
         );
       case 'text':
       const textContent = typeof part.content === 'string' ? part.content : '';

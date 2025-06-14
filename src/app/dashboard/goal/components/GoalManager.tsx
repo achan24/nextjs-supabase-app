@@ -366,24 +366,27 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   };
 
+  // Only fetch tasks when we need them
+  const fetchTasks = async () => {
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching tasks:', error);
+      return;
+    }
+
+    setTasks(tasks || []);
+  };
+
+  // Fetch tasks when opening the task dialog
   useEffect(() => {
-    // Fetch available tasks
-    const fetchTasks = async () => {
-      const { data: tasks, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching tasks:', error);
-        return;
-      }
-
-      setTasks(tasks || []);
-    };
-
-    fetchTasks();
-  }, []);
+    if (isAddingTask) {
+      fetchTasks();
+    }
+  }, [isAddingTask]);
 
   const handleAddTaskToGoal = async (goalId: string) => {
     if (!selectedTaskId) return;

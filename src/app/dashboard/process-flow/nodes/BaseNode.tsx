@@ -110,7 +110,9 @@ const ResizableImage = ({
       }
 
       try {
-        const [bucketName, ...pathParts] = src.replace('supabase://', '').split('/');
+        // Extract the base URL without dimensions
+        const baseUrl = src.split('|')[0];
+        const [bucketName, ...pathParts] = baseUrl.replace('supabase://', '').split('/');
         const filePath = pathParts.join('/');
         
         const { data, error } = await supabase.storage
@@ -133,27 +135,17 @@ const ResizableImage = ({
     getSignedUrl();
   }, [src]);
 
-  // Handle image load to get natural dimensions
-  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.target as HTMLImageElement;
-    const naturalWidth = img.naturalWidth;
-    const naturalHeight = img.naturalHeight;
-    
-    // Store natural dimensions
-    setNaturalSize({ width: naturalWidth, height: naturalHeight });
-    
-    // Calculate initial size maintaining aspect ratio
-    let newWidth = 200; // Default width
-    let newHeight = Math.round((newWidth * naturalHeight) / naturalWidth);
-    
-    // If height is too tall, scale down proportionally
-    if (newHeight > 300) {
-      newHeight = 300;
-      newWidth = Math.round((newHeight * naturalWidth) / naturalHeight);
+  // Extract dimensions from src if present
+  useEffect(() => {
+    const dimensionMatch = src.match(/\|(\d+\.?\d*)x(\d+\.?\d*)/);
+    if (dimensionMatch) {
+      const [, width, height] = dimensionMatch;
+      setSize({
+        width: parseFloat(width),
+        height: parseFloat(height)
+      });
     }
-    
-    setSize({ width: newWidth, height: newHeight });
-  };
+  }, [src]);
 
   const handleDelete = async () => {
     if (!src.startsWith('supabase://')) {
@@ -185,7 +177,7 @@ const ResizableImage = ({
   };
 
   if (!signedUrl) {
-    return null; // Don't render anything until we have the URL
+    return null;
   }
 
   return (
@@ -223,7 +215,6 @@ const ResizableImage = ({
           draggable={false}
           className="w-full h-full object-contain select-none rounded-lg shadow-sm"
           crossOrigin="anonymous"
-          onLoad={handleImageLoad}
         />
         {isHovered && (
           <button
@@ -303,14 +294,14 @@ const BaseNode = ({
   const handleImageResize = useCallback((originalMarkdown: string, width: number, height: number) => {
     if (!data.description) return;
     
-    // Extract the alt and src from the original markdown
-    const match = originalMarkdown.match(/!\[(.*?)\]\((.*?)(?:\|(\d+)x(\d+))?\)/);
+    // Extract the alt and src from the original markdown, handling both formats
+    const match = originalMarkdown.match(/!\[(.*?)(?:\|[^]*)?\]\((.*?)(?:\|[\dx\.]*?)?\)/);
     if (!match) return;
     
     const [_, alt, src] = match;
     
-    // Replace the original markdown with one that includes dimensions
-    const newMarkdown = `![${alt}](${src}|${width}x${height})`;
+    // Create new markdown with the width and height as style parameters
+    const newMarkdown = `![${alt}|width=${Math.round(width)}px height=${Math.round(height)}px](${src})`;
     const newDescription = data.description.replace(originalMarkdown, newMarkdown);
     
     setNodes(nodes => 
