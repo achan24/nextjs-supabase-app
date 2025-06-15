@@ -287,7 +287,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
 
       if (!milestone.completed) {
         toast.success(
-          `🎉 Congratulations on completing ${milestone.title}! You are one step closer to ${goal?.title}!`,
+          `🎉 Congratulations on completing ${milestone.title}! You are one step closer to ${goal?.title}${goal?.description ? ` and ${goal.description}` : ''}!`,
           {
             duration: Infinity,
             dismissible: true,
@@ -558,7 +558,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                 <div className="flex flex-col">
                   <h3 className="text-2xl">{selectedGoal.title}</h3>
                   {selectedGoal.description && (
-                    <p className="text-gray-600 mt-1">{selectedGoal.description}</p>
+                    <p className="text-gray-600 mt-1 text-base">{selectedGoal.description}</p>
                   )}
                 </div>
                 <div className="flex gap-2">
@@ -964,7 +964,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                                 <div className="flex-grow">
                                   <h3 className="text-xl font-semibold group-hover:text-blue-600 transition-colors">{goal.title}</h3>
                                   {goal.description && (
-                                    <p className="text-gray-600 mt-1">{goal.description}</p>
+                                    <p className="text-gray-600 mt-1 text-base">{goal.description}</p>
                                   )}
                                 </div>
                                 <Button
