@@ -271,6 +271,40 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   };
 
+  const handleCompleteMilestone = async (milestone: LifeGoalMilestone) => {
+    try {
+      const now = new Date().toISOString();
+      await updateMilestone(milestone.id, {
+        completed: !milestone.completed,
+        completed_at: !milestone.completed ? now : undefined,
+      });
+
+      // Find the goal this milestone belongs to
+      const goal = areas
+        .flatMap(area => area.subareas)
+        .flatMap(subarea => subarea.goals)
+        .find(g => g.milestones.some(m => m.id === milestone.id));
+
+      if (!milestone.completed) {
+        toast.success(
+          `🎉 Congratulations on completing ${milestone.title}! You are one step closer to ${goal?.title}!`,
+          {
+            duration: Infinity,
+            dismissible: true,
+          }
+        );
+      } else {
+        toast.info(`Milestone ${milestone.title} unmarked as complete`, {
+          duration: Infinity,
+          dismissible: true,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating milestone completion:', error);
+      toast.error('Failed to update milestone completion status');
+    }
+  };
+
   const handleAddMetricThreshold = async () => {
     if (!selectedMetricId || !selectedMilestoneId || !newThresholdValue.trim()) return;
 
@@ -567,29 +601,42 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                         className="flex flex-col p-3 rounded-lg border"
                       >
                         <div className="flex justify-between items-start">
-                          <div>
-                            <span className="font-medium">{milestone.title}</span>
-                            {milestone.description && (
-                              <p className="text-sm text-gray-600 mt-1">{milestone.description}</p>
-                            )}
-                            {milestone.due_date && (
-                              <p className="text-xs text-gray-500 mt-1 flex items-center">
-                                <Calendar className="w-3 h-3 mr-1" />
-                                Due: {new Date(milestone.due_date).toLocaleDateString()}
-                              </p>
-                            )}
-                            {/* Add metric thresholds display */}
-                            {selectedGoal.metrics.flatMap(metric => 
-                              metric.thresholds
-                                .filter(threshold => threshold.milestone_id === milestone.id)
-                                .map(threshold => (
-                                  <p key={threshold.id} className="text-xs text-gray-500 mt-1 flex items-center">
-                                    <Target className="w-3 h-3 mr-1" />
-                                    {metric.name}: {threshold.target_value} {metric.unit}
-                                    {metric.current_value > 0 && ` (Current: ${metric.current_value})`}
-                                  </p>
-                                ))
-                            )}
+                          <div className="flex items-start gap-3">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`mt-0.5 h-5 w-5 ${milestone.completed ? 'text-green-500' : 'text-gray-300'}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCompleteMilestone(milestone);
+                              }}
+                            >
+                              <CheckCircle2 className="w-5 h-5" />
+                            </Button>
+                            <div>
+                              <span className="font-medium">{milestone.title}</span>
+                              {milestone.description && (
+                                <p className="text-sm text-gray-600 mt-1">{milestone.description}</p>
+                              )}
+                              {milestone.due_date && (
+                                <p className="text-xs text-gray-500 mt-1 flex items-center">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  Due: {new Date(milestone.due_date).toLocaleDateString()}
+                                </p>
+                              )}
+                              {/* Add metric thresholds display */}
+                              {selectedGoal.metrics.flatMap(metric => 
+                                metric.thresholds
+                                  .filter(threshold => threshold.milestone_id === milestone.id)
+                                  .map(threshold => (
+                                    <p key={threshold.id} className="text-xs text-gray-500 mt-1 flex items-center">
+                                      <Target className="w-3 h-3 mr-1" />
+                                      {metric.name}: {threshold.target_value} {metric.unit}
+                                      {metric.current_value > 0 && ` (Current: ${metric.current_value})`}
+                                    </p>
+                                  ))
+                              )}
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <Button
@@ -947,7 +994,17 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                                         key={milestone.id} 
                                         className={`flex items-start gap-3 p-3 rounded-lg border ${milestone.completed ? 'bg-green-50 border-green-100' : 'bg-white'}`}
                                       >
-                                        <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${milestone.completed ? 'bg-green-500' : 'bg-gray-300'}`} />
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className={`mt-0.5 h-5 w-5 ${milestone.completed ? 'text-green-500' : 'text-gray-300'}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCompleteMilestone(milestone);
+                                          }}
+                                        >
+                                          <CheckCircle2 className="w-5 h-5" />
+                                        </Button>
                                         <div className="flex-grow">
                                           <div className="flex justify-between items-start">
                                             <div>

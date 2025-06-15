@@ -17,7 +17,8 @@ import {
   Bot,
   Users,
   Repeat,
-  Lightbulb
+  Lightbulb,
+  Target
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { PostgrestResponse } from '@supabase/supabase-js';
@@ -28,6 +29,12 @@ const apps = [
     href: '/dashboard/overview', 
     description: 'Track and manage all your targets and progress',
     icon: BarChart3
+  },
+  { 
+    name: 'GOAL System', 
+    href: '/dashboard/goal', 
+    description: 'Growth, Objectives, Areas, Life-metrics - Track and achieve your life goals',
+    icon: Target
   },
   { 
     name: 'Projects', 
@@ -66,6 +73,12 @@ const apps = [
     icon: Calendar
   },
   { 
+    name: 'Habits', 
+    href: '/dashboard/habits', 
+    description: 'Build and track your habits',
+    icon: Repeat
+  },
+  { 
     name: 'Insights', 
     href: '/dashboard/insights', 
     description: 'Get productivity insights',
@@ -82,12 +95,6 @@ const apps = [
     href: '/dashboard/crm', 
     description: 'Track and grow meaningful relationships',
     icon: Users
-  },
-  { 
-    name: 'Habits', 
-    href: '/dashboard/habits', 
-    description: 'Build and track your habits',
-    icon: Repeat
   },
   { 
     name: 'Recommendations', 

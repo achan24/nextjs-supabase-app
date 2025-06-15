@@ -6,7 +6,7 @@ import Link from 'next/link'
 import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb } from 'lucide-react'
 
 export default function HomePage({ user }: { user: User }) {
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
@@ -53,25 +53,14 @@ export default function HomePage({ user }: { user: User }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="p-2 bg-purple-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-purple-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <rect x="3" y="3" width="7" height="7" />
-                      <rect x="14" y="3" width="7" height="7" />
-                      <rect x="3" y="14" width="7" height="7" />
-                      <rect x="14" y="14" width="7" height="7" />
-                    </svg>
+                    <BarChart3 className="h-6 w-6 text-purple-600" />
                   </div>
                   Overview
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Track and manage all your targets and their progress in one place.
+                  Track and manage all your targets and their progress in one place. Get a comprehensive view of your goals and achievements.
                 </p>
               </CardContent>
             </Card>
@@ -111,25 +100,15 @@ export default function HomePage({ user }: { user: User }) {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-green-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <path d="M3 3h18v18H3z" />
-                      <path d="M3 9h18" />
-                      <path d="M9 9v12" />
-                    </svg>
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FolderKanban className="h-6 w-6 text-blue-600" />
                   </div>
                   Projects
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Organize and manage your projects with deadlines and priorities.
+                  Organize and manage your projects effectively. Break down complex goals into manageable tasks and track progress systematically.
                 </p>
               </CardContent>
             </Card>
@@ -140,58 +119,15 @@ export default function HomePage({ user }: { user: User }) {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-yellow-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-yellow-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <path d="M3 6l2 2 4-4" />
-                      <path d="M3 12l2 2 4-4" />
-                      <path d="M3 18l2 2 4-4" />
-                      <line x1="11" y1="6" x2="20" y2="6" />
-                      <line x1="11" y1="12" x2="20" y2="12" />
-                      <line x1="11" y1="18" x2="20" y2="18" />
-                    </svg>
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CheckSquare className="h-6 w-6 text-green-600" />
                   </div>
                   Tasks
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Manage your daily tasks and track your progress.
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Calendar Card */}
-          <Link href="/dashboard/calendar" className="group">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-red-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                    </svg>
-                  </div>
-                  Calendar
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  View your tasks and commitments in a calendar format for better planning.
+                  Create, organize, and track your daily tasks with priority levels and due dates. Stay on top of your to-do list and boost productivity.
                 </p>
               </CardContent>
             </Card>
@@ -202,26 +138,15 @@ export default function HomePage({ user }: { user: User }) {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-indigo-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-indigo-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <path d="M14 2v6h6" />
-                      <path d="M14 2L4 2v20h16V8l-6-6z" />
-                      <line x1="8" y1="12" x2="16" y2="12" />
-                      <line x1="8" y1="16" x2="16" y2="16" />
-                    </svg>
+                  <div className="p-2 bg-yellow-100 rounded-lg">
+                    <StickyNote className="h-6 w-6 text-yellow-600" />
                   </div>
                   Notes
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Keep track of your thoughts, ideas, and important information.
+                  Capture and organize your thoughts, ideas, and important information. Keep your notes structured and easily accessible.
                 </p>
               </CardContent>
             </Card>
@@ -232,27 +157,15 @@ export default function HomePage({ user }: { user: User }) {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-cyan-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-cyan-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <circle cx="6" cy="6" r="3" />
-                      <circle cx="18" cy="6" r="3" />
-                      <circle cx="12" cy="18" r="3" />
-                      <line x1="6" y1="9" x2="12" y2="15" />
-                      <line x1="18" y1="9" x2="12" y2="15" />
-                    </svg>
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <GitFork className="h-6 w-6 text-indigo-600" />
                   </div>
                   Process Flow
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Visualize and track your learning progress, practice sessions, and skill development through interactive process flows.
+                  Visualize and track your learning progress through interactive process flows. Map out your skill development journey and practice sessions.
                 </p>
               </CardContent>
             </Card>
@@ -264,80 +177,33 @@ export default function HomePage({ user }: { user: User }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="p-2 bg-orange-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-orange-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
+                    <Timer className="h-6 w-6 text-orange-600" />
                   </div>
                   Process Timer
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Execute your process flows with focused timing. Select tasks from your flow maps and perform them with structured intervals.
+                  Time and track your process sequences with focused intervals. Execute your process flows with structured timing and measurement.
                 </p>
               </CardContent>
             </Card>
           </Link>
 
-          {/* AI Recommendations Card */}
-          <Link href="/dashboard/recommendations" className="group">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-violet-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-violet-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                      <path d="M2 17l10 5 10-5" />
-                      <path d="M2 12l10 5 10-5" />
-                    </svg>
-                  </div>
-                  AI Recommendations
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  Get personalized suggestions to improve your productivity.
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Habit Tracker Card */}
-          <Link href="/dashboard/habits" className="group">
+          {/* Calendar Card */}
+          <Link href="/dashboard/calendar" className="group">
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="p-2 bg-pink-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-pink-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                      <circle cx="12" cy="12" r="3" fill="currentColor" />
-                    </svg>
+                    <Calendar className="h-6 w-6 text-pink-600" />
                   </div>
-                  Habit Tracker
+                  Calendar
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Build and maintain positive habits with daily tracking and streak monitoring.
+                  View and manage your schedule in a clear, organized way. Keep track of important dates, deadlines, and recurring events.
                 </p>
               </CardContent>
             </Card>
@@ -349,36 +215,94 @@ export default function HomePage({ user }: { user: User }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="p-2 bg-emerald-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-emerald-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
+                    <LineChart className="h-6 w-6 text-emerald-600" />
                   </div>
                   Insights
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Get personalized insights about your productivity patterns and progress.
+                  Get detailed analytics and insights about your productivity patterns and progress. Make data-driven decisions to improve your workflow.
                 </p>
               </CardContent>
             </Card>
           </Link>
 
-          {/* Settings Card (Placeholder) */}
-          <div className="bg-white p-6 rounded-lg shadow opacity-75">
-            <h3 className="text-xl font-semibold mb-2">Settings</h3>
-            <p className="text-gray-600 mb-4">
-              Customize your experience and manage your account settings.
-            </p>
-            <div className="text-gray-400 font-medium">Coming Soon</div>
-          </div>
+          {/* AI Assistant Card */}
+          <Link href="/dashboard/ai" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-violet-100 rounded-lg">
+                    <Bot className="h-6 w-6 text-violet-600" />
+                  </div>
+                  AI Assistant
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Get intelligent, AI-powered help with your tasks, scheduling, and productivity. Let AI assist you in optimizing your workflow.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Relationship CRM Card */}
+          <Link href="/dashboard/crm" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <Users className="h-6 w-6 text-red-600" />
+                  </div>
+                  Relationship CRM
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Track and nurture your personal and professional relationships. Manage contacts, track interactions, and grow meaningful connections.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Habits Card */}
+          <Link href="/dashboard/habits" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-cyan-100 rounded-lg">
+                    <Repeat className="h-6 w-6 text-cyan-600" />
+                  </div>
+                  Habits
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Build and maintain positive habits. Track your progress, set reminders, and develop consistent routines for personal growth.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Recommendations Card */}
+          <Link href="/dashboard/recommendations" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <Lightbulb className="h-6 w-6 text-amber-600" />
+                  </div>
+                  Recommendations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Get personalized recommendations for improving your productivity, habits, and workflow based on your usage patterns.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
     </div>

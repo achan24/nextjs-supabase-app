@@ -7,6 +7,7 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { ActiveSequenceProvider } from '@/contexts/ActiveSequenceContext';
 import { ActiveSequenceIndicator } from '@/components/ActiveSequenceIndicator';
+import Link from 'next/link';
 
 export default function DashboardLayout({
   children,
@@ -31,7 +32,7 @@ export default function DashboardLayout({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-4">
-                <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+                <a href="/dashboard" className="text-2xl font-bold text-gray-900 hover:text-gray-700 transition-colors">Dashboard</a>
                 <AppNavDropdown />
               </div>
               <div className="flex items-center gap-4">
