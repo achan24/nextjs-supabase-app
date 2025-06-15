@@ -464,6 +464,30 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   };
 
+  const handleCompleteTask = async (taskId: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'completed' ? 'todo' : 'completed';
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus })
+        .eq('id', taskId);
+
+      if (error) throw error;
+      await fetchTasks(); // Refresh tasks after update
+
+      // Find the task to get its name
+      const task = tasks.find(t => t.id === taskId);
+      if (newStatus === 'completed') {
+        toast.success(`Good job completing "${task?.title}"! 🎉\nOne step closer to ${selectedGoal?.title}`);
+      } else {
+        toast.success(`Task "${task?.title}" reopened`);
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      toast.error('Failed to update task status');
+    }
+  };
+
   const handleCreateAndAddTask = async () => {
     try {
       // First create the task
@@ -908,19 +932,28 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                       return (
                         <div 
                           key={goalTask.id}
-                          className="flex items-center justify-between p-3 rounded-lg border"
+                          className="flex items-center justify-between py-1.5 px-3 rounded-lg border"
                         >
-                          <div className="flex items-center gap-3">
-                            <CheckCircle2 
-                              className={`w-5 h-5 ${task.status === 'completed' ? 'text-green-500' : 'text-gray-300'}`} 
-                            />
-                            <div>
-                              <span className="font-medium">{task.title}</span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-4 w-4 ${task.status === 'completed' ? 'text-green-500' : 'text-gray-300'}`}
+                              onClick={() => handleCompleteTask(task.id, task.status)}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </Button>
+                            <div className="min-w-0">
+                              <span className={`font-medium text-sm ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
+                                {task.title}
+                              </span>
                               {task.description && (
-                                <p className="text-sm text-gray-600">{task.description}</p>
+                                <p className={`text-xs text-gray-600 truncate ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
+                                  {task.description}
+                                </p>
                               )}
                               {task.due_date && (
-                                <p className="text-xs text-gray-500 flex items-center mt-1">
+                                <p className={`text-xs text-gray-500 flex items-center ${task.status === 'completed' ? 'text-gray-400' : ''}`}>
                                   <Calendar className="w-3 h-3 mr-1" />
                                   Due: {new Date(task.due_date).toLocaleDateString()}
                                 </p>
@@ -928,15 +961,16 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">
+                            <span className="text-xs text-gray-500">
                               Worth: {goalTask.time_worth}x
                             </span>
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-4 w-4"
                               onClick={() => handleRemoveTaskFromGoal(goalTask.id)}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3 h-3" />
                             </Button>
                           </div>
                         </div>
