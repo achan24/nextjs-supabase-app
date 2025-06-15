@@ -123,12 +123,24 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   // Set timer view based on URL parameter and active sequence
   useEffect(() => {
     if (!searchParams) return;
+    
+    const sequenceId = searchParams.get('sequence');
     const shouldShowTimer = searchParams.get('isTimerView') === 'true';
-    if (shouldShowTimer && selectedSequence) {
+
+    // If a specific sequence is requested, find and start it
+    if (sequenceId) {
+      const sequence = sequences.find(s => s.id === sequenceId);
+      if (sequence) {
+        setIsTimerView(true); // Set timer view before starting sequence
+        handleStartSequence(sequence);
+      }
+    }
+    // Otherwise, if timer view is requested and there's a selected sequence, show timer
+    else if (shouldShowTimer && selectedSequence) {
       setIsTimerView(true);
       setSelectedTasks(selectedSequence.tasks);
     }
-  }, [searchParams, selectedSequence]);
+  }, [searchParams, selectedSequence, sequences]);
 
   // Load flows from Supabase
   useEffect(() => {
@@ -374,7 +386,11 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     try {
       // Check if there's already an active sequence
       if (selectedSequence) {
-        throw new Error('Another sequence is currently active. Please complete or stop it first.');
+        // Set timer view before navigating
+        setIsTimerView(true);
+        // Instead of throwing an error, navigate to the active sequence
+        router.push(`/dashboard/process-flow/timer?sequence=${selectedSequence.id}`);
+        return;
       }
 
       // Validate that all tasks have flowIds
@@ -531,6 +547,37 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       if (!completion) {
         throw new Error('No completion data returned');
       }
+
+      // Update metrics that this sequence contributes to
+      const { data: contributions, error: contribError } = await supabase
+        .from('life_goal_sequence_contributions')
+        .select(`
+          *,
+          metric:life_goal_metrics (*)
+        `)
+        .eq('sequence_id', selectedSequence.id);
+
+      if (contribError) {
+        console.error('Error fetching sequence contributions:', contribError);
+        throw contribError;
+      }
+
+      // Update each metric's value
+      await Promise.all(contributions?.map(async (contribution) => {
+        if (!contribution.metric) return;
+        
+        const newValue = contribution.metric.current_value + contribution.contribution_value;
+        
+        const { error: updateError } = await supabase
+          .from('life_goal_metrics')
+          .update({ current_value: newValue })
+          .eq('id', contribution.metric_id);
+
+        if (updateError) {
+          console.error('Error updating metric:', updateError);
+          throw updateError;
+        }
+      }));
 
       // Set the completion for display and update completions array
       setLastCompletion(completion);

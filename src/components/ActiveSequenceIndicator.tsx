@@ -23,7 +23,7 @@ export function ActiveSequenceIndicator() {
       <Timer className="w-4 h-4 text-blue-600" />
       <div className="flex flex-col">
         <Link 
-          href="/dashboard/process-flow/timer?isTimerView=true" 
+          href={`/dashboard/process-flow/timer?sequence=${activeSequence.id}`}
           className="text-sm font-medium text-blue-700 hover:text-blue-800"
         >
           {activeSequence.title}
