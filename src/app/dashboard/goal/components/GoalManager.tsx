@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,8 @@ import {
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { Spinner } from '@/components/ui/spinner';
 import { toast } from 'sonner';
-import { LifeGoal, LifeGoalMilestone, LifeGoalMetric, LifeGoalTask, Note } from '@/types/goal';
-import { useRouter } from 'next/navigation';
+import { LifeGoal, LifeGoalMilestone, LifeGoalMetric, LifeGoalTask, Note, TimerSequence } from '@/types/goal';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -56,6 +56,8 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     updateNoteLinkOrder,
     addTaskToGoal,
     removeTaskFromGoal,
+    addSequenceContribution,
+    removeSequenceContribution,
   } = useGoalSystem();
 
   const [isAddingGoal, setIsAddingGoal] = useState(false);
@@ -117,6 +119,12 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
+
+  // Add state for sequence dialog
+  const [isAddingSequence, setIsAddingSequence] = useState(false);
+  const [sequences, setSequences] = useState<TimerSequence[]>([]);
+  const [selectedSequenceId, setSelectedSequenceId] = useState<string | null>(null);
+  const [sequenceContributionValue, setSequenceContributionValue] = useState<number>(1);
 
   // Find the area that contains the selected subarea
   useEffect(() => {
@@ -490,6 +498,62 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   };
 
+  // Fetch available sequences when needed
+  const fetchSequences = async () => {
+    try {
+      const { data: sequences, error } = await supabase
+        .from('timer_sequences')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching sequences:', error);
+        return;
+      }
+
+      setSequences(sequences || []);
+    } catch (error) {
+      console.error('Error in fetchSequences:', error);
+    }
+  };
+
+  // Fetch sequences when opening the sequence dialog
+  useEffect(() => {
+    if (isAddingSequence) {
+      fetchSequences();
+    }
+  }, [isAddingSequence]);
+
+  const handleAddSequenceToGoal = async () => {
+    if (!selectedSequenceId || !selectedMetricId) return;
+
+    try {
+      await addSequenceContribution(
+        selectedMetricId,
+        selectedSequenceId,
+        sequenceContributionValue
+      );
+      setIsAddingSequence(false);
+      setSelectedSequenceId(null);
+      setSelectedMetricId(null);
+      setSequenceContributionValue(1);
+      toast.success('Sequence linked to goal successfully');
+    } catch (error) {
+      console.error('Error linking sequence to goal:', error);
+      toast.error('Failed to link sequence to goal');
+    }
+  };
+
+  const handleRemoveSequenceFromGoal = async (contributionId: string) => {
+    try {
+      await removeSequenceContribution(contributionId);
+      toast.success('Sequence removed from goal');
+    } catch (error) {
+      console.error('Error removing sequence from goal:', error);
+      toast.error('Failed to remove sequence from goal');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -756,25 +820,53 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               <div className="space-y-4 mt-6">
                 <div className="flex justify-between items-center">
                   <h3 className="text-sm font-medium text-gray-500">Metrics</h3>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsAddingMetricThreshold(true);
-                    }}
-                  >
-                    Add Metric
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsAddingMetricThreshold(true)}
+                    >
+                      Add Metric
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsAddingSequence(true)}
+                    >
+                      <Timer className="w-4 h-4 mr-2" />
+                      Link Sequence
+                    </Button>
+                  </div>
                 </div>
                 {selectedGoal.metrics && selectedGoal.metrics.length > 0 ? (
                   <ul className="space-y-2">
                     {selectedGoal.metrics.map((metric: LifeGoalMetric) => (
-                      <li key={metric.id} className="flex justify-between items-center p-3 rounded-lg border">
+                      <li key={metric.id} className="flex justify-between items-start p-3 rounded-lg border">
                         <div>
                           <span className="font-medium">{metric.name}</span>
                           <p className="text-sm text-gray-600">
                             Current: {metric.current_value} {metric.unit}
                           </p>
+                          {/* Display linked sequences */}
+                          {metric.sequence_contributions?.map(contribution => (
+                            <div key={contribution.id} className="flex items-center gap-2 mt-1">
+                              <Timer className="w-3 h-3 text-gray-500" />
+                              <Link 
+                                href={`/dashboard/process-flow/timer?sequence=${contribution.sequence?.id}`}
+                                className="text-sm text-blue-600 hover:text-blue-800"
+                              >
+                                {contribution.sequence?.title}
+                              </Link>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-4 w-4 ml-1"
+                                onClick={() => handleRemoveSequenceFromGoal(contribution.id)}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
                         <div className="flex gap-2">
                           <Button
@@ -1761,6 +1853,89 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               disabled={!editGoalTitle.trim()}
             >
               Update Goal
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Sequence Dialog */}
+      <Dialog 
+        open={isAddingSequence} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsAddingSequence(false);
+            setSelectedSequenceId(null);
+            setSelectedMetricId(null);
+            setSequenceContributionValue(1);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Sequence to Goal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Sequence</label>
+              <Select
+                value={selectedSequenceId || ''}
+                onValueChange={(value) => setSelectedSequenceId(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a sequence" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sequences.map(sequence => (
+                    <SelectItem key={sequence.id} value={sequence.id}>
+                      {sequence.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Metric</label>
+              <Select
+                value={selectedMetricId || ''}
+                onValueChange={(value) => setSelectedMetricId(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a metric" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedGoal?.metrics.map(metric => (
+                    <SelectItem key={metric.id} value={metric.id}>
+                      {metric.name} ({metric.unit || metric.type})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contribution Value</label>
+              <Input
+                type="number"
+                min={0.1}
+                step={0.1}
+                value={sequenceContributionValue}
+                onChange={(e) => setSequenceContributionValue(parseFloat(e.target.value))}
+              />
+              <p className="text-xs text-gray-500">
+                How much should this sequence count towards the metric?
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsAddingSequence(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddSequenceToGoal}
+              disabled={!selectedSequenceId || !selectedMetricId}
+            >
+              Link Sequence
             </Button>
           </div>
         </DialogContent>

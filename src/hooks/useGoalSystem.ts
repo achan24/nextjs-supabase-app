@@ -49,7 +49,11 @@ export function useGoalSystem() {
               milestones:life_goal_milestones (*),
               metrics:life_goal_metrics (
                 *,
-                thresholds:life_goal_metric_thresholds (*)
+                thresholds:life_goal_metric_thresholds (*),
+                sequence_contributions:life_goal_sequence_contributions (
+                  *,
+                  sequence:timer_sequences (*)
+                )
               ),
               tasks:life_goal_tasks (
                 *,
@@ -73,7 +77,7 @@ export function useGoalSystem() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     fetchAreas();
@@ -462,6 +466,51 @@ export function useGoalSystem() {
     }
   }, [supabase, fetchAreas]);
 
+  const addSequenceContribution = useCallback(async (
+    metricId: string,
+    sequenceId: string,
+    contributionValue: number
+  ) => {
+    try {
+      const { data, error } = await supabase
+        .from('life_goal_sequence_contributions')
+        .insert({
+          metric_id: metricId,
+          sequence_id: sequenceId,
+          contribution_value: contributionValue
+        })
+        .select(`
+          *,
+          sequence:timer_sequences(*)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      await fetchAreas();
+      return data;
+    } catch (error) {
+      console.error('Error adding sequence contribution:', error);
+      throw error;
+    }
+  }, [supabase, fetchAreas]);
+
+  const removeSequenceContribution = useCallback(async (contributionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('life_goal_sequence_contributions')
+        .delete()
+        .eq('id', contributionId);
+
+      if (error) throw error;
+
+      await fetchAreas();
+    } catch (error) {
+      console.error('Error removing sequence contribution:', error);
+      throw error;
+    }
+  }, [supabase, fetchAreas]);
+
   return {
     areas,
     loading,
@@ -494,6 +543,8 @@ export function useGoalSystem() {
     updateNoteLinkOrder,
     addTaskToGoal,
     updateTaskInGoal,
-    removeTaskFromGoal
+    removeTaskFromGoal,
+    addSequenceContribution,
+    removeSequenceContribution
   };
 } 

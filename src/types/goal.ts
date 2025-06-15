@@ -40,6 +40,24 @@ export interface LifeGoalTask {
   task?: Task;
 }
 
+export interface TimerSequence {
+  id: string;
+  title: string;
+  description?: string;
+  tasks: any[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LifeGoalSequenceContribution {
+  id: string;
+  sequence_id: string;
+  metric_id: string;
+  contribution_value: number;
+  created_at: string;
+  sequence?: TimerSequence;
+}
+
 export interface LifeGoal {
   id: string;
   title: string;
@@ -52,6 +70,7 @@ export interface LifeGoal {
   metrics: LifeGoalMetric[];
   goal_notes: GoalNoteLink[];
   tasks: LifeGoalTask[];
+  sequence_contributions?: LifeGoalSequenceContribution[];
 }
 
 export interface LifeGoalMilestone {
@@ -68,14 +87,15 @@ export interface LifeGoalMilestone {
 
 export interface LifeGoalMetric {
   id: string;
+  goal_id: string;
   name: string;
-  type: 'time' | 'count' | 'streak' | 'custom';
+  type: string;
   current_value: number;
   unit?: string;
-  goal_id: string;
   created_at: string;
   updated_at: string;
   thresholds: LifeGoalMetricThreshold[];
+  sequence_contributions: LifeGoalSequenceContribution[];
 }
 
 export interface LifeGoalMetricThreshold {
@@ -85,14 +105,6 @@ export interface LifeGoalMetricThreshold {
   target_value: number;
   created_at: string;
   updated_at: string;
-}
-
-export interface LifeGoalSequenceContribution {
-  id: string;
-  sequence_id: string;
-  metric_id: string;
-  contribution_value: number;
-  created_at: string;
 }
 
 export interface Metric {
