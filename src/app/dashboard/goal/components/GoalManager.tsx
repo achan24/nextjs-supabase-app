@@ -415,7 +415,14 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     setTasks(tasks || []);
   };
 
-  // Fetch tasks when opening the task dialog
+  // Fetch tasks when component mounts and when selectedGoal changes
+  useEffect(() => {
+    if (selectedGoal) {
+      fetchTasks();
+    }
+  }, [selectedGoal]);
+
+  // Also fetch tasks when opening the task dialog
   useEffect(() => {
     if (isAddingTask) {
       fetchTasks();
@@ -427,6 +434,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
 
     try {
       await addTaskToGoal(goalId, selectedTaskId, selectedTaskTimeWorth);
+      await fetchTasks(); // Fetch tasks after adding
       setIsAddingTask(false);
       setSelectedTaskId(null);
       setSelectedTaskTimeWorth(1);
@@ -440,6 +448,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const handleRemoveTaskFromGoal = async (taskId: string) => {
     try {
       await removeTaskFromGoal(taskId);
+      await fetchTasks(); // Fetch tasks after removing
       toast.success('Task removed from goal');
     } catch (error) {
       console.error('Error removing task from goal:', error);
@@ -468,6 +477,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
         await addTaskToGoal(selectedGoal.id, newTask.id, selectedTaskTimeWorth);
       }
 
+      await fetchTasks(); // Fetch tasks after creating and adding
       // Reset form
       setNewTaskTitle('');
       setNewTaskDescription('');
@@ -1674,6 +1684,83 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               disabled={!selectedNoteId || !selectedGoal}
             >
               Link Note
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Goal Dialog */}
+      <Dialog 
+        open={editingGoal !== null} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingGoal(null);
+            setEditGoalTitle('');
+            setEditGoalDescription('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Goal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="editGoalTitle" className="text-sm font-medium">
+                Title
+              </label>
+              <Input
+                id="editGoalTitle"
+                value={editGoalTitle}
+                onChange={(e) => setEditGoalTitle(e.target.value)}
+                placeholder="e.g., Run a Marathon"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="editGoalDescription" className="text-sm font-medium">
+                Description
+              </label>
+              <Textarea
+                id="editGoalDescription"
+                value={editGoalDescription}
+                onChange={(e) => setEditGoalDescription(e.target.value)}
+                placeholder="Describe your goal..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setEditingGoal(null);
+                setEditGoalTitle('');
+                setEditGoalDescription('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!editingGoal || !editGoalTitle.trim()) return;
+                
+                try {
+                  await updateGoal(editingGoal, {
+                    title: editGoalTitle,
+                    description: editGoalDescription || undefined,
+                  });
+                  setEditingGoal(null);
+                  setEditGoalTitle('');
+                  setEditGoalDescription('');
+                  toast.success('Goal updated successfully');
+                } catch (error) {
+                  console.error('Error updating goal:', error);
+                  toast.error('Failed to update goal');
+                }
+              }}
+              disabled={!editGoalTitle.trim()}
+            >
+              Update Goal
             </Button>
           </div>
         </DialogContent>
