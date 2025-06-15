@@ -5,13 +5,15 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer } from 'lucide-react';
+import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { useGoalSystem } from '@/hooks/useGoalSystem';
 import { Spinner } from '@/components/ui/spinner';
@@ -24,10 +26,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createClient } from '@/lib/supabase/client';
 import { NoteLinkButton } from '@/components/ui/note-link-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
 
 interface GoalManagerProps {
   selectedSubareaId: string | null;
   selectedGoalId: string | null;
+}
+
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  due_date?: string;
+  metric_contributions?: {
+    id: string;
+    metric_id: string;
+    contribution_value: number;
+    metric?: {
+      id: string;
+      name: string;
+      unit?: string;
+    };
+  }[];
 }
 
 export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalManagerProps) {
@@ -115,7 +136,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskTimeWorth, setSelectedTaskTimeWorth] = useState<number>(1);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
@@ -125,6 +146,12 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [sequences, setSequences] = useState<TimerSequence[]>([]);
   const [selectedSequenceId, setSelectedSequenceId] = useState<string | null>(null);
   const [sequenceContributionValue, setSequenceContributionValue] = useState<number>(1);
+
+  // Add state for task-metric linking
+  const [isLinkingTaskToMetric, setIsLinkingTaskToMetric] = useState(false);
+  const [selectedTaskForMetric, setSelectedTaskForMetric] = useState<string | null>(null);
+  const [selectedMetricForTask, setSelectedMetricForTask] = useState<string | null>(null);
+  const [taskContributionValue, setTaskContributionValue] = useState(1);
 
   // Find the area that contains the selected subarea
   useEffect(() => {
@@ -578,6 +605,50 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   };
 
+  const handleLinkTaskToMetric = async () => {
+    if (!selectedTaskForMetric || !selectedMetricForTask) return;
+
+    try {
+      const { error } = await supabase
+        .from('life_goal_metric_tasks')
+        .insert({
+          task_id: selectedTaskForMetric,
+          metric_id: selectedMetricForTask,
+          contribution_value: taskContributionValue
+        });
+
+      if (error) throw error;
+
+      toast.success('Task linked to metric successfully');
+      setIsLinkingTaskToMetric(false);
+      setSelectedTaskForMetric(null);
+      setSelectedMetricForTask(null);
+      setTaskContributionValue(1);
+      await fetchTasks();
+    } catch (error) {
+      console.error('Error linking task to metric:', error);
+      toast.error('Failed to link task to metric');
+    }
+  };
+
+  const handleRemoveTaskFromMetric = async (taskId: string, metricId: string) => {
+    try {
+      const { error } = await supabase
+        .from('life_goal_metric_tasks')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('metric_id', metricId);
+
+      if (error) throw error;
+
+      toast.success('Task unlinked from metric');
+      await fetchTasks();
+    } catch (error) {
+      console.error('Error removing task from metric:', error);
+      toast.error('Failed to unlink task from metric');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -958,12 +1029,37 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                                   Due: {new Date(task.due_date).toLocaleDateString()}
                                 </p>
                               )}
+                              {/* Show linked metrics */}
+                              {task.metric_contributions?.map(contribution => (
+                                <div key={contribution.id} className="flex items-center gap-1 mt-1">
+                                  <Target className="w-3 h-3 text-gray-500" />
+                                  <span className="text-xs text-gray-600">
+                                    Contributes {contribution.contribution_value} to {contribution.metric?.name}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-4 w-4"
+                                    onClick={() => handleRemoveTaskFromMetric(task.id, contribution.metric_id)}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              ))}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500">
                               Worth: {goalTask.time_worth}x
                             </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4"
+                              onClick={() => setSelectedTaskForMetric(task.id)}
+                            >
+                              <Target className="w-3 h-3" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1972,6 +2068,56 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               Link Sequence
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog for linking task to metric */}
+      <Dialog open={isLinkingTaskToMetric} onOpenChange={setIsLinkingTaskToMetric}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Task to Metric</DialogTitle>
+            <DialogDescription>
+              Select a metric and set the contribution value. When this task is completed, it will update the metric's value.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Select Metric</Label>
+              <Select
+                value={selectedMetricForTask || ''}
+                onValueChange={setSelectedMetricForTask}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a metric" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedGoal?.metrics.map(metric => (
+                    <SelectItem key={metric.id} value={metric.id}>
+                      {metric.name} ({metric.unit})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Contribution Value</Label>
+              <Input
+                type="number"
+                value={taskContributionValue}
+                onChange={(e) => setTaskContributionValue(parseFloat(e.target.value))}
+                min={0}
+                step={0.1}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLinkingTaskToMetric(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleLinkTaskToMetric}>
+              Link Task to Metric
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

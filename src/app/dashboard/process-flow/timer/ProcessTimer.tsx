@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useActiveSequence } from '@/contexts/ActiveSequenceContext';
+import { toast } from 'sonner';
 
 interface CompletionRecord {
   completedAt: number;
@@ -78,7 +79,8 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     setIsRunning,
     startTimer,
     pauseTimer,
-    resetTimer
+    resetTimer,
+    setActiveSequence
   } = useActiveSequence();
   const [isTimerView, setIsTimerView] = useState(false);
   const [isCompletionView, setIsCompletionView] = useState(false);
@@ -99,6 +101,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const currentTask = selectedTasks[currentTaskIndex];
   const [lockedTaskEta, setLockedTaskEta] = useState<Date | null>(null);
   const [lockedSequenceEta, setLockedSequenceEta] = useState<Date | null>(null);
+  const [isCompletingSequence, setIsCompletingSequence] = useState(false);
 
   // Load all sequence completions when component mounts
   useEffect(() => {
@@ -122,25 +125,29 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
   // Set timer view based on URL parameter and active sequence
   useEffect(() => {
-    if (!searchParams) return;
+    if (!searchParams || !sequences.length) return;
     
     const sequenceId = searchParams.get('sequence');
-    const shouldShowTimer = searchParams.get('isTimerView') === 'true';
-
-    // If a specific sequence is requested, find and start it
-    if (sequenceId) {
+    
+    // If a specific sequence is requested and no sequence is currently selected
+    if (sequenceId && !selectedSequence) {
       const sequence = sequences.find(s => s.id === sequenceId);
       if (sequence) {
-        setIsTimerView(true); // Set timer view before starting sequence
+        setIsTimerView(true);
         handleStartSequence(sequence);
       }
     }
-    // Otherwise, if timer view is requested and there's a selected sequence, show timer
-    else if (shouldShowTimer && selectedSequence) {
+  }, [searchParams, sequences]); // Only depend on searchParams and sequences
+
+  // Separate effect for showing timer view
+  useEffect(() => {
+    if (!searchParams) return;
+    const shouldShowTimer = searchParams.get('isTimerView') === 'true';
+    if (shouldShowTimer && selectedSequence) {
       setIsTimerView(true);
       setSelectedTasks(selectedSequence.tasks);
     }
-  }, [searchParams, selectedSequence, sequences]);
+  }, [searchParams, selectedSequence]);
 
   // Load flows from Supabase
   useEffect(() => {
@@ -195,71 +202,6 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       loadSequences();
     }
   }, [user.id]);
-
-  // Load sequence completions
-  useEffect(() => {
-    const loadCompletions = async () => {
-      if (!selectedSequence) return;
-      
-      try {
-        // First refresh the task data
-        const refreshedTasks = await Promise.all(
-          selectedSequence.tasks.map(async (task) => {
-            if (!task.data?.flowId) {
-              console.error('Task missing flowId in loadCompletions:', task);
-              throw new Error(`Task ${task.id} is missing flowId`);
-            }
-
-            const { data: flow, error: fetchError } = await supabase
-              .from('process_flows')
-              .select('nodes')
-              .eq('id', task.data.flowId)
-              .single();
-
-            if (fetchError) throw fetchError;
-
-            const node = flow.nodes.find((n: any) => n.id === task.id);
-            if (!node) {
-              console.error('Node not found in flow:', task.id);
-              throw new Error(`Node ${task.id} not found in flow ${task.data.flowId}`);
-            }
-
-            // Preserve the flowId and any other essential data
-            return {
-              ...task,
-              data: {
-                ...node.data,
-                flowId: task.data.flowId, // Explicitly preserve flowId
-                completionHistory: node.data.completionHistory || [],
-                targetDuration: node.data.targetDuration,
-                useTargetDuration: node.data.useTargetDuration,
-                cues: node.data.cues || [],
-                activeCueId: node.data.activeCueId
-              }
-            };
-          })
-        );
-
-        // Update selected tasks with fresh data
-        setSelectedTasks(refreshedTasks);
-
-        // Then load completions
-        const { data: completions, error } = await supabase
-          .from('sequence_completions')
-          .select('*')
-          .eq('sequence_id', selectedSequence.id)
-          .order('completed_at', { ascending: false });
-
-        if (error) throw error;
-        setCompletions(completions || []);
-      } catch (error) {
-        console.error('Error loading sequence completions:', error);
-        setCompletions([]);
-      }
-    };
-
-    loadCompletions();
-  }, [selectedSequence?.id]);
 
   // Timer logic
   useEffect(() => {
@@ -386,10 +328,15 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     try {
       // Check if there's already an active sequence
       if (selectedSequence) {
-        // Set timer view before navigating
+        // If the requested sequence is different from the active one,
+        // just navigate to the active sequence
+        if (sequence.id !== selectedSequence.id) {
+          setIsTimerView(true);
+          router.push(`/dashboard/process-flow/timer?sequence=${selectedSequence.id}`);
+          return;
+        }
+        // If it's the same sequence, just show the timer view
         setIsTimerView(true);
-        // Instead of throwing an error, navigate to the active sequence
-        router.push(`/dashboard/process-flow/timer?sequence=${selectedSequence.id}`);
         return;
       }
 
@@ -526,8 +473,24 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         throw new Error('Missing required data for sequence completion');
       }
 
-      // Save sequence completion
-      const { data: completion, error: saveError } = await supabase
+      // Check for recent completions (within last 5 minutes)
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: recentCompletion } = await supabase
+        .from('sequence_completions')
+        .select()
+        .eq('sequence_id', selectedSequence.id)
+        .eq('user_id', user.id)
+        .gte('completed_at', fiveMinutesAgo)
+        .maybeSingle();
+
+      if (recentCompletion) {
+        console.log('Sequence was recently completed');
+        toast.info('This sequence was completed very recently. Please wait a few minutes before completing it again.');
+        return;
+      }
+
+      // Save new sequence completion
+      const { data: completion, error } = await supabase
         .from('sequence_completions')
         .insert({
           sequence_id: selectedSequence.id,
@@ -539,62 +502,45 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         .select()
         .single();
 
-      if (saveError) {
-        console.error('Error saving sequence completion:', saveError);
-        throw saveError;
-      }
-
-      if (!completion) {
-        throw new Error('No completion data returned');
-      }
-
-      // Update metrics that this sequence contributes to
-      const { data: contributions, error: contribError } = await supabase
-        .from('life_goal_sequence_contributions')
-        .select(`
-          *,
-          metric:life_goal_metrics (*)
-        `)
-        .eq('sequence_id', selectedSequence.id);
-
-      if (contribError) {
-        console.error('Error fetching sequence contributions:', contribError);
-        throw contribError;
-      }
-
-      // Update each metric's value
-      await Promise.all(contributions?.map(async (contribution) => {
-        if (!contribution.metric) return;
-        
-        const newValue = contribution.metric.current_value + contribution.contribution_value;
-        
-        const { error: updateError } = await supabase
-          .from('life_goal_metrics')
-          .update({ current_value: newValue })
-          .eq('id', contribution.metric_id);
-
-        if (updateError) {
-          console.error('Error updating metric:', updateError);
-          throw updateError;
+      if (error) {
+        // If we get a unique constraint violation, someone completed it just now
+        if (error.code === '23505') {
+          toast.info('This sequence was just completed. Please wait a few minutes before completing it again.');
+          return;
         }
-      }));
+        console.error('Error completing sequence:', error);
+        throw error;
+      }
 
-      // Set the completion for display and update completions array
-      setLastCompletion(completion);
-      setCompletions(prevCompletions => [...prevCompletions, completion]);
+      // Set the completion for display
+      if (completion) {
+        setLastCompletion(completion);
+        setCompletions(prevCompletions => {
+          // Only add if not already in the list
+          if (!prevCompletions.some(c => c.id === completion.id)) {
+            return [...prevCompletions, completion];
+          }
+          return prevCompletions;
+        });
+        toast.success(`Completed "${selectedSequence.title}"! 🎉`);
+      }
       
       // Show completion view
       setIsCompletionView(true);
       
-      // Reset timer state but keep sequence info for completion view
+      // Reset all state including the active sequence
       setCurrentTaskIndex(-1);
       setTimeSpent(0);
       setIsRunning(false);
+      setSelectedSequence(null);
+      setSelectedTasks([]);
+      setActiveSequence(null); // Clear the active sequence from context
 
     } catch (error) {
       console.error('Error completing sequence:', error);
       setCompletionError(error as Error);
       setIsRunning(false);
+      toast.error('Failed to complete sequence');
     }
   };
 
@@ -645,7 +591,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       <div className="max-w-2xl mx-auto py-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">Sequence Completed!</h1>
-          <p className="text-gray-600">{selectedSequence?.title}</p>
+          <p className="text-gray-600">{lastCompletion.sequence_id}</p>
         </div>
 
         <Card className="p-6 mb-8">
@@ -680,6 +626,8 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
             setSelectedSequence(null);
             setSelectedTasks([]);
             setLastCompletion(null);
+            // Clear the active sequence from context
+            setActiveSequence(null);
           }}
           className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-lg"
         >

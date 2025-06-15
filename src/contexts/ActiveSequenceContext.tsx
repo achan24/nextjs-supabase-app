@@ -63,14 +63,17 @@ export function ActiveSequenceProvider({ children }: { children: React.ReactNode
 
   const resetTimer = () => {
     setTimeSpent(0);
-    if (activeSequence) {
-      setActiveSequence({
-        ...activeSequence,
-        startTime: null
-      });
-    }
     setIsRunning(false);
   };
+
+  // Add effect to sync state when active sequence changes
+  useEffect(() => {
+    if (!activeSequence) {
+      setCurrentTaskIndex(-1);
+      setTimeSpent(0);
+      setIsRunning(false);
+    }
+  }, [activeSequence]);
 
   return (
     <ActiveSequenceContext.Provider
