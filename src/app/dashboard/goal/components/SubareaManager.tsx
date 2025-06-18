@@ -267,7 +267,12 @@ export default function SubareaManager() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setIsAddingGoal(subarea.id)}
+                        onClick={() => {
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('tab', 'goals');
+                          url.searchParams.set('subarea', subarea.id);
+                          router.push(url.toString(), { scroll: false });
+                        }}
                       >
                         <Plus className="w-4 h-4" />
                       </Button>
