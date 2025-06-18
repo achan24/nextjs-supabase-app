@@ -7,8 +7,10 @@ declare module '@/components/ui/progress' {
 }
 
 declare module '@/components/ui/tabs' {
-  export const Tabs: React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<'div'>>;
-  export const TabsList: React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<'div'>>;
-  export const TabsTrigger: React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<'button'>>;
-  export const TabsContent: React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<'div'>>;
+  import * as TabsPrimitive from "@radix-ui/react-tabs";
+  
+  export const Tabs: typeof TabsPrimitive.Root;
+  export const TabsList: typeof TabsPrimitive.List;
+  export const TabsTrigger: typeof TabsPrimitive.Trigger;
+  export const TabsContent: typeof TabsPrimitive.Content;
 } 
