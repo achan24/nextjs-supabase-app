@@ -58,6 +58,7 @@
     "reactflow": "^11.11.4",
     "recharts": "^2.15.3",
     "sonner": "^2.0.5",
+    "supports-color": "^8.1.1",
     "tailwind-merge": "^3.3.0",
     "utf-8-validate": "^6.0.5",
     "web-push": "^3.6.7",

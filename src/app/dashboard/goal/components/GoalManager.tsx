@@ -1414,28 +1414,15 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                   onChange={(e) => setNewTaskDueDate(e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Time Worth Multiplier</label>
-                <Input
-                  type="number"
-                  min={0.1}
-                  step={0.1}
-                  value={selectedTaskTimeWorth}
-                  onChange={(e) => setSelectedTaskTimeWorth(parseFloat(e.target.value))}
-                />
-                <p className="text-xs text-gray-500">
-                  How much should this task count towards the goal's metrics?
-                </p>
-              </div>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setIsAddingTask(false)}>
                   Cancel
                 </Button>
                 <Button
                   onClick={handleCreateAndAddTask}
-                  disabled={!newTaskTitle}
+                  disabled={!newTaskTitle.trim()}
                 >
-                  Create & Add Task
+                  Create and Add Task
                 </Button>
               </div>
             </TabsContent>
@@ -2047,8 +2034,6 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               <label className="text-sm font-medium">Contribution Value</label>
               <Input
                 type="number"
-                min={0.1}
-                step={0.1}
                 value={sequenceContributionValue}
                 onChange={(e) => setSequenceContributionValue(parseFloat(e.target.value))}
               />
