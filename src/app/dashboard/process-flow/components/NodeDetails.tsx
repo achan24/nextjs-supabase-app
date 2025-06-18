@@ -7,6 +7,7 @@ import FlashcardReview from './FlashcardReview';
 import { createClient } from '@/lib/supabase';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { toast } from 'sonner';
+import { useTaskTimer } from '@/contexts/TaskTimerContext';
 
 interface CompletionRecord {
   completedAt: number;
@@ -63,6 +64,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [nodesInFlow, setNodesInFlow] = useState<any[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
   const supabase = createClient();
+  const { startTimer, stopTimer, resetTimer } = useTaskTimer();
 
   useEffect(() => {
     if (node) {
@@ -264,6 +266,13 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
 
   const handleStartTimer = () => {
     if (!node) return;
+    startTimer(node.id, {
+      timeSpent: node.data.timeSpent || 0,
+      label: node.data.label,
+      targetDuration: node.data.targetDuration,
+      useTargetDuration: node.data.useTargetDuration || false,
+      completionHistory: node.data.completionHistory,
+    });
     updateNode(node.id, {
       isRunning: true,
       startTime: Date.now(),
@@ -273,10 +282,22 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
 
   const handleStopTimer = () => {
     if (!node) return;
+    stopTimer(node.id);
     const now = Date.now();
     updateNode(node.id, {
       isRunning: false,
       timeSpent: ((node.data.timeSpent || 0) + (now - (node.data.startTime || now))),
+      startTime: undefined,
+      status: 'ready',
+    });
+  };
+
+  const handleResetTask = () => {
+    if (!node) return;
+    resetTimer(node.id);
+    updateNode(node.id, {
+      isRunning: false,
+      timeSpent: 0,
       startTime: undefined,
       status: 'ready',
     });
@@ -313,16 +334,6 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
       completionHistory: [...(node.data.completionHistory || []), completionRecord],
     });
     setNewNote(''); // Reset note input
-  };
-
-  const handleResetTask = () => {
-    if (!node) return;
-    updateNode(node.id, {
-      isRunning: false,
-      timeSpent: 0,
-      startTime: undefined,
-      status: 'ready',
-    });
   };
 
   const formatTime = (ms: number) => {

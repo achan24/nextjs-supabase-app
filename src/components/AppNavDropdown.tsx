@@ -192,7 +192,7 @@ export function AppNavDropdown() {
       <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md"
         >
           Apps
           <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -200,7 +200,7 @@ export function AppNavDropdown() {
 
         {/* Apps Dropdown */}
         {isOpen && (
-          <div className="absolute left-0 z-10 mt-2 w-80 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+          <div className="absolute left-0 z-10 mt-2 w-80 origin-top-left rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
             <div className="py-1">
               {apps.map((app) => {
                 const Icon = app.icon;
@@ -208,15 +208,15 @@ export function AppNavDropdown() {
                   <Link
                     key={app.href}
                     href={app.href}
-                    className="flex items-start gap-3 px-4 py-3 hover:bg-gray-100 transition-colors"
+                    className="flex items-start gap-3 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <div className="flex-shrink-0 mt-1">
-                      <Icon className="w-5 h-5 text-gray-600" />
+                      <Icon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{app.name}</div>
-                      <div className="text-xs text-gray-500">{app.description}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">{app.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{app.description}</div>
                     </div>
                   </Link>
                 );
@@ -230,7 +230,7 @@ export function AppNavDropdown() {
       <div className="relative" ref={hotlinksRef}>
         <button
           onClick={() => setIsHotlinksOpen(!isHotlinksOpen)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md"
         >
           <Star className="w-4 h-4" />
           Hotlinks
@@ -239,10 +239,10 @@ export function AppNavDropdown() {
 
         {/* Hotlinks Dropdown */}
         {isHotlinksOpen && (
-          <div className="absolute right-0 z-10 mt-2 w-64 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+          <div className="absolute right-0 z-10 mt-2 w-64 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
             <div className="py-1">
               {favoriteFlows.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-gray-500">
+                <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                   No favorite flows yet. Star a flow to add it here.
                 </div>
               ) : (
@@ -250,12 +250,12 @@ export function AppNavDropdown() {
                   <Link
                     key={flow.id}
                     href={`/dashboard/process-flow?flowId=${flow.id}`}
-                    className="block px-4 py-2 text-sm hover:bg-gray-100 transition-colors"
+                    className="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     onClick={() => setIsHotlinksOpen(false)}
                   >
-                    <div className="font-medium text-gray-900">{flow.title}</div>
+                    <div className="font-medium text-gray-900 dark:text-white">{flow.title}</div>
                     {flow.description && (
-                      <div className="text-xs text-gray-500">{flow.description}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{flow.description}</div>
                     )}
                   </Link>
                 ))

@@ -1,9 +1,7 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 import type { Metadata } from 'next'
-import { NotificationProvider } from '../contexts/NotificationContext'
-import { ServiceWorkerRegistration } from '../components/ServiceWorkerRegistration'
-import { Toaster } from '@/components/ui/toaster'
+import { ClientLayout } from './ClientLayout'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,17 +16,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.className}>
-      <head>
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#3b82f6" />
-      </head>
-      <body className="antialiased">
-        <NotificationProvider>
-          <ServiceWorkerRegistration />
-          {children}
-          <Toaster />
-        </NotificationProvider>
+    <html lang="en">
+      <body className={`${inter.className} dark:bg-gray-900 dark:text-gray-100`}>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )

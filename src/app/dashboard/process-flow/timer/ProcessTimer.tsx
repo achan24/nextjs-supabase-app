@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Node } from 'reactflow';
@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useActiveSequence } from '@/contexts/ActiveSequenceContext';
 import { toast } from 'sonner';
+import { useTaskTimer } from '@/contexts/TaskTimerContext';
 
 interface CompletionRecord {
   completedAt: number;
@@ -68,6 +69,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedTasks, setSelectedTasks] = useState<Node[]>([]);
+  const { resetTimer: resetTaskTimer, getCurrentTime, isTimerRunning, stopTimer, startTimer } = useTaskTimer();
   const { 
     activeSequence: selectedSequence,
     setActiveSequence: setSelectedSequence,
@@ -77,7 +79,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     setTimeSpent,
     isRunning,
     setIsRunning,
-    startTimer,
+    startTimer: activeSequenceStartTimer,
     pauseTimer,
     resetTimer,
     setActiveSequence
@@ -102,6 +104,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const [lockedTaskEta, setLockedTaskEta] = useState<Date | null>(null);
   const [lockedSequenceEta, setLockedSequenceEta] = useState<Date | null>(null);
   const [isCompletingSequence, setIsCompletingSequence] = useState(false);
+  const [displayTime, setDisplayTime] = useState(0);
 
   // Load all sequence completions when component mounts
   useEffect(() => {
@@ -203,43 +206,223 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     }
   }, [user.id]);
 
-  // Timer logic
+  // Sync timer state on mount and when current task changes
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (isRunning && selectedSequence?.startTime !== null && selectedSequence?.startTime !== undefined) {
-      interval = setInterval(() => {
-        setTimeSpent(Date.now() - selectedSequence.startTime!);
-      }, 1000);
-    }
+    if (currentTask) {
+      const running = isTimerRunning(currentTask.id);
+      setIsRunning(running);
+      
+      // Update task data if needed
+      if (running !== currentTask.data.isRunning) {
+        const updatedTask = {
+          ...currentTask,
+          data: {
+            ...currentTask.data,
+            isRunning: running,
+            timeSpent: getCurrentTime(currentTask.id)
+          }
+        };
+        
+        setSelectedTasks(tasks => 
+          tasks.map(t => t.id === currentTask.id ? updatedTask : t)
+        );
 
-    return () => clearInterval(interval);
-  }, [isRunning, selectedSequence?.startTime]);
+        if (selectedSequence) {
+          setSelectedSequence({
+            ...selectedSequence,
+            tasks: selectedTasks.map(t => 
+              t.id === currentTask.id ? updatedTask : t
+            )
+          });
+        }
+      }
+    }
+  }, [currentTask, isTimerRunning, getCurrentTime, setIsRunning, selectedSequence, selectedTasks, setSelectedSequence]);
 
   // Update ETAs when starting timer
   useEffect(() => {
-    if (isRunning && currentTask) {
-      if (!lockedTaskEta && currentTask.data.targetDuration) {
-        setLockedTaskEta(new Date(Date.now() + currentTask.data.targetDuration * 1000));
-      }
-      if (!lockedSequenceEta && currentTaskIndex < selectedTasks.length - 1) {
-        const totalTime = selectedTasks.slice(currentTaskIndex).reduce((total, task) => {
-          if (task.data.targetDuration) {
-            return total + (task.data.targetDuration * 1000);
-          }
-          if (task.data.completionHistory?.length) {
-            return total + (task.data.completionHistory.reduce((s: number, r: CompletionRecord) => s + r.timeSpent, 0) / 
-              task.data.completionHistory.length);
-          }
-          return total;
-        }, 0);
-        setLockedSequenceEta(new Date(Date.now() + totalTime));
-      }
-    } else {
-      setLockedTaskEta(null);
-      setLockedSequenceEta(null);
+    if (isRunning && selectedSequence?.startTime !== null && selectedSequence?.startTime !== undefined) {
+      setTimeSpent(Date.now() - selectedSequence.startTime!);
     }
-  }, [isRunning, currentTask, currentTaskIndex, selectedTasks]);
+  }, [isRunning, selectedSequence?.startTime]);
+
+  // Update timer state when data changes
+  useEffect(() => {
+    if (currentTask) {
+      const isCurrentlyRunning = isTimerRunning(currentTask.id);
+      const currentTimeSpent = getCurrentTime(currentTask.id);
+      
+      // Update task data if timer is running
+      if (isCurrentlyRunning && currentTimeSpent !== currentTask.data.timeSpent) {
+        const updatedTask = {
+          ...currentTask,
+              data: {
+            ...currentTask.data,
+            timeSpent: currentTimeSpent,
+            isRunning: true,
+            startTime: Date.now() - currentTimeSpent
+          }
+        };
+
+        setSelectedTasks(tasks => 
+          tasks.map(t => t.id === currentTask.id ? updatedTask : t)
+        );
+
+        // Update sequence data
+        if (selectedSequence) {
+          setSelectedSequence({
+            ...selectedSequence,
+            tasks: selectedTasks.map(t => 
+              t.id === currentTask.id ? updatedTask : t
+            ),
+            startTime: selectedSequence.startTime || (Date.now() - currentTimeSpent)
+          });
+        }
+      }
+    }
+  }, [currentTask, getCurrentTime, isTimerRunning, selectedSequence, selectedTasks, setSelectedSequence]);
+
+  // Update displayTime from per-task timer
+  useEffect(() => {
+    if (!currentTask) return;
+    let interval: NodeJS.Timeout | null = null;
+    const update = () => {
+      setDisplayTime(getCurrentTime(currentTask.id));
+    };
+    update();
+    if (isTimerRunning(currentTask.id)) {
+      interval = setInterval(update, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentTask, getCurrentTime, isTimerRunning]);
+
+  // Handle start/pause actions
+  const handleStartTimer = useCallback(() => {
+    if (!currentTask) return;
+    // Start per-task timer with correct initial data
+    startTimer(currentTask.id, {
+      timeSpent: currentTask.data.timeSpent || 0,
+      label: currentTask.data.label,
+      targetDuration: currentTask.data.targetDuration,
+      useTargetDuration: currentTask.data.useTargetDuration || false,
+      completionHistory: currentTask.data.completionHistory,
+    });
+    // Start sequence/global timer
+    if (selectedSequence && !selectedSequence.startTime) {
+      setSelectedSequence({
+        ...selectedSequence,
+        startTime: Date.now(),
+      });
+    }
+    setIsRunning(true);
+    const updatedTask = {
+      ...currentTask,
+      data: {
+        ...currentTask.data,
+        isRunning: true,
+        startTime: Date.now(),
+      },
+    };
+    setSelectedTasks(tasks =>
+      tasks.map(t => t.id === currentTask.id ? updatedTask : t)
+    );
+    if (selectedSequence) {
+      setSelectedSequence({
+        ...selectedSequence,
+        tasks: selectedTasks.map(t =>
+          t.id === currentTask.id ? updatedTask : t
+        ),
+      });
+    }
+  }, [currentTask, startTimer, selectedSequence, selectedTasks, setSelectedSequence, setIsRunning, setSelectedTasks]);
+
+  const handlePauseTimer = useCallback(() => {
+    if (!currentTask) return;
+    stopTimer(currentTask.id); // per-task
+    pauseTimer(); // sequence/global
+    setIsRunning(false);
+    const updatedTask = {
+      ...currentTask,
+      data: {
+        ...currentTask.data,
+        isRunning: false,
+        timeSpent: getCurrentTime(currentTask.id),
+      },
+    };
+    setSelectedTasks(tasks =>
+      tasks.map(t => t.id === currentTask.id ? updatedTask : t)
+    );
+    if (selectedSequence) {
+      setSelectedSequence({
+        ...selectedSequence,
+        tasks: selectedTasks.map(t =>
+          t.id === currentTask.id ? updatedTask : t
+        ),
+      });
+    }
+  }, [currentTask, stopTimer, pauseTimer, getCurrentTime, selectedSequence, selectedTasks, setSelectedSequence, setIsRunning, setSelectedTasks]);
+
+  const handleResetTimer = useCallback(async () => {
+    if (!currentTask) return;
+    resetTaskTimer(currentTask.id); // per-task
+    resetTimer(); // sequence/global
+    setIsRunning(false);
+    const updatedTask = {
+      ...currentTask,
+      data: {
+        ...currentTask.data,
+        timeSpent: 0,
+        startTime: null,
+        isRunning: false,
+      },
+    };
+    setSelectedTasks(tasks =>
+      tasks.map(t => t.id === currentTask.id ? updatedTask : t)
+    );
+    if (selectedSequence) {
+      setSelectedSequence({
+        ...selectedSequence,
+        tasks: selectedTasks.map(t =>
+          t.id === currentTask.id ? updatedTask : t
+        ),
+      });
+    }
+    // Update in database if needed (existing code)
+    if (currentTask.data.flowId) {
+      try {
+        const { data: flow, error: fetchError } = await supabase
+          .from('process_flows')
+          .select('nodes')
+          .eq('id', currentTask.data.flowId)
+          .single();
+        if (fetchError) throw fetchError;
+        const updatedNodes = flow.nodes.map((n: any) => {
+          if (n.id === currentTask.id) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                timeSpent: 0,
+                startTime: null,
+                isRunning: false,
+              },
+            };
+          }
+          return n;
+        });
+        const { error: updateError } = await supabase
+          .from('process_flows')
+          .update({ nodes: updatedNodes })
+          .eq('id', currentTask.data.flowId);
+        if (updateError) throw updateError;
+      } catch (error) {
+        console.error('Error updating flow:', error);
+        toast.error('Failed to reset timer in database');
+      }
+    }
+  }, [currentTask, resetTaskTimer, resetTimer, selectedSequence, selectedTasks, setSelectedSequence, setIsRunning, setSelectedTasks, supabase, toast]);
 
   const formatTime = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -514,7 +697,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
       // Set the completion for display
       if (completion) {
-        setLastCompletion(completion);
+      setLastCompletion(completion);
         setCompletions(prevCompletions => {
           // Only add if not already in the list
           if (!prevCompletions.some(c => c.id === completion.id)) {
@@ -947,7 +1130,7 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
           {/* Timer */}
           <div className="bg-gray-900 text-white rounded-2xl p-4 sm:p-8">
             <div className="text-5xl sm:text-8xl font-mono font-bold tabular-nums text-center">
-              {formatTime(timeSpent)}
+              {formatTime(displayTime)}
             </div>
             <div className="mt-4 space-y-2 text-sm sm:text-base text-gray-400">
               {currentTask?.data.targetDuration && (
@@ -992,24 +1175,34 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
 
           {/* Controls */}
           <div className="flex justify-center gap-4">
-            {isRunning ? (
+            {isTimerRunning(currentTask?.id || '') ? (
               <Button
                 variant="outline"
                 size="lg"
-                onClick={pauseTimer}
+                onClick={handlePauseTimer}
                 className="w-32"
               >
                 Pause
               </Button>
             ) : (
+              <>
               <Button
                 variant="default"
                 size="lg"
-                onClick={startTimer}
+                  onClick={handleStartTimer}
                 className="w-32"
               >
                 Start
               </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleResetTimer}
+                  className="w-32"
+                >
+                  Reset
+                </Button>
+              </>
             )}
 
             {currentTaskIndex < selectedTasks.length - 1 ? (
