@@ -660,7 +660,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   if (error) {
     return (
       <div className="text-center text-red-500 py-8">
-        <p>Error loading goals: {error.message}</p>
+        <p>Error loading goals: {(error as Error).message}</p>
       </div>
     );
   }
@@ -668,7 +668,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   return (
     <div>
       {loading && <div>Loading...</div>}
-      {error && <div>Error: {error.message}</div>}
+      {error && <div>Error: {(error as Error).message}</div>}
 
       {selectedGoal ? (
         <div className="space-y-6">
