@@ -33,22 +33,17 @@ interface GoalManagerProps {
   selectedGoalId: string | null;
 }
 
-interface TaskWithContributions {
+interface MetricData {
   id: string;
-  title: string;
-  description?: string;
-  status: string;
-  due_date?: string;
-  life_goal_task_contributions?: Array<{
-    id: string;
-    metric_id: string;
-    contribution_value: number;
-    metric: {
-      id: string;
-      name: string;
-      unit?: string;
-    };
-  }>;
+  name: string;
+  unit?: string;
+}
+
+interface TaskContribution {
+  id: string;
+  metric_id: string;
+  contribution_value: number;
+  metric?: MetricData;
 }
 
 interface Task {
@@ -57,16 +52,39 @@ interface Task {
   description?: string;
   status: string;
   due_date?: string;
-  metric_contributions?: Array<{
+  metric_contributions?: TaskContribution[];
+}
+
+interface TaskWithContributions {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  due_date?: string;
+  life_goal_task_contributions?: {
     id: string;
     metric_id: string;
     contribution_value: number;
-    metric?: {
+    metric: MetricData;
+  }[];
+}
+
+interface SupabaseTaskResponse {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  due_date: string | null;
+  life_goal_task_contributions: Array<{
+    id: string;
+    metric_id: string;
+    contribution_value: string | number;
+    metric: {
       id: string;
       name: string;
-      unit?: string;
-    };
-  }>;
+      unit: string | null;
+    } | null;
+  }> | null;
 }
 
 export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalManagerProps) {
@@ -474,31 +492,29 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               unit
             )
           )
-        `);
+        `)
+        .returns<SupabaseTaskResponse[]>();
 
       if (error) throw error;
 
       // Transform the tasks data to include metric contributions
-      const transformedTasks = (data || []).map(task => {
-        const taskData: Task = {
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          due_date: task.due_date,
-          metric_contributions: task.life_goal_task_contributions?.map(contrib => ({
-            id: contrib.id,
-            metric_id: contrib.metric_id,
-            contribution_value: Number(contrib.contribution_value),
-            metric: contrib.metric ? {
-              id: contrib.metric.id,
-              name: contrib.metric.name,
-              unit: contrib.metric.unit
-            } : undefined
-          })) || []
-        };
-        return taskData;
-      });
+      const transformedTasks = (data || []).map((task: SupabaseTaskResponse): Task => ({
+        id: task.id,
+        title: task.title,
+        description: task.description || undefined,
+        status: task.status,
+        due_date: task.due_date || undefined,
+        metric_contributions: task.life_goal_task_contributions?.map(contrib => ({
+          id: contrib.id,
+          metric_id: contrib.metric_id,
+          contribution_value: Number(contrib.contribution_value),
+          metric: contrib.metric ? {
+            id: contrib.metric.id,
+            name: contrib.metric.name,
+            unit: contrib.metric.unit || undefined
+          } : undefined
+        })) || []
+      }));
 
       setTasks(transformedTasks);
     } catch (error) {
