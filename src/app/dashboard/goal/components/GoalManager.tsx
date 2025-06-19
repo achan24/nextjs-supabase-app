@@ -33,13 +33,31 @@ interface GoalManagerProps {
   selectedGoalId: string | null;
 }
 
+interface TaskWithContributions {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  due_date?: string;
+  life_goal_task_contributions?: Array<{
+    id: string;
+    metric_id: string;
+    contribution_value: number;
+    metric: {
+      id: string;
+      name: string;
+      unit?: string;
+    };
+  }>;
+}
+
 interface Task {
   id: string;
   title: string;
   description?: string;
   status: string;
   due_date?: string;
-  metric_contributions?: {
+  metric_contributions?: Array<{
     id: string;
     metric_id: string;
     contribution_value: number;
@@ -48,7 +66,7 @@ interface Task {
       name: string;
       unit?: string;
     };
-  }[];
+  }>;
 }
 
 export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalManagerProps) {
@@ -437,17 +455,56 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
 
   // Only fetch tasks when we need them
   const fetchTasks = async () => {
-    const { data: tasks, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(`
+          id,
+          title,
+          description,
+          status,
+          due_date,
+          life_goal_task_contributions!left (
+            id,
+            metric_id,
+            contribution_value,
+            metric:life_goal_metrics!left (
+              id,
+              name,
+              unit
+            )
+          )
+        `);
 
-    if (error) {
+      if (error) throw error;
+
+      // Transform the tasks data to include metric contributions
+      const transformedTasks = (data || []).map(task => {
+        const taskData: Task = {
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          due_date: task.due_date,
+          metric_contributions: task.life_goal_task_contributions?.map(contrib => ({
+            id: contrib.id,
+            metric_id: contrib.metric_id,
+            contribution_value: Number(contrib.contribution_value),
+            metric: contrib.metric ? {
+              id: contrib.metric.id,
+              name: contrib.metric.name,
+              unit: contrib.metric.unit
+            } : undefined
+          })) || []
+        };
+        return taskData;
+      });
+
+      setTasks(transformedTasks);
+    } catch (error) {
       console.error('Error fetching tasks:', error);
-      return;
+      toast.error('Failed to fetch tasks');
     }
-
-    setTasks(tasks || []);
   };
 
   // Fetch tasks when component mounts and when selectedGoal changes
@@ -610,7 +667,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
 
     try {
       const { error } = await supabase
-        .from('life_goal_metric_tasks')
+        .from('life_goal_task_contributions')
         .insert({
           task_id: selectedTaskForMetric,
           metric_id: selectedMetricForTask,
@@ -619,12 +676,14 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
 
       if (error) throw error;
 
+      // Refresh tasks to get updated contributions
+      await fetchTasks();
+
       toast.success('Task linked to metric successfully');
       setIsLinkingTaskToMetric(false);
       setSelectedTaskForMetric(null);
       setSelectedMetricForTask(null);
       setTaskContributionValue(1);
-      await fetchTasks();
     } catch (error) {
       console.error('Error linking task to metric:', error);
       toast.error('Failed to link task to metric');
@@ -634,17 +693,18 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const handleRemoveTaskFromMetric = async (taskId: string, metricId: string) => {
     try {
       const { error } = await supabase
-        .from('life_goal_metric_tasks')
+        .from('life_goal_task_contributions')
         .delete()
-        .eq('task_id', taskId)
-        .eq('metric_id', metricId);
+        .match({ task_id: taskId, metric_id: metricId });
 
       if (error) throw error;
 
-      toast.success('Task unlinked from metric');
+      // Refresh tasks to update the UI
       await fetchTasks();
+
+      toast.success('Task unlinked from metric successfully');
     } catch (error) {
-      console.error('Error removing task from metric:', error);
+      console.error('Error unlinking task from metric:', error);
       toast.error('Failed to unlink task from metric');
     }
   };
@@ -935,45 +995,106 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                 </div>
                 {selectedGoal.metrics && selectedGoal.metrics.length > 0 ? (
                   <ul className="space-y-2">
-                    {selectedGoal.metrics.map((metric: LifeGoalMetric) => (
-                      <li key={metric.id} className="flex justify-between items-start p-3 rounded-lg border">
-                        <div>
-                          <span className="font-medium">{metric.name}</span>
-                          <p className="text-sm text-gray-600">
-                            Current: {metric.current_value} {metric.unit}
-                          </p>
-                          {/* Display linked sequences */}
-                          {metric.sequence_contributions?.map(contribution => (
-                            <div key={contribution.id} className="flex items-center gap-2 mt-1">
-                              <Timer className="w-3 h-3 text-gray-500" />
-                              <Link 
-                                href={`/dashboard/process-flow/timer?sequence=${contribution.sequence?.id}`}
-                                className="text-sm text-blue-600 hover:text-blue-800"
-                              >
-                                {contribution.sequence?.title}
-                              </Link>
+                    {selectedGoal.metrics.map((metric: LifeGoalMetric) => {
+                      const linkedTasks = tasks.filter(task => 
+                        task.metric_contributions?.some(contrib => contrib.metric_id === metric.id)
+                      );
+                      return (
+                        <li key={metric.id} className="flex flex-col p-3 rounded-lg border">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="font-medium">{metric.name}</span>
+                              <p className="text-sm text-gray-600">
+                                Current: {metric.current_value} {metric.unit}
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-4 w-4 ml-1"
-                                onClick={() => handleRemoveSequenceFromGoal(contribution.id)}
+                                onClick={() => handleDeleteMetric(metric.id)}
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteMetric(metric.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
+                          </div>
+
+                          {/* Only show sections if there are linked items */}
+                          {(linkedTasks.length > 0 || metric.sequence_contributions?.length > 0) && (
+                            <div className="mt-2 border-t pt-2 space-y-2">
+                              {linkedTasks.length > 0 && (
+                                <details className="group">
+                                  <summary className="flex items-center gap-2 cursor-pointer list-none">
+                                    <div className="flex-1 flex items-center gap-2">
+                                      <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" />
+                                      <p className="text-xs font-medium text-gray-500">
+                                        Linked Tasks ({linkedTasks.length})
+                                      </p>
+                                    </div>
+                                  </summary>
+                                  <div className="mt-2 pl-6 space-y-2">
+                                    {linkedTasks.map(task => (
+                                      <div key={task.id} className="flex items-center gap-2 text-sm">
+                                        <div className="flex-1">
+                                          <span className={task.status === 'completed' ? 'line-through text-gray-500' : ''}>
+                                            {task.title}
+                                          </span>
+                                          <span className="text-xs text-gray-500 ml-2">
+                                            (Contributes: {task.metric_contributions?.find(c => c.metric_id === metric.id)?.contribution_value})
+                                          </span>
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-4 w-4"
+                                          onClick={() => handleRemoveTaskFromMetric(task.id, metric.id)}
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              )}
+
+                              {metric.sequence_contributions?.length > 0 && (
+                                <details className="group">
+                                  <summary className="flex items-center gap-2 cursor-pointer list-none">
+                                    <div className="flex-1 flex items-center gap-2">
+                                      <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" />
+                                      <p className="text-xs font-medium text-gray-500">
+                                        Linked Sequences ({metric.sequence_contributions.length})
+                                      </p>
+                                    </div>
+                                  </summary>
+                                  <div className="mt-2 pl-6 space-y-2">
+                                    {metric.sequence_contributions?.map(contribution => (
+                                      <div key={contribution.id} className="flex items-center gap-2">
+                                        <Timer className="w-3 h-3 text-gray-500" />
+                                        <Link 
+                                          href={`/dashboard/process-flow/timer?sequence=${contribution.sequence?.id}`}
+                                          className="text-sm text-blue-600 hover:text-blue-800"
+                                        >
+                                          {contribution.sequence?.title}
+                                        </Link>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-4 w-4 ml-1"
+                                          onClick={() => handleRemoveSequenceFromGoal(contribution.id)}
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <p className="text-sm text-gray-500">No metrics yet</p>
@@ -1014,6 +1135,20 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                             >
                               <CheckCircle2 className="w-4 h-4" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4 hover:bg-blue-50 hover:text-blue-600 group relative"
+                              onClick={() => {
+                                setSelectedTaskForMetric(task.id);
+                                setIsLinkingTaskToMetric(true);
+                              }}
+                            >
+                              <Target className="w-3 h-3" />
+                              <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">
+                                Link to Metric
+                              </span>
+                            </Button>
                             <div className="min-w-0">
                               <span className={`font-medium text-sm ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
                                 {task.title}
@@ -1052,14 +1187,6 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                             <span className="text-xs text-gray-500">
                               Worth: {goalTask.time_worth}x
                             </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-4 w-4"
-                              onClick={() => setSelectedTaskForMetric(task.id)}
-                            >
-                              <Target className="w-3 h-3" />
-                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
