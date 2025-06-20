@@ -6,7 +6,20 @@ import Link from 'next/link'
 import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon } from 'lucide-react'
+
+// Mock character data - will be replaced with real data later
+const characterData = {
+  name: 'Your Character',
+  level: 5,
+  xp: 750,
+  nextLevelXp: 1000,
+  traits: [
+    { name: 'Discipline', value: 75 },
+    { name: 'Focus', value: 65 }
+  ]
+}
 
 export default function HomePage({ user }: { user: User }) {
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
@@ -47,6 +60,36 @@ export default function HomePage({ user }: { user: User }) {
         {/* Feature Cards */}
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {/* Character Card */}
+          <Link href="/dashboard/character" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <UserIcon className="h-6 w-6 text-purple-600" />
+                  </div>
+                  Character
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-xl">
+                    🟢
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Level {characterData.level}</p>
+                    <div className="w-24">
+                      <Progress value={(characterData.xp / characterData.nextLevelXp) * 100} className="h-1" />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Level up your character by completing tasks and building good habits. Track your progress and improve your traits.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
           {/* Overview Card */}
           <Link href="/dashboard/overview" className="group">
             <Card className="hover:shadow-md transition-shadow">

@@ -18,12 +18,19 @@ import {
   Users,
   Repeat,
   Lightbulb,
-  Target
+  Target,
+  User
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { PostgrestResponse } from '@supabase/supabase-js';
 
 const apps = [
+  { 
+    name: 'Character', 
+    href: '/dashboard/character', 
+    description: 'View and level up your character',
+    icon: User
+  },
   { 
     name: 'Overview', 
     href: '/dashboard/overview', 

@@ -1,0 +1,675 @@
+# Skills System Design
+
+## Goals vs Skills Comparison
+
+### Goals
+- Temporary and completable
+- Example: "Learn React Basics" or "Complete CS50 Course"
+- Once done, they're archived
+- Binary state: incomplete -> complete
+
+### Skills
+- Permanent and continuously improvable
+- Example: "Programming" or "Public Speaking"
+- Never "complete", only levels of mastery
+- Progressive state: Level 1 -> 2 -> 3 etc.
+
+## Technical Implementation
+
+### Core Types
+```typescript
+interface Skill {
+  id: string;
+  name: string;
+  category: SkillCategory;
+  level: number;          // Current level (1-100)
+  currentXP: number;      // Current experience points
+  nextLevelXP: number;    // XP needed for next level
+  lastActivity: Date;     // Track skill decay
+}
+
+enum SkillCategory {
+  TECHNICAL = 'technical',
+  PHYSICAL = 'physical',
+  SOCIAL = 'social',
+  CREATIVE = 'creative',
+  LIFE_MANAGEMENT = 'life_management'
+}
+```
+
+## Skill Categories and Progression Examples
+
+### 1. Technical Skills
+```
+Programming
+├── Level 1 (0-100 XP): Basic syntax
+├── Level 2 (101-250 XP): Simple programs
+├── Level 3 (251-500 XP): Complex applications
+└── Level 4+ : Advanced concepts
+```
+
+### 2. Social Skills
+```
+Public Speaking
+├── Level 1: Small group presentations
+├── Level 2: Department meetings
+├── Level 3: Company-wide talks
+└── Level 4+: Conference speaking
+```
+
+### 3. Life Management
+```
+Time Management
+├── Level 1: Basic scheduling
+├── Level 2: Priority management
+├── Level 3: Strategic planning
+└── Level 4+: Advanced optimization
+```
+
+## XP Generation System
+
+### 1. Direct Task Completion
+```typescript
+// When completing a task tagged with a skill
+task = {
+  id: "123",
+  title: "Build a React Component",
+  skills: [{
+    skillId: "programming",
+    xpValue: 25
+  }]
+}
+```
+
+### 2. Sequence Completion
+```typescript
+sequence = {
+  id: "456",
+  title: "Complete Frontend Course",
+  skills: [{
+    skillId: "programming",
+    xpValue: 100
+  }]
+}
+```
+
+### 3. Goal Achievement
+```typescript
+goal = {
+  id: "789",
+  title: "Launch Personal Website",
+  skills: [{
+    skillId: "programming",
+    xpValue: 250
+  }, {
+    skillId: "design",
+    xpValue: 150
+  }]
+}
+```
+
+## Skill Progression Example
+
+```
+Programming Skill Progress
+------------------------
+Level 1 (0-100 XP)
+  ✓ Complete "Hello World" (+10 XP)
+  ✓ Build Simple Calculator (+25 XP)
+  ✓ Create Basic Website (+50 XP)
+  → Level Up! (85/100 XP)
+
+Level 2 (101-250 XP)
+  ✓ Build React App (+75 XP)
+  ► Working on API Integration (+0/50 XP)
+  • Deploy to Production (Not Started)
+```
+
+## Benefits Over Goals System
+
+### 1. Continuous Progress
+- Goals end, but skills keep growing
+- More motivating long-term tracking
+
+### 2. Skill Trees
+```
+Web Development
+├── HTML/CSS (Level 3)
+├── JavaScript (Level 2)
+└── React (Level 1)
+```
+
+### 3. Mastery Levels
+- Clear progression path
+- Visual representation of expertise
+- Gamification elements (levels, XP)
+
+### 4. Skill Synergies
+```typescript
+// Tasks can contribute to multiple skills
+task = {
+  title: "Give Tech Talk",
+  skills: [
+    { id: "programming", xp: 50 },
+    { id: "public_speaking", xp: 75 }
+  ]
+}
+```
+
+## Integration Points
+
+1. Tasks can contribute to both goals and skills
+2. Sequences can build skill progression
+3. Metrics can track skill development over time
+4. Skills provide permanent progression alongside temporary goals
+5. Skills can have dependencies (prerequisites)
+6. Skills can decay if not practiced
+
+## Database Schema
+
+```sql
+-- Skills table
+create table skills (
+  id uuid primary key,
+  name text,
+  category text,
+  current_level int,
+  xp_current int,
+  xp_required int
+);
+
+-- Skill contributions from various sources
+create table skill_contributions (
+  id uuid primary key,
+  skill_id uuid references skills(id),
+  source_type text, -- 'task', 'sequence', 'goal'
+  source_id uuid,
+  contribution_value int
+);
+```
+
+## Original Insight (User Prompt)
+Let's talk about this in more detail, for example, learn react basics, sure I can learn it, but will I remember it, will I be able to use the knowledge I learned to build something? With the skill aspect, there is far more to it than just going through the material.
+
+I need to test and verify, and show some creativity, with a capstone project of some sort, or maybe lots and lots of little projects. The real test of learning is do I develop the actual skill. Most skills the basics are straightforward, it's the execution that matters, do I use the knowledge, or do I only use a fraction of what I learned?
+
+## Four Stages of Competence
+
+1. **Unconscious Incompetence** ("Unaware I suck")
+   - Don't know what you don't know
+   - May overestimate abilities
+   - Example: "React is just HTML with extra steps"
+   - XP Range: 0-50
+
+2. **Conscious Incompetence** ("Aware I suck")
+   - Recognize the depth of the skill
+   - Aware of your limitations
+   - Example: "Oh wow, I need to learn state management, routing, hooks..."
+   - XP Range: 51-200
+
+3. **Conscious Competence** ("Getting better, with effort")
+   - Can perform well with focus
+   - Need to think through steps
+   - Example: "I can build this feature, let me think about the steps..."
+   - XP Range: 201-500
+
+4. **Unconscious Competence** ("Mastery")
+   - Skills become second nature
+   - Can innovate and teach others
+   - Example: "Let me show you a few different ways to solve this..."
+   - XP Range: 501+
+
+## Expanded Skill Development Understanding
+
+### Levels of Skill Development
+
+1. **Knowledge Acquisition** (Basic XP)
+```
+"Learn React Basics" Course
+├── Watch tutorials (+5 XP)
+├── Read documentation (+5 XP)
+└── Follow along with examples (+10 XP)
+```
+*But this alone doesn't make you skilled!*
+
+2. **Practice & Application** (Medium XP)
+```
+Small Projects & Exercises
+├── Build Todo App from scratch (+25 XP)
+├── Modify existing projects (+15 XP)
+├── Debug common issues (+20 XP)
+└── Implement specific features (+30 XP)
+```
+
+3. **Creative Application** (High XP)
+```
+Original Projects
+├── Design own solutions (+50 XP)
+├── Solve real problems (+75 XP)
+└── Build without tutorials (+100 XP)
+```
+
+4. **Mastery Indicators** (Bonus XP)
+```
+Skill Depth
+├── Explain to others (+40 XP)
+├── Handle edge cases (+50 XP)
+├── Optimize performance (+60 XP)
+└── Innovate new patterns (+100 XP)
+```
+
+### Skill Verification System
+
+```typescript
+interface SkillVerification {
+  type: 'knowledge' | 'practice' | 'creation' | 'mastery';
+  requirements: {
+    projects: number;      // Number of projects completed
+    complexity: number;    // 1-5 scale
+    originality: number;   // How much was self-created vs followed
+    timeSpent: number;     // Active development time
+  };
+  evidence: {
+    repository?: string;   // Code/project links
+    demonstration?: string; // Live demo/presentation
+    feedback?: string[];   // From peers/mentors
+  };
+}
+```
+
+### Example: React Skill Development
+
+```
+Level 1: KNOWLEDGE (0-100 XP)
+├── Complete basic tutorial (+10 XP)
+├── Understand core concepts (+15 XP)
+└── Pass concept quiz (+25 XP)
+
+Level 2: PRACTICE (101-250 XP)
+├── Build 3 tutorial projects (+30 XP each)
+├── Modify existing apps (+20 XP each)
+└── Debug 5 common issues (+10 XP each)
+
+Level 3: APPLICATION (251-500 XP)
+├── Build original project (+100 XP)
+├── Implement complex features (+50 XP)
+└── Handle state management (+75 XP)
+
+Level 4: CREATION (501-1000 XP)
+├── Design system architecture (+150 XP)
+├── Build production app (+200 XP)
+└── Optimize performance (+150 XP)
+
+Level 5: MASTERY (1001+ XP)
+├── Mentor others (+100 XP)
+├── Create reusable patterns (+150 XP)
+└── Innovate solutions (+200 XP)
+```
+
+### Skill Usage Tracking
+
+```typescript
+interface SkillUsage {
+  skillId: string;
+  lastUsed: Date;
+  frequency: {
+    last7Days: number;
+    last30Days: number;
+    last90Days: number;
+  };
+  depth: {
+    basicUsage: number;    // Simple applications
+    advancedUsage: number; // Complex implementations
+    teaching: number;      // Explaining to others
+    innovation: number;    // Creating new patterns
+  };
+}
+```
+
+### Skill Decay System
+
+```typescript
+interface SkillDecay {
+  decayRate: number;      // How fast skill deteriorates
+  thresholds: {
+    warning: number;      // Days before decay warning
+    minor: number;        // Days before minor decay
+    major: number;        // Days before major decay
+  };
+  recoveryRate: number;   // How fast skill recovers with practice
+}
+```
+
+### Key Insights
+- Real skill development isn't just about checking boxes
+- Active application is crucial
+- Creative problem-solving demonstrates understanding
+- Regular practice prevents decay
+- Teaching others deepens understanding
+- Building without tutorials shows mastery
+- Maintaining and growing skills requires consistent effort
+- Each stage of competence requires different learning approaches
+- Progress isn't linear - breakthroughs happen with deep engagement 
+
+## The Theory-Practice Gap and Bloom's Taxonomy
+
+### Beyond Memorization: The Path to True Expertise
+
+Traditional education often focuses heavily on the lower levels of learning:
+- Memorizing procedures
+- Understanding concepts
+- Following established patterns
+
+But true skill mastery requires progression through all levels of Bloom's Taxonomy:
+
+```
+Bloom's Taxonomy in Skill Development
+│
+├── 6. CREATING (Mastery Level)
+│   ├── Design novel solutions
+│   ├── Innovate new approaches
+│   └── Synthesize across domains
+│
+├── 5. EVALUATING (Expert Level)
+│   ├── Assess solution efficiency
+│   ├── Critique different approaches
+│   └── Justify strategic decisions
+│
+├── 4. ANALYZING (Advanced Level)
+│   ├── Break down complex problems
+│   ├── Compare different solutions
+│   └── Diagnose root causes
+│
+├── 3. APPLYING (Intermediate Level)
+│   ├── Use knowledge in new situations
+│   ├── Implement solutions
+│   └── Demonstrate procedures
+│
+├── 2. UNDERSTANDING (Basic Level)
+│   ├── Explain concepts
+│   ├── Describe processes
+│   └── Summarize information
+│
+└── 1. REMEMBERING (Novice Level)
+    ├── Recall facts
+    ├── Memorize procedures
+    └── List steps
+```
+
+### The "Book Knowledge" vs "Street Smarts" Gap
+
+Example: Network Engineering
+```
+Book-Taught Engineer
+├── Follows standard procedures
+├── Needs to consult documentation
+├── Takes methodical, longer approach
+└── May miss contextual shortcuts
+
+Experienced Engineer
+├── Pattern recognition from past cases
+├── Intuitive problem-solving
+├── Efficient, minimal-time solutions
+├── Understands business impact
+└── Effective communication skills
+```
+
+### Skill Development Principles
+
+1. **Experience Acceleration**
+   - Learn from real-world scenarios
+   - Build pattern recognition
+   - Develop intuitive understanding
+   - Practice under various conditions
+
+2. **Contextual Learning**
+   - Understand when to break "rules"
+   - Recognize situational priorities
+   - Balance theory with practicality
+   - Consider business/user impact
+
+3. **Efficiency Through Experience**
+   - Develop shortcuts and heuristics
+   - Know common failure points
+   - Anticipate problems before they occur
+   - Quick assessment of situation severity
+
+4. **Holistic Skill Integration**
+   ```
+   Technical Expertise
+   ├── Core knowledge
+   ├── Practical experience
+   ├── Problem-solving patterns
+   └── Efficiency shortcuts
+         │
+         ├── Soft Skills
+         │   ├── Communication
+         │   ├── Stakeholder management
+         │   └── Team collaboration
+         │
+         └── Business Context
+             ├── Impact assessment
+             ├── Risk management
+             └── Resource optimization
+   ```
+
+### Measuring True Skill Mastery
+
+Beyond traditional metrics, true skill mastery should measure:
+1. Speed of problem resolution
+2. Accuracy of initial assessment
+3. Efficiency of solution
+4. Communication effectiveness
+5. Business impact understanding
+6. Adaptability to new situations
+7. Pattern recognition ability
+8. Teaching/mentoring capability
+
+This comprehensive approach ensures we're not just creating "book smart" practitioners, but developing true experts who can:
+- Solve problems efficiently
+- Communicate effectively
+- Understand broader impact
+- Adapt to new situations
+- Share knowledge with others
+- Make strategic decisions
+- Innovate when needed 
+
+## AI-Driven Skill Development
+
+### Skill Gap Analysis
+```
+AI Assessment Components
+├── Knowledge Testing
+│   ├── Conceptual understanding
+│   ├── Theoretical foundations
+│   └── Core principles
+│
+├── Practical Evaluation
+│   ├── Code review analysis
+│   ├── Project complexity assessment
+│   ├── Problem-solving patterns
+│   └── Implementation efficiency
+│
+├── Behavioral Analysis
+│   ├── Learning patterns
+│   ├── Problem-solving approaches
+│   ├── Documentation habits
+│   └── Collaboration style
+│
+└── Progress Tracking
+    ├── Skill progression rate
+    ├── Practice consistency
+    ├── Challenge completion
+    └── Knowledge retention
+```
+
+### Dynamic Skill Trees
+```
+Skill Tree Generation
+├── Prerequisites Mapping
+│   ├── Required foundational skills
+│   ├── Dependency relationships
+│   └── Optimal learning order
+│
+├── Personalized Pathways
+│   ├── Current skill level assessment
+│   ├── Learning style adaptation
+│   ├── Pace optimization
+│   └── Interest-based branching
+│
+├── Gap Detection
+│   ├── Missing fundamentals
+│   ├── Weak areas identification
+│   ├── Practice recommendations
+│   └── Remedial exercises
+│
+└── Progress Optimization
+    ├── Learning rate analysis
+    ├── Difficulty adjustment
+    ├── Challenge calibration
+    └── Milestone tracking
+```
+
+### AI-Powered Learning Recommendations
+
+```typescript
+interface SkillAssessment {
+  userId: string;
+  skillId: string;
+  gaps: {
+    fundamental: {
+      topic: string;
+      severity: 'critical' | 'moderate' | 'minor';
+      suggestedTasks: Task[];
+    }[];
+    practical: {
+      area: string;
+      missingExperience: string;
+      recommendedProjects: Project[];
+    }[];
+    advanced: {
+      concept: string;
+      currentLevel: number;
+      nextSteps: LearningPath[];
+    }[];
+  };
+  learningStyle: {
+    preferredMethod: 'visual' | 'practical' | 'theoretical' | 'collaborative';
+    pacePreference: 'accelerated' | 'moderate' | 'thorough';
+    strengthAreas: string[];
+    challengeAreas: string[];
+  };
+}
+
+interface LearningRecommendation {
+  priority: number;
+  type: 'project' | 'exercise' | 'study' | 'practice';
+  description: string;
+  expectedOutcome: string;
+  timeEstimate: string;
+  prerequisites: string[];
+  reinforcesSkills: string[];
+  challengeLevel: number;
+}
+```
+
+### Example: AI-Guided Web Development Path
+
+```
+Current Assessment: Intermediate React Developer
+│
+├── Identified Gaps
+│   ├── State Management Fundamentals
+│   │   └── Recommended: Redux core concepts review
+│   ├── Performance Optimization
+│   │   └── Task: Implement memo and useMemo
+│   └── Testing Practices
+│       └── Project: Add test coverage to existing app
+│
+├── Strength Areas
+│   ├── Component Architecture
+│   ├── Hook Implementation
+│   └── UI Design
+│
+├── Next Growth Areas
+│   ├── Advanced State Patterns
+│   ├── Micro-Frontend Architecture
+│   └── Performance Monitoring
+│
+└── Personalized Learning Path
+    ├── Week 1: Redux Fundamentals
+    ├── Week 2: Testing Workshop
+    ├── Week 3: Performance Project
+    └── Week 4: Architecture Review
+```
+
+### AI Intervention Points
+
+1. **Skill Assessment**
+   - Regular evaluation of code quality
+   - Analysis of problem-solving approaches
+   - Identification of knowledge gaps
+   - Learning pattern recognition
+
+2. **Adaptive Learning**
+   - Dynamic difficulty adjustment
+   - Custom exercise generation
+   - Personalized project suggestions
+   - Real-time feedback loops
+
+3. **Progress Monitoring**
+   ```
+   Monitoring Metrics
+   ├── Completion Rates
+   │   ├── Tasks finished
+   │   ├── Time per task
+   │   └── Success rate
+   │
+   ├── Quality Indicators
+   │   ├── Code complexity
+   │   ├── Best practices adherence
+   │   └── Performance metrics
+   │
+   └── Growth Markers
+       ├── Skill level progression
+       ├── Knowledge retention
+       └── Application ability
+   ```
+
+4. **Intervention Strategies**
+   - Just-in-time learning resources
+   - Targeted practice exercises
+   - Prerequisite reinforcement
+   - Challenge level adjustment
+
+### AI Feedback Loop
+
+```
+Continuous Improvement Cycle
+┌─────────────────────┐
+│  Skill Assessment   │
+│                     │
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│   Gap Analysis      │
+│                     │
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Custom Learning Path│
+│                     │
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│  Practice & Apply   │
+│                     │
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Progress Evaluation │
+│                     │
+└─────────┬───────────┘
+          │
+          └─────> Repeat
+``` 

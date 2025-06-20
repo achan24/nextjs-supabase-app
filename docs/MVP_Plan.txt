@@ -1,0 +1,741 @@
+# Guardian Angel MVP Plan
+
+## Phase 1: Character Dashboard
+```
+Basic Character Screen
+├── Profile Section
+│   ├── Character name/avatar
+│   ├── Level/XP
+│   └── Basic stats display
+│
+├── Core Traits (Start with 3-4)
+│   ├── Discipline
+│   ├── Consistency
+│   ├── Focus
+│   └── Energy
+│
+└── Achievement Overview
+    ├── Recent completions
+    ├── Current streaks
+    └── Basic statistics
+```
+
+### Initial Implementation
+1. Create character profile page
+2. Implement basic trait system
+   - Start with Discipline as first trait
+   - Track via completed tasks/sequences
+   - Simple scoring system (0-100)
+3. Add basic progress visualization
+4. Connect to existing tasks/goals
+
+### Database Schema V1
+```sql
+-- Core character table
+CREATE TABLE characters (
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id),
+    name VARCHAR(255),
+    level INTEGER DEFAULT 1,
+    xp INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Basic traits
+CREATE TABLE traits (
+    id UUID PRIMARY KEY,
+    character_id UUID REFERENCES characters(id),
+    name VARCHAR(50),  -- e.g., 'discipline', 'consistency'
+    value INTEGER,     -- 0-100 score
+    last_updated TIMESTAMP,
+    calculation_data JSONB  -- store contributing factors
+);
+
+-- Track trait changes
+CREATE TABLE trait_history (
+    id UUID PRIMARY KEY,
+    trait_id UUID REFERENCES traits(id),
+    old_value INTEGER,
+    new_value INTEGER,
+    change_reason TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Connect to existing tables
+ALTER TABLE tasks ADD COLUMN trait_impacts JSONB;
+ALTER TABLE sequences ADD COLUMN trait_impacts JSONB;
+ALTER TABLE metrics ADD COLUMN trait_impacts JSONB;
+```
+
+## Phase 2: Trait System Integration
+```
+Trait Development
+├── Task Tagging
+│   ├── Tag tasks with traits
+│   ├── Impact weight setting
+│   └── Automatic suggestions
+│
+├── Calculation System
+│   ├── Base trait score
+│   ├── Recent activity impact
+│   ├── Streak multipliers
+│   └── Decay mechanics
+│
+└── Visualization
+    ├── Trait progress charts
+    ├── Contributing factors
+    └── Historical trends
+```
+
+### Implementation Steps
+1. Add trait tagging to existing entities
+2. Implement basic scoring system
+3. Create trait progress visualization
+4. Add simple decay mechanism
+
+## Phase 3: Skills Foundation
+```
+Basic Skills System
+├── Skill Categories
+│   ├── Technical
+│   ├── Physical
+│   ├── Creative
+│   └── Life Management
+│
+├── Basic Tracking
+│   ├── XP gain
+│   ├── Level progression
+│   └── Activity logging
+│
+└── Integration Points
+    ├── Task completion
+    ├── Sequence progress
+    └── Metric achievements
+```
+
+## Technical Implementation Priority
+
+1. **Frontend Components**
+```typescript
+// Character dashboard component
+interface CharacterDashboard {
+  profile: {
+    name: string;
+    level: number;
+    xp: number;
+    avatar?: string;
+  };
+  traits: {
+    name: string;
+    value: number;
+    recentProgress: number;
+    contributingFactors: Array<{
+      source: string;
+      impact: number;
+    }>;
+  }[];
+  recentAchievements: Achievement[];
+}
+
+// Trait display component
+interface TraitCard {
+  trait: {
+    name: string;
+    value: number;
+    history: Array<{
+      date: Date;
+      value: number;
+    }>;
+  };
+  contributingActivities: Array<{
+    name: string;
+    impact: number;
+    lastCompleted?: Date;
+  }>;
+}
+```
+
+2. **Backend Services**
+```typescript
+interface TraitService {
+  calculateTraitScore(
+    characterId: string,
+    traitName: string,
+    timeframe?: DateRange
+  ): Promise<number>;
+
+  updateTraitFromActivity(
+    characterId: string,
+    activityType: 'task' | 'sequence' | 'metric',
+    activityId: string,
+    completionData: any
+  ): Promise<void>;
+}
+
+interface CharacterProgressService {
+  calculateXP(activities: Activity[]): number;
+  updateLevel(currentXP: number): number;
+  getProgressSnapshot(characterId: string): CharacterSnapshot;
+}
+```
+
+3. **Integration Points**
+```typescript
+// Add to existing task/sequence completion handlers
+interface CompletionHandler {
+  onComplete(entityId: string): Promise<void>;
+  updateCharacterProgress(
+    characterId: string,
+    completionData: CompletionData
+  ): Promise<void>;
+  updateTraits(
+    characterId: string,
+    entityType: string,
+    entityId: string
+  ): Promise<void>;
+}
+```
+
+## MVP Features Checklist
+
+### Must Have
+- [ ] Basic character profile
+- [ ] Discipline trait tracking
+- [ ] Task-trait connection
+- [ ] Simple progress visualization
+- [ ] Basic XP system
+
+### Nice to Have
+- [ ] Multiple traits
+- [ ] Trait history tracking
+- [ ] Achievement badges
+- [ ] Progress animations
+- [ ] Trait suggestions
+
+### Future Phases
+- [ ] Complex skill trees
+- [ ] Social features
+- [ ] AI-driven recommendations
+- [ ] Advanced analytics
+- [ ] Custom trait creation
+
+## Development Approach
+
+1. **Week 1-2: Character Foundation**
+   - Basic character dashboard
+   - Simple trait (Discipline) implementation
+   - Connection to existing tasks
+
+2. **Week 3-4: Trait System**
+   - Task tagging system
+   - Basic scoring mechanism
+   - Progress visualization
+
+3. **Week 5-6: Integration & Polish**
+   - Connect all existing entities
+   - Add basic animations
+   - Implement progress tracking
+
+## Testing Strategy
+
+1. **Unit Tests**
+   - Trait calculation logic
+   - XP/Level progression
+   - Task-trait connections
+
+2. **Integration Tests**
+   - Task completion → trait updates
+   - Multiple activity impacts
+   - Progress calculations
+
+3. **User Testing**
+   - Dashboard usability
+   - Trait understanding
+   - Progress clarity 
+
+# Expanded Trait System Design
+
+## Professional Core Traits (Interview-Focused)
+
+### Primary Traits
+```
+Core Professional Qualities
+├── Reliability
+│   ├── Measured by:
+│   │   ├── Deadline adherence
+│   │   ├── Commitment following
+│   │   ├── Consistent delivery
+│   │   └── Communication of blockers
+│   │
+│   ├── Sources:
+│   │   ├── On-time task completion
+│   │   ├── Meeting attendance
+│   │   ├── Following through on promises
+│   │   └── Proactive status updates
+│   │
+│   └── Interview Evidence:
+│       ├── "Always deliver on time"
+│       ├── "Team can count on me"
+│       └── Specific reliability examples
+│
+├── Discipline
+│   ├── Measured by:
+│   │   ├── Daily routine adherence
+│   │   ├── Long-term consistency
+│   │   ├── Process following
+│   │   └── Self-management
+│   │
+│   ├── Sources:
+│   │   ├── Regular task completion
+│   │   ├── Maintaining schedules
+│   │   ├── Documentation habits
+│   │   └── Systematic approaches
+│   │
+│   └── Interview Evidence:
+│       ├── "Consistent daily practices"
+│       ├── "Structured approach to work"
+│       └── Process improvement examples
+│
+├── Resilience
+│   ├── Measured by:
+│   │   ├── Problem-solving persistence
+│   │   ├── Setback recovery
+│   │   ├── Stress handling
+│   │   └── Adaptation to change
+│   │
+│   ├── Sources:
+│   │   ├── Debugging sessions
+│   │   ├── Project pivots
+│   │   ├── Deadline pressure
+│   │   └── Technical challenges
+│   │
+│   └── Interview Evidence:
+│       ├── "Handled difficult situations"
+│       ├── "Overcame technical obstacles"
+│       └── Recovery examples
+│
+└── Courage/Growth
+    ├── Measured by:
+    │   ├── Taking on challenges
+    │   ├── Learning new skills
+    │   ├── Stepping up when needed
+    │   └── Accepting feedback
+    │
+    ├── Sources:
+    │   ├── New technology adoption
+    │   ├── Leading initiatives
+    │   ├── Difficult conversations
+    │   └── Skill expansion
+    │
+    └── Interview Evidence:
+        ├── "Volunteered for challenges"
+        ├── "Learned new stack quickly"
+        └── Growth journey examples
+```
+
+### Supporting Professional Traits
+```
+Workplace Excellence
+├── Effectiveness
+│   ├── Task completion quality
+│   ├── Resource utilization
+│   ├── Solution efficiency
+│   └── Impact measurement
+│
+├── Communication
+│   ├── Status updates
+│   ├── Documentation
+│   ├── Team collaboration
+│   └── Expectation management
+│
+└── Problem-Solving
+    ├── Issue identification
+    ├── Solution development
+    ├── Implementation
+    └── Results validation
+```
+
+### Measurement System
+```typescript
+interface ProfessionalTraitMetrics {
+  trait: 'reliability' | 'discipline' | 'resilience' | 'courage';
+  metrics: {
+    completion: {
+      onTime: number;        // % of tasks completed on time
+      total: number;         // Total tasks completed
+      streak: number;        // Current streak of on-time completion
+    };
+    consistency: {
+      dailyRoutines: number; // % of daily routines followed
+      processAdherence: number; // % of processes followed correctly
+    };
+    growth: {
+      newSkills: string[];   // New skills/technologies learned
+      challenges: {
+        description: string;
+        difficulty: number;
+        outcome: string;
+      }[];
+    };
+    evidence: {
+      examples: string[];    // Concrete examples for interviews
+      metrics: string[];     // Quantifiable achievements
+      feedback: string[];    // Team/supervisor feedback
+    };
+  };
+}
+```
+
+### Development Tracking
+```
+Professional Growth Evidence
+├── Reliability Score
+│   ├── Tasks completed on time: 95%
+│   ├── Meetings attended: 100%
+│   ├── Commitments met: 98%
+│   └── Communication rating: 9/10
+│
+├── Discipline Metrics
+│   ├── Process adherence: 97%
+│   ├── Documentation completion: 95%
+│   ├── Daily routine success: 90%
+│   └── Long-term consistency: 85%
+│
+├── Resilience Indicators
+│   ├── Problems solved
+│   ├── Challenges overcome
+│   ├── Recovery time trends
+│   └── Adaptation examples
+│
+└── Growth Evidence
+    ├── New skills acquired
+    ├── Challenges accepted
+    ├── Leadership moments
+    └── Impact measurements
+```
+
+### Implementation Priority
+
+1. **Phase 1: Core Professional Traits**
+   - Reliability tracking
+   - Discipline metrics
+   - Basic evidence collection
+
+2. **Phase 2: Evidence Building**
+   - Interview example database
+   - Quantifiable metrics
+   - Achievement documentation
+
+3. **Phase 3: Advanced Features**
+   - Performance trends
+   - Growth visualization
+   - Professional portfolio building
+
+### Database Updates
+```sql
+CREATE TABLE professional_evidence (
+    id UUID PRIMARY KEY,
+    trait_id UUID REFERENCES traits(id),
+    category VARCHAR(50),  -- 'reliability', 'discipline', etc.
+    date DATE,
+    description TEXT,
+    metrics JSONB,        -- Quantifiable data
+    context TEXT,         -- Situation/background
+    outcome TEXT,         -- Results/impact
+    interview_relevance TEXT  -- How to use in interviews
+);
+
+CREATE TABLE trait_metrics (
+    id UUID PRIMARY KEY,
+    trait_id UUID REFERENCES traits(id),
+    metric_type VARCHAR(50),
+    value NUMERIC,
+    period_start DATE,
+    period_end DATE,
+    notes TEXT
+);
+```
+
+## Updated Database Schema
+```sql
+-- Expand traits table
+ALTER TABLE traits ADD COLUMN category VARCHAR(50);
+ALTER TABLE traits ADD COLUMN derived_from JSONB;
+ALTER TABLE traits ADD COLUMN synergy_effects JSONB;
+
+-- Add trait relationships
+CREATE TABLE trait_relationships (
+    id UUID PRIMARY KEY,
+    trait_id_1 UUID REFERENCES traits(id),
+    trait_id_2 UUID REFERENCES traits(id),
+    relationship_type VARCHAR(50),
+    synergy_effect JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Track trait sources
+CREATE TABLE trait_sources (
+    id UUID PRIMARY KEY,
+    trait_id UUID REFERENCES traits(id),
+    source_type VARCHAR(50),
+    source_id UUID,
+    impact_value INTEGER,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## UI Components Update
+```typescript
+interface TraitDisplay {
+  category: 'mental' | 'physical' | 'social' | 'character';
+  primaryTraits: Array<{
+    name: string;
+    value: number;
+    recentGains: number;
+    sources: Array<{
+      type: string;
+      impact: number;
+    }>;
+  }>;
+  derivedTraits: Array<{
+    name: string;
+    value: number;
+    components: Array<{
+      traitName: string;
+      contribution: number;
+    }>;
+  }>;
+  synergies: Array<{
+    name: string;
+    traits: string[];
+    effect: string;
+    active: boolean;
+  }>;
+}
+```
+
+## Life Quality Traits (Sims-Inspired)
+
+### Basic Needs & Habits
+```
+Daily Living Stats (0-100)
+├── Hygiene
+│   ├── Measured by:
+│   │   ├── Personal care routines
+│   │   ├── Living space cleanliness
+│   │   └── Organization level
+│   │
+│   ├── Sources:
+│   │   ├── Cleaning tasks completed
+│   │   ├── Hygiene routines
+│   │   ├── Organization projects
+│   │   └── Home maintenance
+│   │
+│   └── Connected Goals:
+│       ├── Daily cleaning routines
+│       ├── Weekly deep cleans
+│       └── Organization projects
+│
+├── Energy
+│   ├── Measured by:
+│   │   ├── Sleep quality
+│   │   ├── Exercise frequency
+│   │   └── Rest/recovery time
+│   │
+│   ├── Sources:
+│   │   ├── Sleep tracking
+│   │   ├── Workout completion
+│   │   └── Recovery activities
+│   │
+│   └── Connected Goals:
+│       ├── Sleep schedule
+│       ├── Exercise routines
+│       └── Rest periods
+│
+├── Comfort
+│   ├── Measured by:
+│   │   ├── Home environment
+│   │   ├── Work setup
+│   │   └── Life balance
+│   │
+│   ├── Sources:
+│   │   ├── Home improvements
+│   │   ├── Workspace optimization
+│   │   └── Comfort investments
+│   │
+│   └── Connected Goals:
+│       ├── Home organization
+│       ├── Workspace setup
+│       └── Living quality
+```
+
+### Goal Area to Trait Mapping
+```
+Goal Areas → Traits & Stats
+├── Hygiene & Cleaning
+│   ├── Primary Trait: Cleanliness (0-100)
+│   ├── Supporting Trait: Organization
+│   └── Impacts:
+│       ├── Comfort level
+│       ├── Mental clarity
+│       └── Professional readiness
+│
+├── Health & Fitness
+│   ├── Primary Trait: Vitality
+│   ├── Supporting Trait: Energy
+│   └── Impacts:
+│       ├── Daily performance
+│       ├── Mental sharpness
+│       └── Overall wellbeing
+│
+├── Professional Development
+│   ├── Primary Trait: Discipline
+│   ├── Supporting Trait: Growth
+│   └── Impacts:
+│       ├── Career progress
+│       ├── Skill development
+│       └── Work effectiveness
+```
+
+### Trait Development Through Goals
+```typescript
+interface GoalTraitConnection {
+  goalArea: string;
+  relatedTraits: {
+    primary: {
+      trait: string;
+      impact: number;  // 0-10 scale
+      development: {
+        daily: number;
+        weekly: number;
+        monthly: number;
+      };
+    };
+    supporting: {
+      trait: string;
+      impact: number;
+    }[];
+  };
+  milestones: {
+    description: string;
+    traitBoosts: {
+      trait: string;
+      boost: number;
+    }[];
+  }[];
+}
+```
+
+### Visual Representation
+```
+Character Dashboard
+├── Professional Traits Panel
+│   └── [Previous professional traits]
+│
+├── Life Quality Panel
+│   ├── Basic Needs
+│   │   ├── Hygiene Level
+│   │   ├── Energy Level
+│   │   └── Comfort Level
+│   │
+│   └── Current Effects
+│       ├── "Well Rested" (+2 Energy)
+│       ├── "Organized Space" (+2 Focus)
+│       └── "Clean Environment" (+2 Comfort)
+│
+└── Goal Progress Panel
+    ├── Active Goals
+    │   └── Shows trait impacts
+    │
+    └── Recent Achievements
+        └── Trait boosts gained
+```
+
+### Integration System
+```typescript
+interface LifeQualitySystem {
+  basicNeeds: {
+    hygiene: number;    // 0-100
+    energy: number;     // 0-100
+    comfort: number;    // 0-100
+  };
+  
+  effects: {
+    name: string;
+    duration: number;
+    impacts: {
+      trait: string;
+      boost: number;
+    }[];
+  }[];
+
+  goalConnections: {
+    goalId: string;
+    impactedTraits: {
+      trait: string;
+      impact: number;
+    }[];
+  }[];
+}
+
+interface TraitBoost {
+  source: 'goal' | 'routine' | 'achievement';
+  trait: string;
+  amount: number;
+  duration: number;  // in hours
+  stackable: boolean;
+}
+```
+
+### Example Interactions
+```
+Daily Routine → Trait Impact
+├── Morning Hygiene Routine
+│   ├── +2 Hygiene
+│   ├── +1 Discipline
+│   └── Effect: "Fresh Start" (+1 Energy for 4 hours)
+│
+├── Workspace Cleanup
+│   ├── +2 Organization
+│   ├── +1 Comfort
+│   └── Effect: "Clear Mind" (+1 Focus for 2 hours)
+│
+└── Evening Reset
+    ├── +2 Hygiene
+    ├── +1 Comfort
+    └── Effect: "Ready for Tomorrow" (+2 Morning Energy)
+```
+
+### Database Updates
+```sql
+-- Life quality metrics
+CREATE TABLE life_quality_metrics (
+    id UUID PRIMARY KEY,
+    character_id UUID REFERENCES characters(id),
+    metric_type VARCHAR(50),  -- 'hygiene', 'energy', 'comfort'
+    current_value INTEGER,
+    last_updated TIMESTAMP,
+    contributing_activities JSONB
+);
+
+-- Active effects
+CREATE TABLE active_effects (
+    id UUID PRIMARY KEY,
+    character_id UUID REFERENCES characters(id),
+    effect_name VARCHAR(100),
+    start_time TIMESTAMP,
+    duration_hours INTEGER,
+    trait_impacts JSONB,
+    source_activity UUID
+);
+
+-- Goal-trait connections
+CREATE TABLE goal_trait_impacts (
+    id UUID PRIMARY KEY,
+    goal_id UUID REFERENCES goals(id),
+    trait_id UUID REFERENCES traits(id),
+    impact_type VARCHAR(50),  -- 'direct', 'supporting', 'milestone'
+    impact_value INTEGER,
+    conditions JSONB
+);
+``` 
