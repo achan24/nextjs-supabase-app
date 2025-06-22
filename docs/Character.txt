@@ -65,9 +65,9 @@ if (overallScore > 80) show 'smiling expression'
 
 
 You're not just making a task manager — you're building a life simulation game starring you.
-Let’s break this down into systems to help you build it piece by piece, starting with a daily structure, visual feedback, and progression model.
+Let's break this down into systems to help you build it piece by piece, starting with a daily structure, visual feedback, and progression model.
 
-🎮 THE CORE LOOP: “LIVE A GOOD DAY”
+🎮 THE CORE LOOP: "LIVE A GOOD DAY"
 
 Every day is a level. To beat it, you must:
 
@@ -75,7 +75,7 @@ Complete core tasks across all areas
 Fill your life bars (Hygiene, Fitness, Work, etc.)
 See your avatar reflect how you're doing
 Progress to harder/more meaningful days over time
-✅ DAILY STRUCTURE — “The Checklist of Life”
+✅ DAILY STRUCTURE — "The Checklist of Life"
 
 🎯 Step 1: Daily Requirements System
 Each day has a required quota per area:
@@ -94,11 +94,11 @@ You can start small and scale over time.
 Track your success over a rolling 7-day window.
 
 If you meet daily targets consistently → level up that area
-Then you increase that area’s daily quota slightly
-If you fail too often → the area “decays” a bit
+Then you increase that area's daily quota slightly
+If you fail too often → the area "decays" a bit
 This builds a progressive life engine:
 
-You don’t start with 10 tasks/day
+You don't start with 10 tasks/day
 But 3 weeks from now, you might handle 15 with ease
 🧍 AVATAR REFLECTION SYSTEM
 
@@ -138,5 +138,280 @@ Bars fill → avatar animates: brighter eyes, clothes freshen
 By evening:
 If all bars full → avatar fully restored, maybe with glow or badge
 If only some → mixed appearance (fresh, but messy room)
+
+# Character Attribute Definitions
+
+**Discipline**: Doing tasks you've done before. Sticking to routines, habits, or familiar actions.
+
+**Courage**: Doing tasks you've never done before. Attempting something new or unknown, where you don't know how you'll perform.
+
+**Bravery**: Doing things you know you suck at, but do them anyway. Facing tasks you've tried and struggled with, or know are difficult for you, and still taking action.
+
+**Creativity**: Thinking of new tasks that work—i.e., are effective. Coming up with novel solutions or approaches that prove to be successful in practice.
+
+# Secondary Character Traits
+
+**Resilience**: Bouncing back after setbacks, failures, or tough days.
+- *Example:* Try again after failing an exam or missing a workout. If you log a task you previously failed or missed and complete it, you earn resilience.
+
+**Adaptability**: Adjusting quickly to new situations, changes, or unexpected challenges.
+- *Example:* Switch to a new study method when the old one isn't working. If you change your approach or routine in response to feedback or a new challenge, you earn adaptability.
+
+**Initiative**: Taking action without being told. Starting new projects or tasks on your own.
+- *Example:* Start a new project or habit without a prompt. If you create and complete a task that wasn't scheduled or suggested, you earn initiative.
+
+**Perseverance**: Sticking with long-term goals or difficult tasks, even when progress is slow.
+- *Example:* Work on a project for 30+ days in a row. If you log progress on a long-term or multi-step task over many days, you earn perseverance.
+
+**Self-Awareness**: Recognizing your own emotions, strengths, weaknesses, and patterns of behavior.
+- *Example:* Reflect on what went well and what didn't in a daily journal. Completing a self-reflection or feedback task earns self-awareness.
+
+**Empathy**: Understanding and caring about the feelings and perspectives of others.
+- *Example:* Help a friend with their problem or listen to someone's concerns. Logging a task that involves supporting or understanding others earns empathy.
+
+**Patience**: Waiting calmly for results, progress, or for others, without frustration.
+- *Example:* Wait for feedback on a project before making changes. Logging a task that involves waiting or delayed gratification earns patience.
+
+**Accountability**: Taking responsibility for your actions, decisions, and their outcomes.
+- *Example:* Admit a mistake and make a plan to fix it. Logging a task where you own up to an error or follow up on a commitment earns accountability.
+
+**Resourcefulness**: Finding clever ways to overcome obstacles or make the most of what you have.
+- *Example:* Solve a problem with limited resources. Logging a task that required improvisation or creative use of available tools earns resourcefulness.
+
+**Curiosity**: Eagerly seeking new knowledge, experiences, or skills.
+- *Example:* Take an online course in a new subject. Logging a task that involves learning something new or exploring a new topic earns curiosity.
+
+# Primary Trait Tagging Rules
+
+**Discipline**
+- **Tags:** routine, habit, repeat, maintenance, scheduled
+- **Rule:** Task has been completed before (user has a history with this task or habit).
+- **Examples:**
+  - "Daily workout"
+  - "Morning meditation"
+  - "Weekly review"
+
+**Courage**
+- **Tags:** first-time, new, unknown, explore, try
+- **Rule:** Task is new to the user (no prior completions, or marked as "first attempt").
+- **Examples:**
+  - "Try public speaking for the first time"
+  - "Attend a new class"
+  - "Apply for a job in a new field"
+
+**Bravery**
+- **Tags:** difficult, fear, challenge, struggle, weakness
+- **Rule:** Task is known to be hard for the user (user has failed before, or self-reports low confidence/skill).
+- **Examples:**
+  - "Go to the gym after skipping for weeks"
+  - "Have a difficult conversation you've been avoiding"
+  - "Work on a subject you consistently struggle with"
+
+**Creativity**
+- **Tags:** invent, innovate, new-idea, solution, design, experiment
+- **Rule:** Task involves coming up with a new idea, method, or solution that is effective.
+- **Examples:**
+  - "Design a new workflow that improves productivity"
+  - "Write an original story or song"
+  - "Find a new way to solve a recurring problem"
+
+# Secondary Trait Tagging Rules
+
+**Resilience**
+- **Tags:** retry, bounce-back, recovery, persistence, comeback
+- **Rule:** Task is a repeat attempt after a failure, missed day, or setback.
+- **Example:**
+  - "Retake a failed exam"
+  - "Go for a run after missing a week"
+
+**Adaptability**
+- **Tags:** change, switch, adjust, flexible, pivot
+- **Rule:** Task involves changing your approach, routine, or plan in response to new information or circumstances.
+- **Example:**
+  - "Switch to a new study method after poor results"
+  - "Adapt your schedule due to unexpected events"
+
+**Initiative**
+- **Tags:** start, proactive, self-starter, launch, propose
+- **Rule:** Task is self-initiated, not prompted by others or a schedule.
+- **Example:**
+  - "Start a new project on your own"
+  - "Propose a new idea at work"
+
+**Perseverance**
+- **Tags:** long-term, grind, stick-with-it, ongoing, marathon
+- **Rule:** Task is part of a long-term effort or repeated over many days/weeks.
+- **Example:**
+  - "Work on a thesis for 30 days straight"
+  - "Practice an instrument daily for a month"
+
+**Self-Awareness**
+- **Tags:** reflect, journal, feedback, insight, review
+- **Rule:** Task involves self-reflection, journaling, or seeking feedback.
+- **Example:**
+  - "Write a daily reflection"
+  - "Ask for feedback on your performance"
+
+**Empathy**
+- **Tags:** help, support, listen, care, understand
+- **Rule:** Task involves helping, listening to, or supporting others.
+- **Example:**
+  - "Listen to a friend's problem"
+  - "Volunteer to help someone in need"
+
+**Patience**
+- **Tags:** wait, delay, endure, hold, persist
+- **Rule:** Task requires waiting for results, progress, or others, or involves delayed gratification.
+- **Example:**
+  - "Wait for feedback before making changes"
+  - "Stick with a slow process without frustration"
+
+**Accountability**
+- **Tags:** own-up, responsibility, follow-up, admit, correct
+- **Rule:** Task involves admitting mistakes, taking responsibility, or following up on commitments.
+- **Example:**
+  - "Admit a mistake and make a plan to fix it"
+  - "Check in on a promise you made"
+
+**Resourcefulness**
+- **Tags:** improvise, hack, workaround, optimize, make-do
+- **Rule:** Task involves finding creative solutions or making the most of limited resources.
+- **Example:**
+  - "Solve a problem with what you have on hand"
+  - "Find a workaround for a blocked task"
+
+**Curiosity**
+- **Tags:** learn, explore, discover, research, question
+- **Rule:** Task involves learning something new, exploring, or asking questions.
+- **Example:**
+  - "Take a course in a new subject"
+  - "Research a topic you're unfamiliar with"
+
+---
+
+**How to Use These Rules**
+- **Automatic tagging:**
+  - If a task is marked as "new" and has no prior completions → tag as courage.
+  - If a task is marked as "routine" or has been completed multiple times → tag as discipline.
+  - If a task is marked as "difficult" or user has failed before → tag as bravery.
+  - If a task is marked as "new-idea" or "solution" and is effective → tag as creativity.
+- **Manual tagging:**
+  - Let users select tags when creating or completing a task.
+
+---
+
+# System Implementation & Conversation Summary (2024-06)
+
+This section summarizes the design, logic, and implementation details discussed and refined during the development of the gamified character and goal-tracking system.
+
+---
+
+### 1. Weekly Targets System
+- **Database:** Created a `character_weekly_targets` table, ensuring correct RLS policies and UUID usage.
+- **Frontend:** Implemented loading and saving of weekly targets, fixed UUID mapping, and ensured error handling and type safety.
+- **Bugs Fixed:** Addressed issues with saving/loading, UUID mismatches, and RLS errors. Added toast notifications for save success/failure.
+- **UI/UX:** Added accessibility improvements, loading spinners, and error messages for authentication and state loading.
+
+### 2. Authentication and Supabase Client
+- Ensured the correct Supabase client (`@/lib/supabase`) is used throughout for consistent authentication and cookie management.
+- Fixed issues with user ID retrieval and state loading.
+
+### 3. Dialog Accessibility and Controlled Inputs
+- Addressed warnings about missing `aria-describedby` in dialogs.
+- Fixed controlled/uncontrolled input warnings by ensuring all input values are always defined.
+
+### 4. Weekly/Daily Target Logic
+- Clarified the distinction between "Today's Targets" (saving/loading only today's values) and "Weekly Schedule" (saving/loading all days).
+- Updated logic so that saving from each tab only affects the intended days.
+- Ensured that editing in either tab updates the correct part of the weekly targets array.
+
+### 5. Data Propagation and State Sync
+- Fixed issues where changes in the dialog were not reflected in the main "Daily Progress" UI.
+- Added a new prop (`onUpdateAllTargets`) to propagate all weekly targets back to the parent, updating area, subarea, and goal targets for today.
+
+### 6. Trait Definitions and Tagging System
+- Defined primary traits: **Discipline** (routine tasks), **Courage** (new tasks), **Bravery** (tasks you know you struggle with), **Creativity** (new, effective tasks).
+- Defined secondary traits: **Resilience, Adaptability, Initiative, Perseverance, Self-Awareness, Empathy, Patience, Accountability, Resourcefulness, Curiosity**.
+- For each trait, provided:
+  - A definition
+  - Example tasks
+  - Tagging/categorical rules (suggested tags, rules for automatic/manual tagging, and examples)
+- Added all definitions and rules to this document.
+
+### 7. XP and Stat System
+- Outlined the flow: Completing a task/sequence attached to a goal contributes points to daily progress and awards XP.
+- Tags on tasks boost character stats and can apply XP multipliers.
+- **Multipliers:** Courage = x2 XP, Bravery = x3 XP (highest multiplier applies if both are present).
+- Provided logic for how to apply these multipliers and how to increment stats based on tags.
+
+### 8. User Clarifications and Philosophy
+- User clarified nuanced distinctions between traits (e.g., discipline vs. courage vs. bravery).
+- Discussed how to recognize and tag tasks for each trait, both automatically and manually.
+- Emphasized the importance of accurate state propagation and correct UI reflection of saved data.
+
+### 9. Outstanding Issues and Fixes
+- Fixed issues with only area-level targets being saved/loaded; ensured subarea and goal targets are included.
+- Ensured that saving from the correct tab (daily/weekly) only affects the intended days.
+- Ensured that all relevant state is updated in the parent component after dialog actions.
+
+---
+
+**In summary:**
+The system now supports nuanced trait tracking, correct data flow, and extensible tagging for both primary and secondary character attributes. The documentation and codebase reflect a full-stack approach: database schema, frontend state management, accessibility, error handling, trait definitions, tagging logic, XP/stat calculation, and extensibility for future features.
+
+---
+
+## Task/Sequence Completion Flow
+
+1. **Complete a Task or Sequence**
+   - The task/sequence is attached to a goal (and possibly to an area/subarea).
+
+2. **Points Contribution**
+   - The task's points contribute to the relevant daily progress target (area, subarea, or goal).
+   - This helps fill the progress bar for that day.
+
+3. **XP Award**
+   - Completing the task/sequence gives you XP.
+   - The amount of XP can be based on:
+     - The base points of the task/sequence.
+     - Any multipliers from tags (see below).
+
+4. **Tag-Based Stat Boosts**
+   - The tags on the task (e.g., `discipline`, `courage`, `creativity`, etc.) boost your character's corresponding stats.
+   - For example:
+     - Completing a "courage" task increases your Courage stat.
+     - Completing a "discipline" task increases your Discipline stat.
+     - Completing a "creativity" task increases your Creativity stat.
+   - Secondary tags (e.g., `resilience`, `adaptability`) can boost those secondary stats.
+
+5. **Daily Progress**
+   - As you complete tasks, your daily progress bars fill up for each area.
+   - When you hit your daily targets, you can get bonus XP or rewards.
+
+---
+
+## Example Flow
+
+- You complete a task tagged as `courage`, `creativity`, and worth 2 points, attached to the "Work & Learning" goal.
+- **Points:**  
+  - 2 points are added to your "Work & Learning" daily progress.
+- **XP:**  
+  - You get base XP for the task (e.g., 2 XP), plus a bonus for the tags (e.g., +1 XP for each tag).
+- **Stats:**  
+  - Your Courage and Creativity stats each increase by 1.
+- **Daily Progress:**  
+  - If you reach your daily target for "Work & Learning", you get a daily bonus.
+
+---
+
+## How to Implement
+
+- When a task/sequence is completed:
+  1. Add its points to the relevant progress target(s).
+  2. Award XP (base + tag bonuses).
+  3. Increment the stats for each tag present.
+  4. Check if daily targets are met for bonus XP.
+
+---
 
 

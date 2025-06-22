@@ -24,13 +24,25 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { createClient } from '@/lib/supabase';
+import { toast } from 'sonner';
+
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  user_id: string;
+}
 
 interface CreateSequenceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateSequence: (tasks: Node[]) => void;
+  onCreateSequence: (tasks: Node[], tagIds: string[], title: string, description: string) => void;
   flows: any[];
   initialTasks?: Node[];
+  initialTagIds?: string[];
+  initialTitle?: string;
+  initialDescription?: string;
 }
 
 interface SortableTaskItemProps {
@@ -98,10 +110,24 @@ function SortableTaskItem({ task, onRemove, onJump }: SortableTaskItemProps) {
   );
 }
 
-export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, initialTasks }: CreateSequenceModalProps) {
+export function CreateSequenceModal({ 
+  isOpen, 
+  onClose, 
+  onCreateSequence, 
+  flows, 
+  initialTasks, 
+  initialTagIds,
+  initialTitle = '',
+  initialDescription = ''
+}: CreateSequenceModalProps) {
   const router = useRouter();
+  const supabase = createClient();
   const [selectedTasks, setSelectedTasks] = useState<Node[]>([]);
   const [expandedFlow, setExpandedFlow] = useState<string | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialTagIds || []);
+  const [title, setTitle] = useState(initialTitle);
+  const [description, setDescription] = useState(initialDescription);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -116,7 +142,18 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
     } else {
       setSelectedTasks([]);
     }
-  }, [initialTasks, isOpen]);
+    setSelectedTagIds(initialTagIds || []);
+    setTitle(initialTitle);
+    setDescription(initialDescription);
+  }, [initialTasks, initialTagIds, initialTitle, initialDescription, isOpen]);
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      const { data, error } = await supabase.from('tags').select('*').order('name', { ascending: true });
+      if (!error) setTags(data || []);
+    };
+    fetchTags();
+  }, []);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -148,6 +185,10 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
   const handleJumpToNode = (flowId: string, nodeId: string) => {
     onClose();
     router.push(`/dashboard/process-flow?flowId=${flowId}&nodeId=${nodeId}`);
+  };
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
   };
 
   return (
@@ -198,6 +239,32 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
           <div className="flex flex-col h-full">
             <Card className="p-4 flex-1 overflow-y-auto">
               <h2 className="text-xl font-semibold mb-4">Timer Sequence</h2>
+
+              {/* Title and Description */}
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Enter sequence title"
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Enter sequence description"
+                    className="w-full px-3 py-2 border rounded-md"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* Task List */}
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -224,6 +291,28 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
                   Select tasks from process maps to create your sequence
                 </div>
               )}
+
+              {/* Tag Selection */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map(tag => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag.id)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        selectedTagIds.includes(tag.id)
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-200 text-gray-700'
+                      }`}
+                      style={{ borderColor: tag.color }}
+                    >
+                      {tag.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </Card>
 
             <div className="mt-4 flex justify-end gap-3">
@@ -231,8 +320,14 @@ export function CreateSequenceModal({ isOpen, onClose, onCreateSequence, flows, 
                 Cancel
               </Button>
               <Button
-                onClick={() => onCreateSequence(selectedTasks)}
-                disabled={selectedTasks.length === 0}
+                onClick={() => {
+                  if (!title.trim()) {
+                    toast.error('Please enter a sequence title');
+                    return;
+                  }
+                  onCreateSequence(selectedTasks, selectedTagIds, title, description);
+                }}
+                disabled={selectedTasks.length === 0 || !title.trim()}
               >
                 {initialTasks ? 'Update' : 'Create'} Sequence ({selectedTasks.length} tasks)
               </Button>

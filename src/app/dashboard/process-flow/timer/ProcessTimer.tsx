@@ -64,6 +64,13 @@ interface SequenceCompletion {
   notes?: string;
 }
 
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  user_id: string;
+}
+
 export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const supabase = createClient();
   const router = useRouter();
@@ -105,6 +112,9 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   const [lockedSequenceEta, setLockedSequenceEta] = useState<Date | null>(null);
   const [isCompletingSequence, setIsCompletingSequence] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
+  const [sequenceTags, setSequenceTags] = useState<Record<string, Tag[]>>({});
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [pendingTagIds, setPendingTagIds] = useState<string[]>([]);
 
   // Load all sequence completions when component mounts
   useEffect(() => {
@@ -183,20 +193,48 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
   useEffect(() => {
     const loadSequences = async () => {
       try {
+        // Fetch sequences
         const { data: sequences, error } = await supabase
           .from('timer_sequences')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('Error loading sequences:', error);
-          throw error;
-        }
-        
+        if (error) throw error;
+
+        // Fetch all tags
+        const { data: tags, error: tagsError } = await supabase
+          .from('tags')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (tagsError) throw tagsError;
+        setAllTags(tags || []);
+
+        // Fetch sequence tags for all sequences
+        const { data: sequenceTagsData, error: sequenceTagsError } = await supabase
+          .from('sequence_tags')
+          .select('sequence_id, tag_id')
+          .in('sequence_id', (sequences || []).map(s => s.id));
+
+        if (sequenceTagsError) throw sequenceTagsError;
+
+        // Group tags by sequence
+        const tagsBySequence: Record<string, Tag[]> = {};
+        sequenceTagsData?.forEach(st => {
+          if (!tagsBySequence[st.sequence_id]) {
+            tagsBySequence[st.sequence_id] = [];
+          }
+          const tag = tags?.find(t => t.id === st.tag_id);
+          if (tag) {
+            tagsBySequence[st.sequence_id].push(tag);
+          }
+        });
+
+        setSequenceTags(tagsBySequence);
         setSequences(sequences || []);
       } catch (error) {
-        console.error('Error in loadSequences:', error);
+        console.error('Error loading sequences:', error);
         setSequences([]);
       }
     };
@@ -431,12 +469,45 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     return `${hours.toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
   };
 
-  const handleCreateSequence = async (tasks: Node[]) => {
-    setSelectedTasks(tasks);
-    setIsSaveModalOpen(true);
-    setIsEditMode(false);
-    setNewSequenceTitle('');
-    setNewSequenceDescription('');
+  const handleCreateSequence = async (tasks: Node[], tagIds: string[], title: string, description: string) => {
+    try {
+      // Create the sequence
+      const { data: newSequence, error: createError } = await supabase
+        .from('timer_sequences')
+        .insert({
+          title,
+          description,
+          tasks: tasks,
+          user_id: user.id
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      if (!newSequence) throw new Error('Failed to create sequence');
+
+      // Add tags to the sequence
+      if (tagIds.length > 0) {
+        const tagRows = tagIds.map(tagId => ({
+          sequence_id: newSequence.id,
+          tag_id: tagId
+        }));
+        const { error: tagError } = await supabase
+          .from('sequence_tags')
+          .insert(tagRows);
+        if (tagError) throw tagError;
+      }
+
+      // Update local state
+      setSequences([newSequence, ...sequences]);
+      setIsCreateModalOpen(false);
+      setNewSequenceTitle('');
+      setNewSequenceDescription('');
+      toast.success('Sequence created successfully');
+    } catch (error: unknown) {
+      console.error('Error creating sequence:', error);
+      toast.error('Failed to create sequence');
+    }
   };
 
   const handleEditSequence = (sequence: TimerSequence) => {
@@ -444,57 +515,75 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     setNewSequenceTitle(sequence.title);
     setNewSequenceDescription(sequence.description);
     setSelectedSequence(sequence);
+    // Set initial tag IDs from the sequence's existing tags
+    setPendingTagIds((sequenceTags[sequence.id] || []).map(tag => tag.id));
     setIsEditMode(true);
     setIsCreateModalOpen(true);
   };
 
-  const handleSaveSequence = async () => {
+  const handleSaveSequence = async (tasks: Node[], tagIds: string[], title: string, description: string) => {
     try {
+      if (!selectedSequence || !isEditMode) {
+        toast.error('No sequence selected for editing');
+        return;
+      }
+
       // Ensure tasks have flowId preserved
-      const tasksWithFlowIds = selectedTasks.map(task => ({
+      const tasksWithFlowIds = tasks.map(task => ({
         ...task,
         data: {
           ...task.data,
-          flowId: task.data.flowId // Explicitly preserve flowId
+          flowId: task.data.flowId
         }
       }));
 
-      if (isEditMode && selectedSequence) {
-        // Update existing sequence
-        const { error } = await supabase
-          .from('timer_sequences')
-          .update({
-            title: newSequenceTitle,
-            description: newSequenceDescription,
-            tasks: tasksWithFlowIds,
-          })
-          .eq('id', selectedSequence.id);
+      // Update existing sequence
+      const { error: updateError } = await supabase
+        .from('timer_sequences')
+        .update({
+          title,
+          description,
+          tasks: tasksWithFlowIds,
+        })
+        .eq('id', selectedSequence.id);
 
-        if (error) throw error;
+      if (updateError) throw updateError;
 
-        setSequences(sequences.map(s => 
-          s.id === selectedSequence.id 
-            ? { ...s, title: newSequenceTitle, description: newSequenceDescription, tasks: tasksWithFlowIds }
-            : s
-        ));
-      } else {
-        // Create new sequence
-        const { data: sequence, error } = await supabase
-          .from('timer_sequences')
-          .insert({
-            title: newSequenceTitle,
-            description: newSequenceDescription,
-            tasks: tasksWithFlowIds,
-            user_id: user.id
-          })
-          .select()
-          .single();
+      // Update sequence tags
+      // First, remove all existing tags
+      const { error: deleteTagsError } = await supabase
+        .from('sequence_tags')
+        .delete()
+        .eq('sequence_id', selectedSequence.id);
 
-        if (error) throw error;
+      if (deleteTagsError) throw deleteTagsError;
 
-        setSequences([sequence, ...sequences]);
+      // Then add the new tags
+      if (tagIds.length > 0) {
+        const tagRows = tagIds.map(tagId => ({
+          sequence_id: selectedSequence.id,
+          tag_id: tagId
+        }));
+        const { error: tagError } = await supabase
+          .from('sequence_tags')
+          .insert(tagRows);
+        if (tagError) throw tagError;
       }
 
+      // Update local state
+      setSequences(sequences.map(s => 
+        s.id === selectedSequence.id 
+          ? { ...s, title, description, tasks: tasksWithFlowIds }
+          : s
+      ));
+      
+      // Update sequence tags in local state
+      setSequenceTags(prev => ({
+        ...prev,
+        [selectedSequence.id]: allTags.filter(tag => tagIds.includes(tag.id))
+      }));
+
+      // Reset state
       setIsSaveModalOpen(false);
       setIsCreateModalOpen(false);
       setNewSequenceTitle('');
@@ -502,8 +591,12 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       setSelectedTasks([]);
       setSelectedSequence(null);
       setIsEditMode(false);
-    } catch (error) {
+      setPendingTagIds([]);
+
+      toast.success('Sequence updated successfully');
+    } catch (error: unknown) {
       console.error('Error saving sequence:', error);
+      toast.error('Failed to save sequence');
     }
   };
 
@@ -840,109 +933,61 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         {sequences.length > 0 && (
           <>
             <h2 className="text-lg font-semibold mb-4">Sequences</h2>
-            <div className="space-y-3">
-              {sequences.map((sequence) => {
-                // Calculate total estimated time
-                const totalEstimatedTime = sequence.tasks.reduce((total, task) => {
-                  // If task has target duration, use that
-                  if (task.data.targetDuration) {
-                    return total + (task.data.targetDuration * 1000);
-                  }
-                  // If task has completion history, use average
-                  if (task.data.completionHistory?.length) {
-                    const avgTime = task.data.completionHistory.reduce((sum: number, rec: CompletionRecord) => sum + rec.timeSpent, 0) / 
-                      task.data.completionHistory.length;
-                    return total + avgTime;
-                  }
-                  return total;
-                }, 0);
-
-                // Calculate ETA if we start now
-                const eta = totalEstimatedTime ? new Date(Date.now() + totalEstimatedTime) : null;
-
-                return (
+            <div className="space-y-4">
+              {sequences.map((sequence) => (
                 <Card key={sequence.id} className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-semibold">{sequence.title}</h3>
-                      <p className="text-sm text-gray-500">{sequence.description}</p>
-                    </div>
-                    <div className="flex gap-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-medium">{sequence.title}</h3>
+                    <div className="flex space-x-2">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setIsHistoryModalOpen(true);
-                          setHistorySequenceId(sequence.id);
-                        }}
-                      >
-                        <Clock className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
+                        size="sm"
                         onClick={() => handleEditSequence(sequence)}
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Edit2 size={16} />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setSelectedSequence(sequence);
-                          setIsDeleteModalOpen(true);
-                        }}
+                        size="sm"
+                        onClick={() => setIsDeleteModalOpen(true)}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 size={16} />
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleStartSequence(sequence)}
+                      >
+                        <Play size={16} />
                       </Button>
                     </div>
                   </div>
-
-                  <div className="space-y-2 mb-4">
-                    <p className="text-sm">
-                      {sequence.tasks.length} tasks
-                    </p>
-                    {completions.filter(c => c.sequence_id === sequence.id).length > 0 && (
-                      <p className="text-sm text-gray-500">
-                        {completions.filter(c => c.sequence_id === sequence.id).length} completions
-                      </p>
-                    )}
-                      {totalEstimatedTime > 0 && (
-                        <p className="text-sm text-blue-600">
-                          Estimated time: {formatTime(totalEstimatedTime)}
-                          {eta && (
-                            <span className="ml-2 text-gray-500">
-                              (ETA: {eta.toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit',
-                                hour12: false 
-                              })})
-                            </span>
-                          )}
-                        </p>
-                      )}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="default"
-                      onClick={() => handleStartSequence(sequence)}
-                      className="flex-1"
-                      disabled={selectedSequence !== null}
-                    >
-                      {selectedSequence ? (
-                        'Another sequence is active'
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4 mr-2" />
-                          Start
-                        </>
-                      )}
-                    </Button>
+                  {sequence.description && (
+                    <p className="text-sm text-gray-600 mb-2">{sequence.description}</p>
+                  )}
+                  {/* Display sequence tags */}
+                  {sequenceTags[sequence.id]?.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {sequenceTags[sequence.id].map(tag => (
+                        <span
+                          key={tag.id}
+                          className="px-2 py-1 rounded text-xs"
+                          style={{
+                            backgroundColor: `${tag.color}20`,
+                            color: tag.color,
+                            border: `1px solid ${tag.color}`
+                          }}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-sm text-gray-500 mt-2">
+                    {sequence.tasks.length} tasks
                   </div>
                 </Card>
-                );
-              })}
+              ))}
             </div>
           </>
         )}
@@ -951,41 +996,44 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
           isOpen={isCreateModalOpen}
           onClose={() => {
             setIsCreateModalOpen(false);
+            setNewSequenceTitle('');
+            setNewSequenceDescription('');
+            setSelectedTasks([]);
+            setSelectedSequence(null);
+            setIsEditMode(false);
+            setPendingTagIds([]);
+          }}
+          onCreateSequence={(tasks, tagIds, title, description) => {
             if (isEditMode) {
-              setSelectedSequence(null);
-              setIsEditMode(false);
+              handleSaveSequence(tasks, tagIds, title, description);
+            } else {
+              handleCreateSequence(tasks, tagIds, title, description);
             }
           }}
-          onCreateSequence={(tasks) => {
-            setSelectedTasks(tasks);
-            setIsSaveModalOpen(true);
-          }}
           flows={flows}
-          initialTasks={isEditMode ? selectedSequence?.tasks : undefined}
+          initialTasks={selectedTasks}
+          initialTagIds={pendingTagIds}
+          initialTitle={newSequenceTitle}
+          initialDescription={newSequenceDescription}
         />
 
         <Dialog open={isSaveModalOpen} onOpenChange={setIsSaveModalOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{isEditMode ? 'Edit Sequence' : 'Save Sequence'}</DialogTitle>
-              <DialogDescription>
-                Give your sequence a name and optional description.
-              </DialogDescription>
+              <DialogTitle>{isEditMode ? 'Update' : 'Save'} Sequence</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
+            <div className="space-y-4">
+              <div>
+                <Label>Title</Label>
                 <Input
-                  id="title"
                   value={newSequenceTitle}
                   onChange={(e) => setNewSequenceTitle(e.target.value)}
                   placeholder="Enter sequence title"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
+              <div>
+                <Label>Description (optional)</Label>
                 <Textarea
-                  id="description"
                   value={newSequenceDescription}
                   onChange={(e) => setNewSequenceDescription(e.target.value)}
                   placeholder="Enter sequence description"
@@ -997,7 +1045,16 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
               <Button variant="outline" onClick={() => setIsSaveModalOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveSequence} disabled={!newSequenceTitle}>
+              <Button 
+                onClick={() => {
+                  if (!newSequenceTitle.trim()) {
+                    toast.error('Please enter a sequence title');
+                    return;
+                  }
+                  handleSaveSequence(selectedTasks, pendingTagIds, newSequenceTitle, newSequenceDescription);
+                }} 
+                disabled={!newSequenceTitle.trim()}
+              >
                 {isEditMode ? 'Update' : 'Save'} Sequence
               </Button>
             </DialogFooter>
@@ -1086,16 +1143,15 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
     );
   }
 
-  // Calculate average completion time
-  const avgTime = currentTask?.data.completionHistory?.length ? 
-    currentTask.data.completionHistory.reduce((sum: number, rec: CompletionRecord) => sum + rec.timeSpent, 0) / 
-    currentTask.data.completionHistory.length : 
-    null;
+  // Calculate average time from completion history
+  const avgTime = currentTask?.data.completionHistory?.length
+    ? currentTask.data.completionHistory.reduce((sum: number, record: CompletionRecord) => sum + record.timeSpent, 0) / currentTask.data.completionHistory.length
+    : null;
 
   // Get last completion time
-  const lastTime = currentTask?.data.completionHistory?.length ? 
-    currentTask.data.completionHistory[currentTask.data.completionHistory.length - 1].timeSpent : 
-    null;
+  const lastTime = currentTask?.data.completionHistory?.length 
+    ? currentTask.data.completionHistory[currentTask.data.completionHistory.length - 1].timeSpent 
+    : null;
 
   // Get active cue
   const activeCue = currentTask?.data.cues?.find((c: TaskCue) => c.id === currentTask.data.activeCueId && !c.archived);

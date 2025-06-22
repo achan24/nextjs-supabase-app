@@ -1,14 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { Plus, Minus, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, Minus, ChevronRight, ChevronDown, Settings2 } from 'lucide-react'
 import WeeklyTargetsDialog from './WeeklyTargetsDialog'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { LifeGoal } from '@/types/goal'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 
-const lifeAreas = [
+interface LocalLifeArea {
+  id: string;
+  name: string;
+  target: number;
+}
+
+const lifeAreas: LocalLifeArea[] = [
   { id: 'work-learning', name: '🎓 Work & Learning', target: 5 },
   { id: 'health-fitness', name: '💪 Health & Fitness', target: 3 },
   { id: 'relationships', name: '❤️ Relationships', target: 2 },
@@ -21,6 +35,60 @@ const lifeAreas = [
 interface ProgressState {
   value: number;
   target: number;
+}
+
+interface TargetDialogProps {
+  title: string;
+  currentTarget: number;
+  maxTarget?: number;
+  onUpdateTarget: (newTarget: number) => void;
+}
+
+function TargetDialog({ title, currentTarget, maxTarget, onUpdateTarget }: TargetDialogProps) {
+  const [newTarget, setNewTarget] = useState(
+    currentTarget !== undefined && currentTarget !== null ? currentTarget.toString() : "1"
+  )
+
+  useEffect(() => {
+    setNewTarget(
+      currentTarget !== undefined && currentTarget !== null ? currentTarget.toString() : "1"
+    )
+  }, [currentTarget])
+
+  const handleSave = () => {
+    const parsedTarget = Math.max(1, parseInt(newTarget) || 1)
+    const constrainedTarget = maxTarget ? Math.min(parsedTarget, maxTarget) : parsedTarget
+    onUpdateTarget(constrainedTarget)
+  }
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-6 w-6 ml-2">
+          <Settings2 className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent aria-describedby="target-dialog-description">
+        <DialogHeader>
+          <DialogTitle>Set Target for {title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4" id="target-dialog-description">
+          <div className="flex items-center gap-4">
+            <Input
+              type="number"
+              min="1"
+              max={maxTarget}
+              value={newTarget}
+              onChange={(e) => setNewTarget(e.currentTarget.value)}
+              className="w-24"
+            />
+            <span>points{maxTarget ? ` (max: ${maxTarget})` : ''}</span>
+          </div>
+          <Button onClick={handleSave}>Save Target</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 export default function ProgressBars() {
@@ -37,16 +105,19 @@ export default function ProgressBars() {
   const [subareaProgress, setSubareaProgress] = useState<Record<string, ProgressState>>({})
   const [goalProgress, setGoalProgress] = useState<Record<string, ProgressState>>({})
 
-  // Weekly targets for each area
+  // Daily targets for each area (separate from weekly targets)
+  const [dailyAreaTargets, setDailyAreaTargets] = useState<Record<string, number>>(
+    Object.fromEntries(lifeAreas.map(area => [area.id, area.target]))
+  )
+
+  // Weekly targets for each area (for the weekly dialog)
   const [weeklyTargets, setWeeklyTargets] = useState<Record<string, number[]>>(
     Object.fromEntries(lifeAreas.map(area => [area.id, Array(7).fill(area.target)]))
   )
 
   // Get current day's target (0 = Monday, 6 = Sunday)
   const getCurrentDayTarget = (areaId: string) => {
-    const today = new Date().getDay()
-    const dayIndex = today === 0 ? 6 : today - 1
-    return weeklyTargets[areaId][dayIndex]
+    return dailyAreaTargets[areaId]
   }
 
   const toggleArea = (areaId: string) => {
@@ -78,9 +149,9 @@ export default function ProgressBars() {
     })
   }
 
-  const incrementSubareaProgress = (subareaId: string) => {
+  const incrementSubareaProgress = (subareaId: string, areaTarget: number) => {
     setSubareaProgress(prev => {
-      const current = prev[subareaId] || { value: 0, target: 3 }
+      const current = prev[subareaId] || { value: 0, target: Math.min(3, areaTarget) }
       return {
         ...prev,
         [subareaId]: {
@@ -104,9 +175,9 @@ export default function ProgressBars() {
     })
   }
 
-  const incrementGoalProgress = (goalId: string) => {
+  const incrementGoalProgress = (goalId: string, subareaTarget: number) => {
     setGoalProgress(prev => {
-      const current = prev[goalId] || { value: 0, target: 1 }
+      const current = prev[goalId] || { value: 0, target: Math.min(1, subareaTarget) }
       return {
         ...prev,
         [goalId]: {
@@ -135,6 +206,111 @@ export default function ProgressBars() {
       ...prev,
       [areaId]: targets
     }))
+    // Update today's target
+    const today = new Date().getDay()
+    const dayIndex = today === 0 ? 6 : today - 1
+    setDailyAreaTargets(prev => ({
+      ...prev,
+      [areaId]: targets[dayIndex]
+    }))
+  }
+
+  const updateAreaTarget = (areaId: string, newTarget: number) => {
+    setDailyAreaTargets(prev => ({
+      ...prev,
+      [areaId]: newTarget
+    }))
+    
+    // Update subareas if their targets exceed the new area target
+    setSubareaProgress(prev => {
+      const updated = { ...prev }
+      Object.keys(updated).forEach(subareaId => {
+        if (updated[subareaId].target > newTarget) {
+          updated[subareaId] = {
+            ...updated[subareaId],
+            target: newTarget
+          }
+        }
+      })
+      return updated
+    })
+  }
+
+  const updateSubareaTarget = (subareaId: string, newTarget: number, areaTarget: number) => {
+    const constrainedTarget = Math.min(newTarget, areaTarget)
+    setSubareaProgress(prev => ({
+      ...prev,
+      [subareaId]: {
+        ...(prev[subareaId] || { value: 0 }),
+        target: constrainedTarget
+      }
+    }))
+
+    // Update goals if their targets exceed the new subarea target
+    setGoalProgress(prev => {
+      const updated = { ...prev }
+      Object.keys(updated).forEach(goalId => {
+        if (updated[goalId].target > constrainedTarget) {
+          updated[goalId] = {
+            ...updated[goalId],
+            target: constrainedTarget
+          }
+        }
+      })
+      return updated
+    })
+  }
+
+  const updateGoalTarget = (goalId: string, newTarget: number, subareaTarget: number) => {
+    const constrainedTarget = Math.min(newTarget, subareaTarget)
+    setGoalProgress(prev => ({
+      ...prev,
+      [goalId]: {
+        ...(prev[goalId] || { value: 0 }),
+        target: constrainedTarget
+      }
+    }))
+  }
+
+  const handleUpdateAllTargets = (allWeeklyTargets: Record<string, number[]>) => {
+    setWeeklyTargets(allWeeklyTargets)
+    // Update dailyAreaTargets for today
+    const today = new Date().getDay()
+    const todayIndex = today === 0 ? 6 : today - 1
+    setDailyAreaTargets(prev => {
+      const updated = { ...prev }
+      Object.keys(allWeeklyTargets).forEach(id => {
+        if (lifeAreas.some(a => a.id === id)) {
+          updated[id] = allWeeklyTargets[id][todayIndex] || 0
+        }
+      })
+      return updated
+    })
+    // Update subareaProgress and goalProgress for today
+    setSubareaProgress(prev => {
+      const updated = { ...prev }
+      Object.keys(allWeeklyTargets).forEach(id => {
+        if (!lifeAreas.some(a => a.id === id)) {
+          updated[id] = {
+            ...(prev[id] || { value: 0 }),
+            target: allWeeklyTargets[id][todayIndex] || 0
+          }
+        }
+      })
+      return updated
+    })
+    setGoalProgress(prev => {
+      const updated = { ...prev }
+      Object.keys(allWeeklyTargets).forEach(id => {
+        if (!lifeAreas.some(a => a.id === id)) {
+          updated[id] = {
+            ...(prev[id] || { value: 0 }),
+            target: allWeeklyTargets[id][todayIndex] || 0
+          }
+        }
+      })
+      return updated
+    })
   }
 
   const renderProgressControls = (
@@ -142,7 +318,10 @@ export default function ProgressBars() {
     currentValue: number,
     targetValue: number,
     onIncrement: () => void,
-    onDecrement: () => void
+    onDecrement: () => void,
+    title: string,
+    maxTarget?: number,
+    onUpdateTarget?: (newTarget: number) => void
   ) => (
     <div className="flex items-center gap-2">
       <span>{currentValue}/{targetValue} pts</span>
@@ -166,11 +345,19 @@ export default function ProgressBars() {
           <Plus className="h-4 w-4" />
         </Button>
       </div>
+      {onUpdateTarget && (
+        <TargetDialog
+          title={title}
+          currentTarget={targetValue}
+          maxTarget={maxTarget}
+          onUpdateTarget={onUpdateTarget}
+        />
+      )}
     </div>
   )
 
-  const renderGoal = (goal: LifeGoal) => {
-    const goalState = goalProgress[goal.id] || { value: 0, target: 1 }
+  const renderGoal = (goal: LifeGoal, subareaTarget: number) => {
+    const goalState = goalProgress[goal.id] || { value: 0, target: Math.min(1, subareaTarget) }
     const progressPercentage = (goalState.value / goalState.target) * 100
 
     return (
@@ -181,8 +368,11 @@ export default function ProgressBars() {
             goal.id,
             goalState.value,
             goalState.target,
-            () => incrementGoalProgress(goal.id),
-            () => decrementGoalProgress(goal.id)
+            () => incrementGoalProgress(goal.id, subareaTarget),
+            () => decrementGoalProgress(goal.id),
+            goal.title,
+            subareaTarget,
+            (newTarget) => updateGoalTarget(goal.id, newTarget, subareaTarget)
           )}
         </div>
         <Progress value={progressPercentage} className="h-1" />
@@ -201,6 +391,28 @@ export default function ProgressBars() {
         <WeeklyTargetsDialog 
           areas={lifeAreas} 
           onUpdateTargets={handleUpdateTargets}
+          currentDayTargets={dailyAreaTargets}
+          subareaTargets={subareaProgress}
+          goalTargets={goalProgress}
+          onUpdateSubareaTarget={(subareaId, target) => {
+            setSubareaProgress(prev => ({
+              ...prev,
+              [subareaId]: {
+                ...(prev[subareaId] || { value: 0 }),
+                target
+              }
+            }))
+          }}
+          onUpdateGoalTarget={(goalId, target) => {
+            setGoalProgress(prev => ({
+              ...prev,
+              [goalId]: {
+                ...(prev[goalId] || { value: 0 }),
+                target
+              }
+            }))
+          }}
+          onUpdateAllTargets={handleUpdateAllTargets}
         />
       </div>
 
@@ -239,7 +451,10 @@ export default function ProgressBars() {
                   currentProgress,
                   currentTarget,
                   () => incrementProgress(area.id),
-                  () => decrementProgress(area.id)
+                  () => decrementProgress(area.id),
+                  area.name,
+                  undefined,
+                  (newTarget) => updateAreaTarget(area.id, newTarget)
                 )}
               </div>
               <Progress value={progressPercentage} className="h-2" />
@@ -250,7 +465,7 @@ export default function ProgressBars() {
               <div className="pl-8 space-y-3 mt-3">
                 {subareas.map((subarea) => {
                   const isSubareaExpanded = expandedSubareas[subarea.id]
-                  const subareaState = subareaProgress[subarea.id] || { value: 0, target: 3 }
+                  const subareaState = subareaProgress[subarea.id] || { value: 0, target: Math.min(3, currentTarget) }
                   const subareaProgressPercentage = (subareaState.value / subareaState.target) * 100
 
                   return (
@@ -278,8 +493,11 @@ export default function ProgressBars() {
                             subarea.id,
                             subareaState.value,
                             subareaState.target,
-                            () => incrementSubareaProgress(subarea.id),
-                            () => decrementSubareaProgress(subarea.id)
+                            () => incrementSubareaProgress(subarea.id, currentTarget),
+                            () => decrementSubareaProgress(subarea.id),
+                            subarea.name,
+                            currentTarget,
+                            (newTarget) => updateSubareaTarget(subarea.id, newTarget, currentTarget)
                           )}
                         </div>
                         <Progress value={subareaProgressPercentage} className="h-1.5" />
@@ -288,7 +506,7 @@ export default function ProgressBars() {
                       {/* Goals */}
                       {isSubareaExpanded && subarea.goals.length > 0 && (
                         <div className="pl-8 space-y-2 mt-2">
-                          {subarea.goals.map(renderGoal)}
+                          {subarea.goals.map(goal => renderGoal(goal, subareaState.target))}
                         </div>
                       )}
                     </div>

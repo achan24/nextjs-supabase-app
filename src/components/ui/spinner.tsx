@@ -10,6 +10,8 @@ export function Spinner({ className, ...props }: SpinnerProps) {
         className
       )}
       {...props}
-    />
+    >
+      <span className="sr-only">Loading...</span>
+    </div>
   );
 } 

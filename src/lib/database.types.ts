@@ -67,6 +67,38 @@ export interface Database {
           updated_at?: string
         }
       }
+      character_weekly_targets: {
+        Row: {
+          id: string
+          user_id: string
+          target_id: string
+          target_type: 'area' | 'subarea' | 'goal'
+          day_of_week: number
+          points: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          target_id: string
+          target_type: 'area' | 'subarea' | 'goal'
+          day_of_week: number
+          points: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          target_id?: string
+          target_type?: 'area' | 'subarea' | 'goal'
+          day_of_week?: number
+          points?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
