@@ -1303,13 +1303,23 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                     {currentSubarea?.name}
                   </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push('/dashboard/goal?tab=goals')}
-                >
-                  All Goals
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAddingGoal(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Goal
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push('/dashboard/goal?tab=goals')}
+                  >
+                    All Goals
+                  </Button>
+                </div>
               </div>
 
               {areas.map(area => 
@@ -1574,37 +1584,32 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
       </Dialog>
 
       {/* Add Goal Dialog */}
-      <Dialog open={isAddingGoal} onOpenChange={setIsAddingGoal}>
+      <Dialog open={isAddingGoal} onOpenChange={(open) => !open && setIsAddingGoal(false)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Goal</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label htmlFor="title" className="text-sm font-medium">
-                Title
-              </label>
+              <Label htmlFor="title">Title</Label>
               <Input
                 id="title"
                 value={newGoalTitle}
                 onChange={(e) => setNewGoalTitle(e.target.value)}
-                placeholder="e.g., Run a Marathon"
+                placeholder="Enter goal title"
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="description" className="text-sm font-medium">
-                Description
-              </label>
+              <Label htmlFor="description">Description (optional)</Label>
               <Textarea
                 id="description"
                 value={newGoalDescription}
                 onChange={(e) => setNewGoalDescription(e.target.value)}
-                placeholder="Describe your goal..."
-                rows={3}
+                placeholder="Enter goal description"
               />
             </div>
           </div>
-          <div className="flex justify-end gap-3">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddingGoal(false)}>
               Cancel
             </Button>
@@ -1614,7 +1619,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
             >
               Add Goal
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
