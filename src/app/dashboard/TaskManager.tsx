@@ -29,6 +29,7 @@ interface Task {
   tags?: Tag[];
   time_spent?: number; // in seconds
   last_started_at?: string | null;
+  is_starred?: boolean;
   project?: {
     id: string;
     title: string;
@@ -470,6 +471,11 @@ export default function TaskManager({ user }: { user: User }) {
   // Add sorting logic before the visibleTasks mapping
   const sortedTasks = [...visibleTasks]
     .sort((a, b) => {
+      // First sort by starred status
+      if (a.is_starred && !b.is_starred) return -1;
+      if (!a.is_starred && b.is_starred) return 1;
+      
+      // Then apply existing sorting logic
       if (sortBy === 'priority') {
         return sortOrder === 'asc' 
           ? a.priority - b.priority
@@ -685,6 +691,35 @@ export default function TaskManager({ user }: { user: User }) {
     }
   };
 
+  const handleToggleStarred = async (taskId: string | undefined) => {
+    if (!taskId) return;
+    try {
+      const taskToUpdate = tasks.find(t => t.id === taskId);
+      if (!taskToUpdate) return;
+
+      const newStarredStatus = !taskToUpdate.is_starred;
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({ is_starred: newStarredStatus })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      // Update local state
+      setTasks(tasks.map(task => 
+        task.id === taskId 
+          ? { ...task, is_starred: newStarredStatus }
+          : task
+      ));
+
+      toast.success(newStarredStatus ? 'Task starred' : 'Task unstarred');
+    } catch (error) {
+      console.error('Error toggling star status:', error);
+      toast.error('Failed to update star status');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation Bar */}
@@ -808,11 +843,7 @@ export default function TaskManager({ user }: { user: User }) {
                       {task.title}
                     </h3>
                     {task.description && (
-                      <p className={`text-gray-600 mt-1 ${
-                        task.status === 'completed' ? 'line-through text-gray-400' : ''
-                      }`}>
-                        {task.description}
-                      </p>
+                      <p className="mt-1 text-gray-600">{task.description}</p>
                     )}
                     <div className="mt-2 flex items-center space-x-4">
                       <span className={`px-2 py-1 rounded text-sm ${
@@ -825,40 +856,19 @@ export default function TaskManager({ user }: { user: User }) {
                         Priority {task.priority}
                       </span>
                       {task.due_date && (
-                        <span className={`text-sm ${
-                          task.status === 'completed' ? 'text-gray-400' : 'text-gray-500'
-                        }`}>
-                          Due: {new Date(task.due_date).toLocaleString('en-US', { 
-                            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                            dateStyle: 'short',
-                            timeStyle: 'short'
+                        <span className="text-sm text-gray-600">
+                          Due: {new Date(task.due_date).toLocaleString('en-US', {
+                            month: 'numeric',
+                            day: 'numeric',
+                            year: '2-digit',
+                            hour: 'numeric',
+                            minute: 'numeric',
+                            hour12: true
                           })}
                         </span>
                       )}
-                      {task.reminders && task.reminders.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {task.reminders.map((reminder, index) => (
-                            <span 
-                              key={index}
-                              className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full"
-                            >
-                              {reminder.type === 'at' && reminder.time ? (
-                                `Reminder at ${new Date(reminder.time).toLocaleString('en-US', { 
-                                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                                  timeStyle: 'short'
-                                })}`
-                              ) : reminder.minutes_before ? (
-                                `Reminder ${reminder.minutes_before} mins before`
-                              ) : (
-                                'Reminder set'
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {/* Timer display logic */}
                       <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-500">Time spent:</span>
+                        <span className="text-sm text-gray-600">Time spent:</span>
                         <TaskTimer 
                           initialTime={task.time_spent || 0}
                           isRunning={task.status === 'in_progress'}
@@ -879,27 +889,6 @@ export default function TaskManager({ user }: { user: User }) {
                         />
                       </div>
                     </div>
-                    
-                    {/* Task Tags */}
-                    {task.tags && task.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {task.tags.map(tag => (
-                          <span 
-                            key={tag.id}
-                            className={`px-2 py-1 rounded text-xs ${
-                              task.status === 'completed' ? 'opacity-50' : ''
-                            }`}
-                            style={{ 
-                              backgroundColor: `${tag.color}20`,
-                              color: tag.color,
-                              border: `1px solid ${tag.color}`
-                            }}
-                          >
-                            {tag.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                   <div className="flex items-center space-x-2">
                     <select
@@ -911,6 +900,17 @@ export default function TaskManager({ user }: { user: User }) {
                       <option value="in_progress">In Progress</option>
                       <option value="completed">Completed</option>
                     </select>
+                    <button
+                      onClick={() => handleToggleStarred(task.id)}
+                      className={`text-xl focus:outline-none ${
+                        task.is_starred 
+                          ? 'text-yellow-400 hover:text-yellow-500' 
+                          : 'text-gray-400 hover:text-gray-500'
+                      }`}
+                      title={task.is_starred ? 'Unstar task' : 'Star task'}
+                    >
+                      {task.is_starred ? '★' : '☆'}
+                    </button>
                     <button
                       onClick={() => handleEditClick(task)}
                       className="text-blue-600 hover:text-blue-800"

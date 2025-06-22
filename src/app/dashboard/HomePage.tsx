@@ -1,13 +1,14 @@
 'use client';
 
 import { User } from '@supabase/auth-helpers-nextjs'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon } from 'lucide-react'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star } from 'lucide-react'
+import { createClient } from '@/lib/supabase'
 
 // Mock character data - will be replaced with real data later
 const characterData = {
@@ -21,9 +22,49 @@ const characterData = {
   ]
 }
 
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  priority: number;
+  due_date: string | null;
+  status: 'todo' | 'in_progress' | 'completed';
+}
+
 export default function HomePage({ user }: { user: User }) {
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
   const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false)
+  const [topStarredTask, setTopStarredTask] = useState<Task | null>(null)
+  const supabase = createClient()
+
+  useEffect(() => {
+    fetchTopStarredTask()
+  }, [])
+
+  const fetchTopStarredTask = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('is_starred', true)
+        .eq('status', 'todo')
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single()
+
+      if (error) {
+        if (error.code !== 'PGRST116') { // PGRST116 is the "no rows returned" error
+          console.error('Error fetching starred task:', error)
+        }
+        return
+      }
+
+      setTopStarredTask(data)
+    } catch (error) {
+      console.error('Error fetching starred task:', error)
+    }
+  }
 
   const getAiSuggestion = async () => {
     setIsLoadingSuggestion(true)
@@ -90,6 +131,31 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
+          {/* Tasks Card */}
+          <Link href="/dashboard/tasks" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CheckSquare className="h-6 w-6 text-green-600" />
+                  </div>
+                  Tasks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-3">
+                  Create, organize, and track your daily tasks with priority levels and due dates. Stay on top of your to-do list and boost productivity.
+                </p>
+                {topStarredTask && (
+                  <div className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    <span className="text-sm">{topStarredTask.title}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
+
           {/* Overview Card */}
           <Link href="/dashboard/overview" className="group">
             <Card className="hover:shadow-md transition-shadow">
@@ -152,25 +218,6 @@ export default function HomePage({ user }: { user: User }) {
               <CardContent>
                 <p className="text-sm text-gray-600">
                   Organize and manage your projects effectively. Break down complex goals into manageable tasks and track progress systematically.
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Tasks Card */}
-          <Link href="/dashboard/tasks" className="group">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <CheckSquare className="h-6 w-6 text-green-600" />
-                  </div>
-                  Tasks
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  Create, organize, and track your daily tasks with priority levels and due dates. Stay on top of your to-do list and boost productivity.
                 </p>
               </CardContent>
             </Card>
