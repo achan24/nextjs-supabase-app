@@ -100,6 +100,7 @@ const ResizableImage = ({
   const [isHovered, setIsHovered] = useState(false);
   const supabase = createClient();
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   // Get signed URL for Supabase images
   useEffect(() => {
@@ -135,99 +136,95 @@ const ResizableImage = ({
     getSignedUrl();
   }, [src]);
 
+  // Get natural image size on load
+  const handleImageLoad = () => {
+    if (imageRef.current) {
+      const { naturalWidth, naturalHeight } = imageRef.current;
+      setNaturalSize({ width: naturalWidth, height: naturalHeight });
+      
+      // If no size has been set yet, use the natural size (maintaining aspect ratio)
+      if (!size.width || !size.height) {
+        const maxInitialWidth = 500;
+        let newWidth = naturalWidth;
+        let newHeight = naturalHeight;
+        
+        if (naturalWidth > maxInitialWidth) {
+          const scale = maxInitialWidth / naturalWidth;
+          newWidth = maxInitialWidth;
+          newHeight = naturalHeight * scale;
+        }
+        
+        setSize({ width: newWidth, height: newHeight });
+        onResize?.(newWidth, newHeight);
+      }
+    }
+  };
+
   // Extract dimensions from src if present
   useEffect(() => {
     const dimensionMatch = src.match(/\|(\d+\.?\d*)x(\d+\.?\d*)/);
     if (dimensionMatch) {
       const [, width, height] = dimensionMatch;
+      const newWidth = parseFloat(width);
+      const newHeight = parseFloat(height);
       setSize({
-        width: parseFloat(width),
-        height: parseFloat(height)
+        width: newWidth,
+        height: newHeight
       });
     }
   }, [src]);
-
-  const handleDelete = async () => {
-    if (!src.startsWith('supabase://')) {
-      // For non-Supabase images, just call onDelete
-      onDelete?.();
-      return;
-    }
-
-    try {
-      const [bucketName, ...pathParts] = src.replace('supabase://', '').split('/');
-      const filePath = pathParts.join('/');
-      
-      // Delete from Supabase storage
-      const { error } = await supabase.storage
-        .from(bucketName)
-        .remove([filePath]);
-
-      if (error) {
-        console.error('Error deleting image:', error);
-        throw error;
-      }
-
-      // Call onDelete to update the node's description
-      onDelete?.();
-    } catch (error) {
-      console.error('Error handling delete:', error);
-      alert('Failed to delete image: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
-  };
 
   if (!signedUrl) {
     return null;
   }
 
+  const handleResize = (e: any, { size: { width } }: { size: { width: number } }) => {
+    if (naturalSize) {
+      const aspectRatio = naturalSize.width / naturalSize.height;
+      const height = width / aspectRatio;
+      setSize({ width, height });
+      onResize?.(width, height);
+    }
+  };
+
   return (
-    <div 
-      className="my-2 relative group"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <ResizableBox
-        width={size.width}
-        height={size.height}
-        minConstraints={[100, 100]}
-        maxConstraints={[500, 500]}
-        lockAspectRatio={true}
-        resizeHandles={['se']}
-        className="nodrag nopan relative"
-        handle={
-          <span 
-            className="react-resizable-handle react-resizable-handle-se nodrag nopan absolute bottom-0 right-0 w-6 h-6 bg-white border-2 border-blue-500 rounded-full cursor-se-resize hover:bg-blue-500 z-[100]"
-            onPointerDownCapture={e => e.stopPropagation()}
-          />
-        }
-        onResizeStop={(e, data) => {
-          const newSize = {
-            width: data.size.width,
-            height: data.size.height
-          };
-          setSize(newSize);
-          onResize?.(newSize.width, newSize.height);
-        }}
-      >
-        <img 
-          src={signedUrl}
-          alt={alt}
-          draggable={false}
-          className="w-full h-full object-contain select-none rounded-lg shadow-sm"
-          crossOrigin="anonymous"
+    <ResizableBox
+      width={size.width}
+      height={size.height}
+      minConstraints={[50, 50]}
+      maxConstraints={[naturalSize ? Math.max(naturalSize.width, 1000) : 1000, naturalSize ? Math.max(naturalSize.height, 1000) : 1000]}
+      lockAspectRatio={true}
+      resizeHandles={['se']}
+      className="nodrag nopan group relative"
+      style={{ width: size.width, height: size.height, padding: 0, background: 'none', border: 'none' }}
+      handle={
+        <span 
+          className="react-resizable-handle react-resizable-handle-se nodrag nopan absolute bottom-0 right-0 w-6 h-6 bg-white border-2 border-blue-500 rounded-full cursor-se-resize hover:bg-blue-500 z-[100]"
+          onPointerDownCapture={e => e.stopPropagation()}
         />
-        {isHovered && (
-          <button
-            onClick={handleDelete}
-            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-[100]"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-          </button>
-        )}
-      </ResizableBox>
-    </div>
+      }
+      onResize={handleResize}
+    >
+      <img 
+        ref={imageRef}
+        src={signedUrl}
+        alt={alt}
+        draggable={false}
+        onLoad={handleImageLoad}
+        className="w-full h-full object-fill select-none rounded-lg shadow-sm"
+        crossOrigin="anonymous"
+        style={{ display: 'block', width: '100%', height: '100%' }}
+      />
+      <button
+        onClick={onDelete}
+        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-[100]"
+        style={{ top: 8, right: 8 }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      </button>
+    </ResizableBox>
   );
 };
 
@@ -250,9 +247,9 @@ const NodeContent = ({
     <>
       {parts.map((part, index) => {
         // Match both standard markdown and markdown with dimensions
-        const imageMatch = part.match(/!\[(.*?)\]\((.*?)(?:\|(\d+)x(\d+))?\)/);
+        const imageMatch = part.match(/!\[(.*?)(?:\|width=(\d+)px height=(\d+)px)?\]\((.*?)\)/);
         if (imageMatch) {
-          const [fullMatch, alt, src, width, height] = imageMatch;
+          const [fullMatch, alt, width, height, src] = imageMatch;
           return (
             <ResizableImage 
               key={index} 
@@ -295,7 +292,7 @@ const BaseNode = ({
     if (!data.description) return;
     
     // Extract the alt and src from the original markdown, handling both formats
-    const match = originalMarkdown.match(/!\[(.*?)(?:\|[^]*)?\]\((.*?)(?:\|[\dx\.]*?)?\)/);
+    const match = originalMarkdown.match(/!\[(.*?)(?:\|width=\d+px height=\d+px)?\]\((.*?)\)/);
     if (!match) return;
     
     const [_, alt, src] = match;
