@@ -1369,13 +1369,13 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                     <Plus className="w-4 h-4 mr-1" />
                     Add Goal
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push('/dashboard/goal?tab=goals')}
-                  >
-                    All Goals
-                  </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push('/dashboard/goal?tab=goals')}
+                >
+                  All Goals
+                </Button>
                 </div>
               </div>
 

@@ -857,7 +857,7 @@ export default function TaskManager({ user }: { user: User }) {
                       </span>
                       {task.due_date && (
                         <span className="text-sm text-gray-600">
-                          Due: {new Date(task.due_date).toLocaleString('en-US', {
+                          Due: {new Date(task.due_date).toLocaleString('en-US', { 
                             month: 'numeric',
                             day: 'numeric',
                             year: '2-digit',

@@ -188,43 +188,43 @@ const ResizableImage = ({
   };
 
   return (
-    <ResizableBox
-      width={size.width}
-      height={size.height}
+      <ResizableBox
+        width={size.width}
+        height={size.height}
       minConstraints={[50, 50]}
       maxConstraints={[naturalSize ? Math.max(naturalSize.width, 1000) : 1000, naturalSize ? Math.max(naturalSize.height, 1000) : 1000]}
-      lockAspectRatio={true}
-      resizeHandles={['se']}
+        lockAspectRatio={true}
+        resizeHandles={['se']}
       className="nodrag nopan group relative"
       style={{ width: size.width, height: size.height, padding: 0, background: 'none', border: 'none' }}
-      handle={
-        <span 
-          className="react-resizable-handle react-resizable-handle-se nodrag nopan absolute bottom-0 right-0 w-6 h-6 bg-white border-2 border-blue-500 rounded-full cursor-se-resize hover:bg-blue-500 z-[100]"
-          onPointerDownCapture={e => e.stopPropagation()}
-        />
-      }
+        handle={
+          <span 
+            className="react-resizable-handle react-resizable-handle-se nodrag nopan absolute bottom-0 right-0 w-6 h-6 bg-white border-2 border-blue-500 rounded-full cursor-se-resize hover:bg-blue-500 z-[100]"
+            onPointerDownCapture={e => e.stopPropagation()}
+          />
+        }
       onResize={handleResize}
-    >
-      <img 
+      >
+        <img 
         ref={imageRef}
-        src={signedUrl}
-        alt={alt}
-        draggable={false}
+          src={signedUrl}
+          alt={alt}
+          draggable={false}
         onLoad={handleImageLoad}
         className="w-full h-full object-fill select-none rounded-lg shadow-sm"
-        crossOrigin="anonymous"
+          crossOrigin="anonymous"
         style={{ display: 'block', width: '100%', height: '100%' }}
-      />
-      <button
+        />
+          <button
         onClick={onDelete}
-        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-[100]"
+            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-md transition-opacity opacity-0 group-hover:opacity-100 z-[100]"
         style={{ top: 8, right: 8 }}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-        </svg>
-      </button>
-    </ResizableBox>
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+      </ResizableBox>
   );
 };
 

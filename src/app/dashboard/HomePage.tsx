@@ -3,12 +3,14 @@
 import { User } from '@supabase/auth-helpers-nextjs'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { useGoalSystem } from '@/hooks/useGoalSystem'
 
 // Mock character data - will be replaced with real data later
 const characterData = {
@@ -32,14 +34,42 @@ interface Task {
 }
 
 export default function HomePage({ user }: { user: User }) {
+  const router = useRouter()
+  const { areas } = useGoalSystem()
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null)
   const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false)
   const [topStarredTask, setTopStarredTask] = useState<Task | null>(null)
+  const [topProgress, setTopProgress] = useState<{
+    areaName: string;
+    subareaName: string;
+    goalId: string;
+    goalTitle: string;
+  } | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
     fetchTopStarredTask()
   }, [])
+
+  useEffect(() => {
+    // Find the top daily progress from areas
+    if (areas.length > 0) {
+      // Look for "Working and Learning" area or the first area
+      const workingArea = areas.find(area => area.name.includes('Working')) || areas[0]
+      if (workingArea && workingArea.subareas.length > 0) {
+        const firstSubarea = workingArea.subareas[0]
+        if (firstSubarea && firstSubarea.goals.length > 0) {
+          const firstGoal = firstSubarea.goals[0]
+          setTopProgress({
+            areaName: workingArea.name,
+            subareaName: firstSubarea.name,
+            goalId: firstGoal.id,
+            goalTitle: firstGoal.title
+          })
+        }
+      }
+    }
+  }, [areas])
 
   const fetchTopStarredTask = async () => {
     try {
@@ -76,6 +106,12 @@ export default function HomePage({ user }: { user: User }) {
     }, 1500)
   }
 
+  const handleGoalClick = () => {
+    if (topProgress) {
+      router.push(`/dashboard/goal?tab=goals&goal=${topProgress.goalId}`)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -102,34 +138,49 @@ export default function HomePage({ user }: { user: User }) {
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Character Card */}
-          <Link href="/dashboard/character" className="group">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <UserIcon className="h-6 w-6 text-purple-600" />
+          <Card className="hover:shadow-md transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <UserIcon className="h-6 w-6 text-purple-600" />
+                </div>
+                Character
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-xl">
+                  🟢
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Level {characterData.level}</p>
+                  <div className="w-24">
+                    <Progress value={(characterData.xp / characterData.nextLevelXp) * 100} className="h-1" />
                   </div>
-                  Character
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-xl">
-                    🟢
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Level {characterData.level}</p>
-                    <div className="w-24">
-                      <Progress value={(characterData.xp / characterData.nextLevelXp) * 100} className="h-1" />
-                    </div>
+                  <p className="text-xs text-gray-500">{characterData.xp} / {characterData.nextLevelXp} XP</p>
+                </div>
+              </div>
+
+              {/* Top Daily Progress */}
+              {topProgress && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium mb-2">Top Daily Progress</h3>
+                  <div 
+                    className="p-3 rounded-lg border cursor-pointer hover:border-blue-600 transition-colors"
+                    onClick={handleGoalClick}
+                  >
+                    <div className="text-sm text-gray-600">{topProgress.areaName}</div>
+                    <div className="text-sm font-medium">{topProgress.subareaName}</div>
+                    <div className="text-sm text-blue-600 hover:text-blue-800">{topProgress.goalTitle}</div>
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">
-                  Level up your character by completing tasks and building good habits. Track your progress and improve your traits.
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+              )}
+
+              <Link href="/dashboard/character" className="mt-4 text-sm text-gray-600 hover:text-gray-800 block">
+                Level up your character by completing tasks and building good habits. Track your progress and improve your traits.
+              </Link>
+            </CardContent>
+          </Card>
 
           {/* Tasks Card */}
           <Link href="/dashboard/tasks" className="group">

@@ -501,8 +501,8 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       // Update local state
       setSequences([newSequence, ...sequences]);
       setIsCreateModalOpen(false);
-      setNewSequenceTitle('');
-      setNewSequenceDescription('');
+    setNewSequenceTitle('');
+    setNewSequenceDescription('');
       toast.success('Sequence created successfully');
     } catch (error: unknown) {
       console.error('Error creating sequence:', error);
@@ -537,15 +537,15 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
         }
       }));
 
-      // Update existing sequence
+        // Update existing sequence
       const { error: updateError } = await supabase
-        .from('timer_sequences')
-        .update({
+          .from('timer_sequences')
+          .update({
           title,
           description,
-          tasks: tasksWithFlowIds,
-        })
-        .eq('id', selectedSequence.id);
+            tasks: tasksWithFlowIds,
+          })
+          .eq('id', selectedSequence.id);
 
       if (updateError) throw updateError;
 
@@ -571,11 +571,11 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
       }
 
       // Update local state
-      setSequences(sequences.map(s => 
-        s.id === selectedSequence.id 
+        setSequences(sequences.map(s => 
+          s.id === selectedSequence.id 
           ? { ...s, title, description, tasks: tasksWithFlowIds }
-          : s
-      ));
+            : s
+        ));
       
       // Update sequence tags in local state
       setSequenceTags(prev => ({
@@ -979,9 +979,9 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
                           }}
                         >
                           {tag.name}
-                        </span>
+                            </span>
                       ))}
-                    </div>
+                  </div>
                   )}
                   <div className="text-sm text-gray-500 mt-2">
                     {sequence.tasks.length} tasks
@@ -999,8 +999,8 @@ export function ProcessTimer({ onTaskComplete, user }: ProcessTimerProps) {
             setNewSequenceTitle('');
             setNewSequenceDescription('');
             setSelectedTasks([]);
-            setSelectedSequence(null);
-            setIsEditMode(false);
+              setSelectedSequence(null);
+              setIsEditMode(false);
             setPendingTagIds([]);
           }}
           onCreateSequence={(tasks, tagIds, title, description) => {

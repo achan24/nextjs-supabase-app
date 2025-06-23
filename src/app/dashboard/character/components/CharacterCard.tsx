@@ -1,22 +1,63 @@
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { useGoalSystem } from '@/hooks/useGoalSystem'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
-// Temporary mock data - will be replaced with real data later
-const characterData = {
-  name: 'Your Character',
-  level: 5,
-  xp: 750,
-  nextLevelXp: 1000,
-  overallScore: 85, // 0-100
-  traits: [
-    { name: 'Discipline', value: 75 },
-    { name: 'Consistency', value: 80 },
-    { name: 'Focus', value: 65 },
-    { name: 'Energy', value: 90 }
-  ]
+interface CharacterData {
+  name: string;
+  level: number;
+  xp: number;
+  nextLevelXp: number;
+  overallScore: number;
+  traits: Array<{ name: string; value: number }>;
+}
+
+interface TopProgress {
+  areaName: string;
+  subareaName: string;
+  goalId: string;
+  goalTitle: string;
 }
 
 export default function CharacterCard() {
+  const router = useRouter()
+  const { areas } = useGoalSystem()
+  const [characterData, setCharacterData] = useState<CharacterData>({
+    name: 'Your Character',
+    level: 5,
+    xp: 750,
+    nextLevelXp: 1000,
+    overallScore: 85,
+    traits: [
+      { name: 'Discipline', value: 75 },
+      { name: 'Consistency', value: 80 },
+      { name: 'Focus', value: 65 },
+      { name: 'Energy', value: 90 }
+    ]
+  })
+  const [topProgress, setTopProgress] = useState<TopProgress | null>(null)
+
+  useEffect(() => {
+    // Find the top daily progress from areas
+    if (areas.length > 0) {
+      // Look for "Working and Learning" area or the first area
+      const workingArea = areas.find(area => area.name.includes('Working')) || areas[0]
+      if (workingArea && workingArea.subareas.length > 0) {
+        const firstSubarea = workingArea.subareas[0]
+        if (firstSubarea && firstSubarea.goals.length > 0) {
+          const firstGoal = firstSubarea.goals[0]
+          setTopProgress({
+            areaName: workingArea.name,
+            subareaName: firstSubarea.name,
+            goalId: firstGoal.id,
+            goalTitle: firstGoal.title
+          })
+        }
+      }
+    }
+  }, [areas])
+
   const xpProgress = (characterData.xp / characterData.nextLevelXp) * 100
 
   // Determine avatar state based on overall score
@@ -24,6 +65,12 @@ export default function CharacterCard() {
     if (score >= 80) return '🟢' // Clean, confident, bright
     if (score >= 50) return '🟡' // Neutral, okay
     return '🔴' // Messy, tired, dim
+  }
+
+  const handleGoalClick = () => {
+    if (topProgress) {
+      router.push(`/dashboard/goal?tab=goals&goal=${topProgress.goalId}`)
+    }
   }
 
   return (
@@ -51,6 +98,21 @@ export default function CharacterCard() {
             </div>
             <Progress value={xpProgress} className="h-2" />
           </div>
+
+          {/* Top Daily Progress */}
+          {topProgress && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium mb-2">Top Daily Progress</h3>
+              <div 
+                className="p-3 rounded-lg border cursor-pointer hover:border-blue-600 transition-colors"
+                onClick={handleGoalClick}
+              >
+                <div className="text-sm text-gray-600">{topProgress.areaName}</div>
+                <div className="text-sm font-medium">{topProgress.subareaName}</div>
+                <div className="text-sm text-blue-600 hover:text-blue-800">{topProgress.goalTitle}</div>
+              </div>
+            </div>
+          )}
 
           {/* Traits Grid */}
           <div className="grid grid-cols-2 gap-4">
