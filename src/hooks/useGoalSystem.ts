@@ -101,13 +101,13 @@ export function useGoalSystem() {
       }
 
       console.log('Raw areas data:', areasData);
-      const mappedAreas = (areasData || []).map(area => ({
+      const mappedAreas = (areasData || []).map((area: any) => ({
         ...area,
-        subareas: (area.subareas || []).map(subarea => ({
+        subareas: (area.subareas || []).map((subarea: any) => ({
           ...subarea,
-          goals: (subarea.goals || []).map(goal => ({
+          goals: (subarea.goals || []).map((goal: any) => ({
             ...goal,
-            process_flows: (goal.process_flows || []).map(link => ({
+            process_flows: (goal.process_flows || []).map((link: any) => ({
               id: link.id,
               flow_id: link.flow_id,
               created_at: link.created_at,
