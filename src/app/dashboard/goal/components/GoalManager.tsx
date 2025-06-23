@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer, X, Share2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ import { createClient } from '@/lib/supabase/client';
 import { NoteLinkButton } from '@/components/ui/note-link-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import { ProcessFlowLinkButton } from '@/components/ui/process-flow-link-button';
 
 interface GoalManagerProps {
   selectedSubareaId: string | null;
@@ -115,6 +116,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     removeTaskFromGoal,
     addSequenceContribution,
     removeSequenceContribution,
+    unlinkProcessFlow,
   } = useGoalSystem();
 
   const [isAddingGoal, setIsAddingGoal] = useState(false);
@@ -188,6 +190,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [selectedTaskForMetric, setSelectedTaskForMetric] = useState<string | null>(null);
   const [selectedMetricForTask, setSelectedMetricForTask] = useState<string | null>(null);
   const [taskContributionValue, setTaskContributionValue] = useState(1);
+
+  // Add state for process flow linking
+  const [isLinkingFlow, setIsLinkingFlow] = useState(false);
 
   // Find the area that contains the selected subarea
   useEffect(() => {
@@ -554,6 +559,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   };
 
   const handleRemoveTaskFromGoal = async (taskId: string) => {
+    if (!window.confirm('Are you sure you want to remove this task from the goal?')) return;
     try {
       await removeTaskFromGoal(taskId);
       await fetchTasks(); // Fetch tasks after removing
@@ -722,6 +728,15 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     } catch (error) {
       console.error('Error unlinking task from metric:', error);
       toast.error('Failed to unlink task from metric');
+    }
+  };
+
+  const handleUnlinkProcessFlow = async (goalId: string, flowId: string) => {
+    try {
+      await unlinkProcessFlow(goalId, flowId);
+      toast.success('Process flow unlinked successfully');
+    } catch (error) {
+      toast.error('Failed to unlink process flow');
     }
   };
 
@@ -1121,12 +1136,8 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               <div className="space-y-4 mt-6">
                 <div className="flex justify-between items-center">
                   <h3 className="text-sm font-medium text-gray-500">Tasks</h3>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsAddingTask(true)}
-                  >
-                    <Plus className="w-4 h-4" />
+                  <Button variant="ghost" size="sm" onClick={() => setIsAddingTask(true)}>
+                    <Plus className="h-4 w-4" />
                   </Button>
                 </div>
 
@@ -1218,6 +1229,52 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                   </div>
                 ) : (
                   <p className="text-sm text-gray-500 text-center py-2">No tasks yet</p>
+                )}
+              </div>
+
+              {/* Process Flows Section */}
+              <div className="space-y-4 mt-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-medium text-gray-500">Process Flows</h3>
+                  <ProcessFlowLinkButton goalId={selectedGoal.id} goalTitle={selectedGoal.title} />
+                </div>
+                {selectedGoal.process_flows && selectedGoal.process_flows.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedGoal.process_flows.map((flow) => (
+                      <div key={flow.id} className="flex items-center justify-between p-2 rounded-lg border">
+                        <div className="flex-1">
+                          <button
+                            className="font-medium text-left text-blue-600 hover:underline"
+                            onClick={() => router.push(`/dashboard/process-flow?flowId=${flow.flow_id}`)}
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                          >
+                            {flow.title}
+                          </button>
+                          {flow.description && (
+                            <p className="text-sm text-gray-500">{flow.description}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/dashboard/process-flow?flowId=${flow.flow_id}`)}
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleUnlinkProcessFlow(selectedGoal.id, flow.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No process flows linked yet</p>
                 )}
               </div>
             </CardContent>

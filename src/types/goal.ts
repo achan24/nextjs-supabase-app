@@ -71,6 +71,13 @@ export interface LifeGoal {
   goal_notes: GoalNoteLink[];
   tasks: LifeGoalTask[];
   sequence_contributions?: LifeGoalSequenceContribution[];
+  process_flows?: {
+    id: string;
+    title: string;
+    description?: string;
+    flow_id: string;
+    created_at: string;
+  }[];
 }
 
 export interface LifeGoalMilestone {

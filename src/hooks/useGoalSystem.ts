@@ -13,12 +13,33 @@ import {
   SubareaNoteLink,
   GoalNoteLink,
 } from '@/types/goal';
+import { User } from '@supabase/supabase-js';
+
+interface GoalFlowLinkResponse {
+  id: string;
+  flow_id: string;
+  created_at: string;
+  process_flows: {
+    id: string;
+    title: string;
+    description?: string;
+  };
+}
 
 export function useGoalSystem() {
+  const supabase = createClient();
   const [areas, setAreas] = useState<LifeGoalArea[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
 
   const fetchAreas = useCallback(async () => {
     console.log('Fetching areas...');
@@ -58,6 +79,16 @@ export function useGoalSystem() {
               tasks:life_goal_tasks (
                 *,
                 task:tasks (*)
+              ),
+              process_flows:goal_flow_links (
+                id,
+                flow_id,
+                created_at,
+                process_flows:process_flows (
+                  id,
+                  title,
+                  description
+                )
               )
             )
           )
@@ -70,7 +101,24 @@ export function useGoalSystem() {
       }
 
       console.log('Raw areas data:', areasData);
-      setAreas(areasData || []);
+      const mappedAreas = (areasData || []).map(area => ({
+        ...area,
+        subareas: (area.subareas || []).map(subarea => ({
+          ...subarea,
+          goals: (subarea.goals || []).map(goal => ({
+            ...goal,
+            process_flows: (goal.process_flows || []).map(link => ({
+              id: link.id,
+              flow_id: link.flow_id,
+              created_at: link.created_at,
+              title: link.process_flows?.title,
+              description: link.process_flows?.description
+            }))
+          }))
+        }))
+      }));
+
+      setAreas(mappedAreas);
     } catch (error) {
       console.error('Error in fetchAreas:', error);
       setError(error as Error);
@@ -511,6 +559,101 @@ export function useGoalSystem() {
     }
   }, [supabase, fetchAreas]);
 
+  const linkProcessFlow = async (goalId: string, flowId: string) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const { data, error } = await supabase
+        .from('goal_flow_links')
+        .insert({
+          goal_id: goalId,
+          flow_id: flowId,
+          user_id: user.id
+        })
+        .select(`
+          id,
+          flow_id,
+          created_at,
+          process_flows:process_flows (
+            id,
+            title,
+            description
+          )
+        `)
+        .single<GoalFlowLinkResponse>();
+
+      if (error) throw error;
+
+      // Update local state
+      setAreas(prevAreas => {
+        return prevAreas.map(area => ({
+          ...area,
+          subareas: area.subareas.map(subarea => ({
+            ...subarea,
+            goals: subarea.goals.map(goal => {
+              if (goal.id === goalId) {
+                return {
+                  ...goal,
+                  process_flows: [
+                    ...(goal.process_flows || []),
+                    {
+                      id: data.id,
+                      title: data.process_flows.title,
+                      description: data.process_flows.description,
+                      flow_id: data.flow_id,
+                      created_at: data.created_at
+                    }
+                  ]
+                };
+              }
+              return goal;
+            })
+          }))
+        }));
+      });
+
+      return data;
+    } catch (err) {
+      console.error('Error linking process flow:', err);
+      throw err;
+    }
+  };
+
+  const unlinkProcessFlow = async (goalId: string, flowId: string) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('goal_flow_links')
+        .delete()
+        .match({ goal_id: goalId, flow_id: flowId, user_id: user.id });
+
+      if (error) throw error;
+
+      // Update local state
+      setAreas(prevAreas => {
+        return prevAreas.map(area => ({
+          ...area,
+          subareas: area.subareas.map(subarea => ({
+            ...subarea,
+            goals: subarea.goals.map(goal => {
+              if (goal.id === goalId) {
+                return {
+                  ...goal,
+                  process_flows: goal.process_flows?.filter(flow => flow.id !== flowId) || []
+                };
+              }
+              return goal;
+            })
+          }))
+        }));
+      });
+    } catch (error) {
+      console.error('Error unlinking process flow:', error);
+      throw error;
+    }
+  };
+
   return {
     areas,
     loading,
@@ -545,6 +688,8 @@ export function useGoalSystem() {
     updateTaskInGoal,
     removeTaskFromGoal,
     addSequenceContribution,
-    removeSequenceContribution
+    removeSequenceContribution,
+    linkProcessFlow,
+    unlinkProcessFlow,
   };
 } 
