@@ -99,21 +99,6 @@ export default function CharacterCard() {
             <Progress value={xpProgress} className="h-2" />
           </div>
 
-          {/* Top Daily Progress */}
-          {topProgress && (
-            <div className="mb-6">
-              <h3 className="text-sm font-medium mb-2">Top Daily Progress</h3>
-              <div 
-                className="p-3 rounded-lg border cursor-pointer hover:border-blue-600 transition-colors"
-                onClick={handleGoalClick}
-              >
-                <div className="text-sm text-gray-600">{topProgress.areaName}</div>
-                <div className="text-sm font-medium">{topProgress.subareaName}</div>
-                <div className="text-sm text-blue-600 hover:text-blue-800">{topProgress.goalTitle}</div>
-              </div>
-            </div>
-          )}
-
           {/* Traits Grid */}
           <div className="grid grid-cols-2 gap-4">
             {characterData.traits.map((trait) => (

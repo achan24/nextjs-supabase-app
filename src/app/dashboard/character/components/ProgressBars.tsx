@@ -359,11 +359,19 @@ export default function ProgressBars() {
   const renderGoal = (goal: LifeGoal, subareaTarget: number) => {
     const goalState = goalProgress[goal.id] || { value: 0, target: Math.min(1, subareaTarget) }
     const progressPercentage = (goalState.value / goalState.target) * 100
+    const router = require('next/navigation').useRouter();
 
     return (
       <div key={goal.id} className="space-y-1">
         <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>{goal.title}</span>
+          <button
+            className="text-blue-600 hover:underline text-left"
+            onClick={() => router.push(`/dashboard/goal?tab=goals&goal=${goal.id}`)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            type="button"
+          >
+            {goal.title}
+          </button>
           {renderProgressControls(
             goal.id,
             goalState.value,

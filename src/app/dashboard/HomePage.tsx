@@ -12,16 +12,12 @@ import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calen
 import { createClient } from '@/lib/supabase'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 
-// Mock character data - will be replaced with real data later
-const characterData = {
-  name: 'Your Character',
-  level: 5,
-  xp: 750,
-  nextLevelXp: 1000,
-  traits: [
-    { name: 'Discipline', value: 75 },
-    { name: 'Focus', value: 65 }
-  ]
+interface CharacterData {
+  name: string;
+  level: number;
+  xp: number;
+  nextLevelXp: number;
+  overallScore: number;
 }
 
 interface Task {
@@ -46,6 +42,13 @@ export default function HomePage({ user }: { user: User }) {
     goalTitle: string;
   } | null>(null)
   const supabase = createClient()
+  const [characterData, setCharacterData] = useState<CharacterData>({
+    name: 'Your Character',
+    level: 5,
+    xp: 750,
+    nextLevelXp: 1000,
+    overallScore: 85
+  })
 
   useEffect(() => {
     fetchTopStarredTask()
@@ -112,6 +115,13 @@ export default function HomePage({ user }: { user: User }) {
     }
   }
 
+  // Determine avatar state based on overall score
+  const getAvatarState = (score: number) => {
+    if (score >= 80) return '🟢' // Clean, confident, bright
+    if (score >= 50) return '🟡' // Neutral, okay
+    return '🔴' // Messy, tired, dim
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -138,49 +148,54 @@ export default function HomePage({ user }: { user: User }) {
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Character Card */}
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <UserIcon className="h-6 w-6 text-purple-600" />
-                </div>
-                Character
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-xl">
-                  🟢
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Level {characterData.level}</p>
-                  <div className="w-24">
-                    <Progress value={(characterData.xp / characterData.nextLevelXp) * 100} className="h-1" />
+          <Link href="/dashboard/character" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <UserIcon className="h-6 w-6 text-purple-600" />
                   </div>
-                  <p className="text-xs text-gray-500">{characterData.xp} / {characterData.nextLevelXp} XP</p>
-                </div>
-              </div>
-
-              {/* Top Daily Progress */}
-              {topProgress && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium mb-2">Top Daily Progress</h3>
-                  <div 
-                    className="p-3 rounded-lg border cursor-pointer hover:border-blue-600 transition-colors"
-                    onClick={handleGoalClick}
-                  >
-                    <div className="text-sm text-gray-600">{topProgress.areaName}</div>
-                    <div className="text-sm font-medium">{topProgress.subareaName}</div>
-                    <div className="text-sm text-blue-600 hover:text-blue-800">{topProgress.goalTitle}</div>
+                  Character
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-xl">
+                    {getAvatarState(characterData.overallScore)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Level {characterData.level}</p>
+                    <div className="w-24">
+                      <Progress value={(characterData.xp / characterData.nextLevelXp) * 100} className="h-1" />
+                    </div>
+                    <p className="text-xs text-gray-500">{characterData.xp} / {characterData.nextLevelXp} XP</p>
                   </div>
                 </div>
-              )}
 
-              <Link href="/dashboard/character" className="mt-4 text-sm text-gray-600 hover:text-gray-800 block">
-                Level up your character by completing tasks and building good habits. Track your progress and improve your traits.
-              </Link>
-            </CardContent>
-          </Card>
+                {/* Top Daily Progress */}
+                {topProgress && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-medium mb-2">Top Daily Progress</h3>
+                    <div 
+                      className="p-3 rounded-lg border cursor-pointer hover:border-blue-600 transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handleGoalClick()
+                      }}
+                    >
+                      <div className="text-sm text-gray-600">{topProgress.areaName}</div>
+                      <div className="text-sm font-medium">{topProgress.subareaName}</div>
+                      <div className="text-sm text-blue-600 hover:text-blue-800">{topProgress.goalTitle}</div>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-sm text-gray-600 mt-4">
+                  Level up your character by completing tasks and building good habits. Track your progress and improve your traits.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
           {/* Tasks Card */}
           <Link href="/dashboard/tasks" className="group">

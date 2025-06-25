@@ -194,6 +194,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   // Add state for process flow linking
   const [isLinkingFlow, setIsLinkingFlow] = useState(false);
 
+  // Add state for daily points
+  const [dailyPoints, setDailyPoints] = useState<number>(0)
+
   // Find the area that contains the selected subarea
   useEffect(() => {
     if (selectedSubareaId) {
@@ -740,6 +743,45 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   };
 
+  // Fetch daily points for the selected goal
+  useEffect(() => {
+    if (selectedGoalId) {
+      const fetchDailyPoints = async () => {
+        const { data, error } = await supabase
+          .rpc('get_goal_daily_points', { goal_id: selectedGoalId })
+        
+        if (error) {
+          console.error('Error fetching daily points:', error)
+          return
+        }
+
+        setDailyPoints(Number(data) || 0)
+      }
+
+      fetchDailyPoints()
+    }
+  }, [selectedGoalId])
+
+  const handleAddPoint = async () => {
+    if (!selectedGoalId) return
+
+    try {
+      const { data, error } = await supabase
+        .rpc('add_goal_points', { 
+          goal_id: selectedGoalId,
+          points_to_add: 1
+        })
+
+      if (error) throw error
+
+      setDailyPoints(Number(data) || 0)
+      toast.success('Point added successfully')
+    } catch (err) {
+      console.error('Error adding point:', err)
+      toast.error('Failed to add point')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -811,30 +853,47 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                     <p className="text-gray-600 mt-1 text-base">{selectedGoal.description}</p>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setEditingGoal(selectedGoal.id);
-                      setEditGoalTitle(selectedGoal.title);
-                      setEditGoalDescription(selectedGoal.description || '');
-                    }}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteGoal(selectedGoal.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                  <NoteLinkButton
-                    type="goal"
-                    id={selectedGoal.id}
-                    name={selectedGoal.title}
-                  />
+                <div className="flex items-center gap-4">
+                  {/* Daily Points */}
+                  <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold">{dailyPoints} pts</span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleAddPoint}
+                        className="h-8 w-8"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <span className="text-xs text-gray-500">Today's Progress</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setEditingGoal(selectedGoal.id);
+                        setEditGoalTitle(selectedGoal.title);
+                        setEditGoalDescription(selectedGoal.description || '');
+                      }}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteGoal(selectedGoal.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <NoteLinkButton
+                      type="goal"
+                      id={selectedGoal.id}
+                      name={selectedGoal.title}
+                    />
+                  </div>
                 </div>
               </CardTitle>
             </CardHeader>
