@@ -71,7 +71,7 @@ function TargetDialog({ title, currentTarget = 1, onUpdateTarget }: TargetDialog
 
 interface SetTargetsDialogProps {
   areas: LifeGoalArea[];
-  onUpdateTargets: (areaId: string, target: number, isSubarea: boolean) => void;
+  onUpdateTargets: (areaId: string, target: number, type: 'area' | 'subarea' | 'goal') => void;
 }
 
 function SetTargetsDialog({ areas, onUpdateTargets }: SetTargetsDialogProps) {
@@ -97,21 +97,36 @@ function SetTargetsDialog({ areas, onUpdateTargets }: SetTargetsDialogProps) {
                   min="0"
                   defaultValue={area.target_points}
                   className="w-24"
-                  onChange={(e) => onUpdateTargets(area.id, parseInt(e.target.value) || 0, false)}
+                  onChange={(e) => onUpdateTargets(area.id, parseInt(e.target.value) || 0, 'area')}
                 />
                 <span className="text-sm text-gray-500 w-12">points</span>
               </div>
               {area.subareas.map((subarea) => (
-                <div key={subarea.id} className="flex items-center gap-4 ml-6">
-                  <span className="flex-1">{subarea.name}</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    defaultValue={subarea.target_points}
-                    className="w-24"
-                    onChange={(e) => onUpdateTargets(subarea.id, parseInt(e.target.value) || 0, true)}
-                  />
-                  <span className="text-sm text-gray-500 w-12">points</span>
+                <div key={subarea.id} className="ml-6 space-y-2">
+                  <div className="flex items-center gap-4">
+                    <span className="flex-1">{subarea.name}</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      defaultValue={subarea.target_points}
+                      className="w-24"
+                      onChange={(e) => onUpdateTargets(subarea.id, parseInt(e.target.value) || 0, 'subarea')}
+                    />
+                    <span className="text-sm text-gray-500 w-12">points</span>
+                  </div>
+                  {subarea.goals.map((goal) => (
+                    <div key={goal.id} className="ml-6 flex items-center gap-4">
+                      <span className="flex-1 text-sm text-gray-700">{goal.title}</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        defaultValue={goal.target_points}
+                        className="w-24"
+                        onChange={(e) => onUpdateTargets(goal.id, parseInt(e.target.value) || 0, 'goal')}
+                      />
+                      <span className="text-sm text-gray-500 w-12">points</span>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -205,7 +220,7 @@ function ProgressItem({
 
 export default function ProgressBars() {
   const router = useRouter()
-  const { areas, loading, updateArea, updateSubarea } = useGoalSystem()
+  const { areas, loading, updateArea, updateSubarea, updateGoal } = useGoalSystem()
   const supabase = createClient()
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({})
   const [expandedSubareas, setExpandedSubareas] = useState<Record<string, boolean>>({})
@@ -239,62 +254,61 @@ export default function ProgressBars() {
     initializeAreas()
   }, [])
 
-  const handleIncrement = async (id: string, isSubarea: boolean = false) => {
-    const table = isSubarea ? 'life_goal_subareas' : 'life_goal_areas'
-    
-    const { data: item } = await supabase
-      .from(table)
-      .select('current_points, target_points')
-      .eq('id', id)
-      .single()
-
-    if (!item) return
-
-    const newPoints = Math.min(item.current_points + 1, item.target_points)
-    
-    const { error } = await supabase
-      .from(table)
-      .update({ current_points: newPoints })
-      .eq('id', id)
-
-    if (error) {
-      toast.error('Failed to update points')
-    }
-  }
-
-  const handleDecrement = async (id: string, isSubarea: boolean = false) => {
-    const table = isSubarea ? 'life_goal_subareas' : 'life_goal_areas'
-    
-    const { data: item } = await supabase
-      .from(table)
-      .select('current_points')
-      .eq('id', id)
-      .single()
-
-    if (!item) return
-
-    const newPoints = Math.max(item.current_points - 1, 0)
-    
-    const { error } = await supabase
-      .from(table)
-      .update({ current_points: newPoints })
-      .eq('id', id)
-
-    if (error) {
-      toast.error('Failed to update points')
-    }
-  }
-
-  const handleUpdateTarget = async (id: string, newTarget: number, isSubarea: boolean = false) => {
+  const handleUpdateTarget = async (id: string, newTarget: number, type: 'area' | 'subarea' | 'goal' = 'area') => {
     try {
-      if (isSubarea) {
+      if (type === 'subarea') {
         await updateSubarea(id, { target_points: newTarget });
+      } else if (type === 'goal') {
+        await updateGoal(id, { target_points: newTarget });
       } else {
         await updateArea(id, { target_points: newTarget });
       }
     } catch (error) {
       console.error('Error updating target:', error);
       toast.error('Failed to update target');
+    }
+  };
+
+  const handleIncrement = async (id: string, type: 'area' | 'subarea' | 'goal' = 'area') => {
+    try {
+      let current = 0;
+      if (type === 'subarea') {
+        const subarea = areas.flatMap(a => a.subareas).find(s => s.id === id);
+        current = subarea?.current_points || 0;
+        console.log('[INCREMENT SUBAREA]', { id, current, next: current + 1 });
+        await updateSubarea(id, { current_points: current + 1 });
+      } else if (type === 'goal') {
+        const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
+        current = goal?.current_points || 0;
+        await updateGoal(id, { current_points: current + 1 });
+      } else {
+        const area = areas.find(a => a.id === id);
+        current = area?.current_points || 0;
+        await updateArea(id, { current_points: current + 1 });
+      }
+    } catch (error) {
+      toast.error('Failed to increment points');
+    }
+  };
+
+  const handleDecrement = async (id: string, type: 'area' | 'subarea' | 'goal' = 'area') => {
+    try {
+      let current = 0;
+      if (type === 'subarea') {
+        const subarea = areas.flatMap(a => a.subareas).find(s => s.id === id);
+        current = subarea?.current_points || 0;
+        await updateSubarea(id, { current_points: Math.max(current - 1, 0) });
+      } else if (type === 'goal') {
+        const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
+        current = goal?.current_points || 0;
+        await updateGoal(id, { current_points: Math.max(current - 1, 0) });
+      } else {
+        const area = areas.find(a => a.id === id);
+        current = area?.current_points || 0;
+        await updateArea(id, { current_points: Math.max(current - 1, 0) });
+      }
+    } catch (error) {
+      toast.error('Failed to decrement points');
     }
   };
 
@@ -335,7 +349,7 @@ export default function ProgressBars() {
         />
       </div>
 
-      <div className="space-y-1">
+                      <div className="space-y-1">
         {areas.map((area) => (
           <div key={area.id} className="space-y-1">
             <ProgressItem
@@ -361,9 +375,9 @@ export default function ProgressBars() {
                   title={subarea.name}
                   currentValue={subarea.current_points || 0}
                   targetValue={subarea.target_points || 0}
-                  onIncrement={() => handleIncrement(subarea.id)}
-                  onDecrement={() => handleDecrement(subarea.id)}
-                  onUpdateTarget={(newTarget) => handleUpdateTarget(subarea.id, newTarget, true)}
+                  onIncrement={() => handleIncrement(subarea.id, 'subarea')}
+                  onDecrement={() => handleDecrement(subarea.id, 'subarea')}
+                  onUpdateTarget={(newTarget) => handleUpdateTarget(subarea.id, newTarget, 'subarea')}
                   level="subarea"
                   isExpanded={expandedSubareas[subarea.id] || false}
                   onToggle={() => toggleSubarea(subarea.id)}
@@ -378,8 +392,9 @@ export default function ProgressBars() {
                     title={goal.title}
                     currentValue={goal.current_points || 0}
                     targetValue={goal.target_points || 0}
-                    onIncrement={() => handleIncrement(goal.id)}
-                    onDecrement={() => handleDecrement(goal.id)}
+                    onIncrement={() => handleIncrement(goal.id, 'goal')}
+                    onDecrement={() => handleDecrement(goal.id, 'goal')}
+                    onUpdateTarget={(newTarget) => handleUpdateTarget(goal.id, newTarget, 'goal')}
                     level="goal"
                     isExpanded={false}
                     onToggle={() => {}}
