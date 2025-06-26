@@ -225,35 +225,6 @@ export default function ProgressBars() {
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({})
   const [expandedSubareas, setExpandedSubareas] = useState<Record<string, boolean>>({})
   
-  // Initialize areas in database if they don't exist
-  useEffect(() => {
-    const initializeAreas = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      // Create areas if they don't exist
-      for (const [areaName] of Object.entries(areaIcons)) {
-        const { data: existingArea } = await supabase
-          .from('life_goal_areas')
-          .select('id')
-          .eq('name', areaName)
-          .eq('user_id', user.id)
-          .single()
-
-        if (!existingArea) {
-          await supabase.from('life_goal_areas').insert({
-            user_id: user.id,
-            name: areaName,
-            target_points: 1,
-            current_points: 0
-          })
-        }
-      }
-    }
-
-    initializeAreas()
-  }, [])
-
   const handleUpdateTarget = async (id: string, newTarget: number, type: 'area' | 'subarea' | 'goal' = 'area') => {
     try {
       if (type === 'subarea') {
