@@ -3,6 +3,8 @@ export interface LifeGoalArea {
   name: string;
   description?: string;
   user_id: string;
+  current_points: number;
+  target_points: number;
   created_at: string;
   updated_at: string;
   subareas: LifeGoalSubarea[];
@@ -14,6 +16,8 @@ export interface LifeGoalSubarea {
   name: string;
   description?: string;
   area_id: string;
+  current_points: number;
+  target_points: number;
   created_at: string;
   updated_at: string;
   goals: LifeGoal[];
@@ -64,6 +68,8 @@ export interface LifeGoal {
   description?: string;
   status: 'active' | 'completed' | 'archived';
   subarea_id: string;
+  current_points: number;
+  target_points: number;
   created_at: string;
   updated_at: string;
   milestones: LifeGoalMilestone[];

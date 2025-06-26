@@ -4,6 +4,7 @@ create table if not exists public.character_areas (
     user_id uuid references auth.users(id) on delete cascade not null,
     name text not null,
     description text,
+    current_points numeric not null default 0,
     target_points numeric not null default 0,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null,
     updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -15,6 +16,7 @@ create table if not exists public.character_subareas (
     area_id uuid references character_areas(id) on delete cascade not null,
     name text not null,
     description text,
+    current_points numeric not null default 0,
     target_points numeric not null default 0,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null,
     updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -26,6 +28,7 @@ create table if not exists public.character_goals (
     subarea_id uuid references character_subareas(id) on delete cascade not null,
     name text not null,
     description text,
+    current_points numeric not null default 0,
     target_points numeric not null default 0,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null,
     updated_at timestamp with time zone default timezone('utc'::text, now()) not null

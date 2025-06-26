@@ -9,6 +9,7 @@ import { ActiveSequenceProvider } from '@/contexts/ActiveSequenceContext';
 import { ActiveSequenceIndicator } from '@/components/ActiveSequenceIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import Link from 'next/link';
+import { initializeAutoSave } from '@/services/characterProgressService';
 
 export default function DashboardLayout({
   children,
@@ -20,6 +21,9 @@ export default function DashboardLayout({
   useEffect(() => {
     const reminderService = new ReminderService(notificationContext);
     reminderService.startCheckingReminders();
+
+    // Initialize auto-save for character progress
+    initializeAutoSave();
 
     return () => {
       reminderService.stopCheckingReminders();

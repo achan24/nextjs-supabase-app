@@ -3,62 +3,41 @@
 import { useState, useEffect } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { Plus, Minus, ChevronRight, ChevronDown, Settings2 } from 'lucide-react'
-import WeeklyTargetsDialog from './WeeklyTargetsDialog'
+import { Plus, Minus, ChevronRight, ChevronDown, Settings2, Target } from 'lucide-react'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
-import { LifeGoal } from '@/types/goal'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { LifeGoalArea, LifeGoalSubarea } from '@/types/goal'
+import { useRouter } from 'next/navigation'
 
-interface LocalLifeArea {
-  id: string;
-  name: string;
-  target: number;
-}
-
-const lifeAreas: LocalLifeArea[] = [
-  { id: 'work-learning', name: '🎓 Work & Learning', target: 5 },
-  { id: 'health-fitness', name: '💪 Health & Fitness', target: 3 },
-  { id: 'relationships', name: '❤️ Relationships', target: 2 },
-  { id: 'environment', name: '🧼 Environment & Hygiene', target: 2 },
-  { id: 'finances', name: '💰 Finances', target: 1 },
-  { id: 'mental-health', name: '🧠 Mental Health & Reflection', target: 3 },
-  { id: 'play-hobbies', name: '🎨 Play & Hobbies', target: 2 }
-]
-
-interface ProgressState {
-  value: number;
-  target: number;
+const areaIcons: Record<string, string> = {
+  'Work & Learning': '📚',
+  'Health & Fitness': '💪',
+  'Relationships': '❤️',
+  'Environment & Hygiene': '🌿',
+  'Finances': '💰',
+  'Mental Health & Reflection': '🧘',
+  'Play & Hobbies': '🎮'
 }
 
 interface TargetDialogProps {
   title: string;
   currentTarget: number;
-  maxTarget?: number;
   onUpdateTarget: (newTarget: number) => void;
 }
 
-function TargetDialog({ title, currentTarget, maxTarget, onUpdateTarget }: TargetDialogProps) {
-  const [newTarget, setNewTarget] = useState(
-    currentTarget !== undefined && currentTarget !== null ? currentTarget.toString() : "1"
-  )
+function TargetDialog({ title, currentTarget = 1, onUpdateTarget }: TargetDialogProps) {
+  const [newTarget, setNewTarget] = useState(currentTarget.toString())
 
   useEffect(() => {
-    setNewTarget(
-      currentTarget !== undefined && currentTarget !== null ? currentTarget.toString() : "1"
-    )
+    setNewTarget(currentTarget.toString())
   }, [currentTarget])
 
   const handleSave = () => {
     const parsedTarget = Math.max(1, parseInt(newTarget) || 1)
-    const constrainedTarget = maxTarget ? Math.min(parsedTarget, maxTarget) : parsedTarget
-    onUpdateTarget(constrainedTarget)
+    onUpdateTarget(parsedTarget)
   }
 
   return (
@@ -77,12 +56,11 @@ function TargetDialog({ title, currentTarget, maxTarget, onUpdateTarget }: Targe
             <Input
               type="number"
               min="1"
-              max={maxTarget}
               value={newTarget}
               onChange={(e) => setNewTarget(e.currentTarget.value)}
               className="w-24"
             />
-            <span>points{maxTarget ? ` (max: ${maxTarget})` : ''}</span>
+            <span>points</span>
           </div>
           <Button onClick={handleSave}>Save Target</Button>
         </div>
@@ -91,34 +69,234 @@ function TargetDialog({ title, currentTarget, maxTarget, onUpdateTarget }: Targe
   )
 }
 
+interface SetTargetsDialogProps {
+  areas: LifeGoalArea[];
+  onUpdateTargets: (areaId: string, target: number, isSubarea: boolean) => void;
+}
+
+function SetTargetsDialog({ areas, onUpdateTargets }: SetTargetsDialogProps) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <Target className="h-4 w-4" />
+          Set Targets
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Set Daily Targets</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-6 py-4 max-h-[70vh] overflow-y-auto">
+          {areas.map((area) => (
+            <div key={area.id} className="space-y-4">
+              <div className="flex items-center gap-4">
+                <span className="font-bold flex-1">{area.name}</span>
+                <Input
+                  type="number"
+                  min="0"
+                  defaultValue={area.target_points}
+                  className="w-24"
+                  onChange={(e) => onUpdateTargets(area.id, parseInt(e.target.value) || 0, false)}
+                />
+                <span className="text-sm text-gray-500 w-12">points</span>
+              </div>
+              {area.subareas.map((subarea) => (
+                <div key={subarea.id} className="flex items-center gap-4 ml-6">
+                  <span className="flex-1">{subarea.name}</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    defaultValue={subarea.target_points}
+                    className="w-24"
+                    onChange={(e) => onUpdateTargets(subarea.id, parseInt(e.target.value) || 0, true)}
+                  />
+                  <span className="text-sm text-gray-500 w-12">points</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+interface ProgressItemProps {
+  id: string;
+  title: string;
+  currentValue: number;
+  targetValue: number;
+  level: 'area' | 'subarea' | 'goal';
+  icon?: string;
+  isExpanded: boolean;
+  hasChildren: boolean;
+  onToggle: () => void;
+  onIncrement: () => void;
+  onDecrement: () => void;
+  onUpdateTarget?: (newTarget: number) => void;
+  onClick?: () => void;
+}
+
+function ProgressItem({
+  title,
+  currentValue,
+  targetValue,
+  level,
+  icon,
+  isExpanded,
+  hasChildren,
+  onToggle,
+  onIncrement,
+  onDecrement,
+  onUpdateTarget,
+  onClick
+}: ProgressItemProps) {
+  const progressPercentage = (currentValue / (targetValue || 1)) * 100
+  
+  return (
+    <div className={`${level === 'goal' ? 'ml-12' : level === 'subarea' ? 'ml-6' : ''}`}>
+      <div className="flex items-center gap-1">
+        {hasChildren && (
+          <button
+            className="h-5 w-5 hover:bg-accent rounded p-0.5 -ml-1"
+            onClick={onToggle}
+          >
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </button>
+        )}
+        {!hasChildren && <div className="w-5" />}
+        <div 
+          className={`flex-1 flex items-center gap-1.5 py-0.5 ${level === 'area' ? 'font-bold text-lg' : level === 'subarea' ? 'font-medium' : 'text-sm text-gray-600 hover:text-blue-600 cursor-pointer'}`}
+          onClick={onClick}
+        >
+          {level === 'area' && icon && <span className="text-lg">{icon}</span>}
+          <span>{title}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[45px] text-right">
+            {currentValue}/{targetValue}
+          </span>
+          <button
+            className="h-5 w-5 hover:bg-accent rounded p-0.5"
+            onClick={onDecrement}
+          >
+            <Minus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="h-5 w-5 hover:bg-accent rounded p-0.5"
+            onClick={onIncrement}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+          {onUpdateTarget && (
+            <TargetDialog
+              title={title}
+              currentTarget={targetValue}
+              onUpdateTarget={onUpdateTarget}
+            />
+          )}
+        </div>
+      </div>
+      <Progress value={progressPercentage} className="h-0.5 mt-0.5" />
+    </div>
+  )
+}
+
 export default function ProgressBars() {
-  const { areas, loading } = useGoalSystem()
+  const router = useRouter()
+  const { areas, loading, updateArea, updateSubarea } = useGoalSystem()
+  const supabase = createClient()
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({})
   const [expandedSubareas, setExpandedSubareas] = useState<Record<string, boolean>>({})
   
-  // Current progress for today - areas
-  const [progress, setProgress] = useState<Record<string, number>>(
-    Object.fromEntries(lifeAreas.map(area => [area.id, 0]))
-  )
+  // Initialize areas in database if they don't exist
+  useEffect(() => {
+    const initializeAreas = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-  // Current progress for subareas and goals
-  const [subareaProgress, setSubareaProgress] = useState<Record<string, ProgressState>>({})
-  const [goalProgress, setGoalProgress] = useState<Record<string, ProgressState>>({})
+      // Create areas if they don't exist
+      for (const [areaName] of Object.entries(areaIcons)) {
+        const { data: existingArea } = await supabase
+          .from('life_goal_areas')
+          .select('id')
+          .eq('name', areaName)
+          .eq('user_id', user.id)
+          .single()
 
-  // Daily targets for each area (separate from weekly targets)
-  const [dailyAreaTargets, setDailyAreaTargets] = useState<Record<string, number>>(
-    Object.fromEntries(lifeAreas.map(area => [area.id, area.target]))
-  )
+        if (!existingArea) {
+          await supabase.from('life_goal_areas').insert({
+            user_id: user.id,
+            name: areaName,
+            target_points: 1,
+            current_points: 0
+          })
+        }
+      }
+    }
 
-  // Weekly targets for each area (for the weekly dialog)
-  const [weeklyTargets, setWeeklyTargets] = useState<Record<string, number[]>>(
-    Object.fromEntries(lifeAreas.map(area => [area.id, Array(7).fill(area.target)]))
-  )
+    initializeAreas()
+  }, [])
 
-  // Get current day's target (0 = Monday, 6 = Sunday)
-  const getCurrentDayTarget = (areaId: string) => {
-    return dailyAreaTargets[areaId]
+  const handleIncrement = async (id: string, isSubarea: boolean = false) => {
+    const table = isSubarea ? 'life_goal_subareas' : 'life_goal_areas'
+    
+    const { data: item } = await supabase
+      .from(table)
+      .select('current_points, target_points')
+      .eq('id', id)
+      .single()
+
+    if (!item) return
+
+    const newPoints = Math.min(item.current_points + 1, item.target_points)
+    
+    const { error } = await supabase
+      .from(table)
+      .update({ current_points: newPoints })
+      .eq('id', id)
+
+    if (error) {
+      toast.error('Failed to update points')
+    }
   }
+
+  const handleDecrement = async (id: string, isSubarea: boolean = false) => {
+    const table = isSubarea ? 'life_goal_subareas' : 'life_goal_areas'
+    
+    const { data: item } = await supabase
+      .from(table)
+      .select('current_points')
+      .eq('id', id)
+      .single()
+
+    if (!item) return
+
+    const newPoints = Math.max(item.current_points - 1, 0)
+    
+    const { error } = await supabase
+      .from(table)
+      .update({ current_points: newPoints })
+      .eq('id', id)
+
+    if (error) {
+      toast.error('Failed to update points')
+    }
+  }
+
+  const handleUpdateTarget = async (id: string, newTarget: number, isSubarea: boolean = false) => {
+    try {
+      if (isSubarea) {
+        await updateSubarea(id, { target_points: newTarget });
+      } else {
+        await updateArea(id, { target_points: newTarget });
+      }
+    } catch (error) {
+      console.error('Error updating target:', error);
+      toast.error('Failed to update target');
+    }
+  };
 
   const toggleArea = (areaId: string) => {
     setExpandedAreas(prev => ({
@@ -134,397 +312,86 @@ export default function ProgressBars() {
     }))
   }
 
-  const incrementProgress = (areaId: string) => {
-    setProgress(prev => {
-      const currentTarget = getCurrentDayTarget(areaId)
-      const newValue = Math.min(prev[areaId] + 1, currentTarget)
-      return { ...prev, [areaId]: newValue }
-    })
-  }
-
-  const decrementProgress = (areaId: string) => {
-    setProgress(prev => {
-      const newValue = Math.max(prev[areaId] - 1, 0)
-      return { ...prev, [areaId]: newValue }
-    })
-  }
-
-  const incrementSubareaProgress = (subareaId: string, areaTarget: number) => {
-    setSubareaProgress(prev => {
-      const current = prev[subareaId] || { value: 0, target: Math.min(3, areaTarget) }
-      return {
-        ...prev,
-        [subareaId]: {
-          ...current,
-          value: Math.min(current.value + 1, current.target)
-        }
-      }
-    })
-  }
-
-  const decrementSubareaProgress = (subareaId: string) => {
-    setSubareaProgress(prev => {
-      const current = prev[subareaId] || { value: 0, target: 3 }
-      return {
-        ...prev,
-        [subareaId]: {
-          ...current,
-          value: Math.max(current.value - 1, 0)
-        }
-      }
-    })
-  }
-
-  const incrementGoalProgress = (goalId: string, subareaTarget: number) => {
-    setGoalProgress(prev => {
-      const current = prev[goalId] || { value: 0, target: Math.min(1, subareaTarget) }
-      return {
-        ...prev,
-        [goalId]: {
-          ...current,
-          value: Math.min(current.value + 1, current.target)
-        }
-      }
-    })
-  }
-
-  const decrementGoalProgress = (goalId: string) => {
-    setGoalProgress(prev => {
-      const current = prev[goalId] || { value: 0, target: 1 }
-      return {
-        ...prev,
-        [goalId]: {
-          ...current,
-          value: Math.max(current.value - 1, 0)
-        }
-      }
-    })
-  }
-
-  const handleUpdateTargets = (areaId: string, targets: number[]) => {
-    setWeeklyTargets(prev => ({
-      ...prev,
-      [areaId]: targets
-    }))
-    // Update today's target
-    const today = new Date().getDay()
-    const dayIndex = today === 0 ? 6 : today - 1
-    setDailyAreaTargets(prev => ({
-      ...prev,
-      [areaId]: targets[dayIndex]
-    }))
-  }
-
-  const updateAreaTarget = (areaId: string, newTarget: number) => {
-    setDailyAreaTargets(prev => ({
-      ...prev,
-      [areaId]: newTarget
-    }))
-    
-    // Update subareas if their targets exceed the new area target
-    setSubareaProgress(prev => {
-      const updated = { ...prev }
-      Object.keys(updated).forEach(subareaId => {
-        if (updated[subareaId].target > newTarget) {
-          updated[subareaId] = {
-            ...updated[subareaId],
-            target: newTarget
-          }
-        }
-      })
-      return updated
-    })
-  }
-
-  const updateSubareaTarget = (subareaId: string, newTarget: number, areaTarget: number) => {
-    const constrainedTarget = Math.min(newTarget, areaTarget)
-    setSubareaProgress(prev => ({
-      ...prev,
-      [subareaId]: {
-        ...(prev[subareaId] || { value: 0 }),
-        target: constrainedTarget
-      }
-    }))
-
-    // Update goals if their targets exceed the new subarea target
-    setGoalProgress(prev => {
-      const updated = { ...prev }
-      Object.keys(updated).forEach(goalId => {
-        if (updated[goalId].target > constrainedTarget) {
-          updated[goalId] = {
-            ...updated[goalId],
-            target: constrainedTarget
-          }
-        }
-      })
-      return updated
-    })
-  }
-
-  const updateGoalTarget = (goalId: string, newTarget: number, subareaTarget: number) => {
-    const constrainedTarget = Math.min(newTarget, subareaTarget)
-    setGoalProgress(prev => ({
-      ...prev,
-      [goalId]: {
-        ...(prev[goalId] || { value: 0 }),
-        target: constrainedTarget
-      }
-    }))
-  }
-
-  const handleUpdateAllTargets = (allWeeklyTargets: Record<string, number[]>) => {
-    setWeeklyTargets(allWeeklyTargets)
-    // Update dailyAreaTargets for today
-    const today = new Date().getDay()
-    const todayIndex = today === 0 ? 6 : today - 1
-    setDailyAreaTargets(prev => {
-      const updated = { ...prev }
-      Object.keys(allWeeklyTargets).forEach(id => {
-        if (lifeAreas.some(a => a.id === id)) {
-          updated[id] = allWeeklyTargets[id][todayIndex] || 0
-        }
-      })
-      return updated
-    })
-    // Update subareaProgress and goalProgress for today
-    setSubareaProgress(prev => {
-      const updated = { ...prev }
-      Object.keys(allWeeklyTargets).forEach(id => {
-        if (!lifeAreas.some(a => a.id === id)) {
-          updated[id] = {
-            ...(prev[id] || { value: 0 }),
-            target: allWeeklyTargets[id][todayIndex] || 0
-          }
-        }
-      })
-      return updated
-    })
-    setGoalProgress(prev => {
-      const updated = { ...prev }
-      Object.keys(allWeeklyTargets).forEach(id => {
-        if (!lifeAreas.some(a => a.id === id)) {
-          updated[id] = {
-            ...(prev[id] || { value: 0 }),
-            target: allWeeklyTargets[id][todayIndex] || 0
-          }
-        }
-      })
-      return updated
-    })
-  }
-
-  const renderProgressControls = (
-    id: string,
-    currentValue: number,
-    targetValue: number,
-    onIncrement: () => void,
-    onDecrement: () => void,
-    title: string,
-    maxTarget?: number,
-    onUpdateTarget?: (newTarget: number) => void
-  ) => (
-    <div className="flex items-center gap-2">
-      <span>{currentValue}/{targetValue} pts</span>
-      <div className="flex gap-1">
-        <Button 
-          variant="outline" 
-          size="icon" 
-          className="h-6 w-6"
-          onClick={onDecrement}
-          disabled={currentValue === 0}
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
-        <Button 
-          variant="outline" 
-          size="icon" 
-          className="h-6 w-6"
-          onClick={onIncrement}
-          disabled={currentValue === targetValue}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-      {onUpdateTarget && (
-        <TargetDialog
-          title={title}
-          currentTarget={targetValue}
-          maxTarget={maxTarget}
-          onUpdateTarget={onUpdateTarget}
-        />
-      )}
-    </div>
-  )
-
-  const renderGoal = (goal: LifeGoal, subareaTarget: number) => {
-    const goalState = goalProgress[goal.id] || { value: 0, target: Math.min(1, subareaTarget) }
-    const progressPercentage = (goalState.value / goalState.target) * 100
-    const router = require('next/navigation').useRouter();
-
-    return (
-      <div key={goal.id} className="space-y-1">
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <button
-            className="text-blue-600 hover:underline text-left"
-            onClick={() => router.push(`/dashboard/goal?tab=goals&goal=${goal.id}`)}
-            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-            type="button"
-          >
-            {goal.title}
-          </button>
-          {renderProgressControls(
-            goal.id,
-            goalState.value,
-            goalState.target,
-            () => incrementGoalProgress(goal.id, subareaTarget),
-            () => decrementGoalProgress(goal.id),
-            goal.title,
-            subareaTarget,
-            (newTarget) => updateGoalTarget(goal.id, newTarget, subareaTarget)
-          )}
-        </div>
-        <Progress value={progressPercentage} className="h-1" />
-      </div>
-    )
+  const handleGoalClick = (areaId: string, subareaId?: string, goalId?: string) => {
+    if (goalId) {
+      router.push(`/dashboard/goal?tab=goals&goal=${goalId}&subarea=${subareaId}`)
+    } else if (subareaId) {
+      router.push(`/dashboard/goal?tab=goals&subarea=${subareaId}`)
+    } else {
+      router.push(`/dashboard/goal?tab=goals&area=${areaId}`)
+    }
   }
 
   if (loading) {
-    return <div>Loading areas...</div>
+    return <div>Loading...</div>
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold">Daily Progress</h2>
-        <WeeklyTargetsDialog 
-          areas={lifeAreas} 
-          onUpdateTargets={handleUpdateTargets}
-          currentDayTargets={dailyAreaTargets}
-          subareaTargets={subareaProgress}
-          goalTargets={goalProgress}
-          onUpdateSubareaTarget={(subareaId, target) => {
-            setSubareaProgress(prev => ({
-              ...prev,
-              [subareaId]: {
-                ...(prev[subareaId] || { value: 0 }),
-                target
-              }
-            }))
-          }}
-          onUpdateGoalTarget={(goalId, target) => {
-            setGoalProgress(prev => ({
-              ...prev,
-              [goalId]: {
-                ...(prev[goalId] || { value: 0 }),
-                target
-              }
-            }))
-          }}
-          onUpdateAllTargets={handleUpdateAllTargets}
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <SetTargetsDialog 
+          areas={areas} 
+          onUpdateTargets={handleUpdateTarget}
         />
       </div>
 
-      {lifeAreas.map((area) => {
-        const currentProgress = progress[area.id]
-        const currentTarget = getCurrentDayTarget(area.id)
-        const progressPercentage = (currentProgress / currentTarget) * 100
-        const isExpanded = expandedAreas[area.id]
-        const goalSystemArea = areas.find(a => a.name.includes(area.name.split(' ')[1])) // Match by second word
-        const subareas = goalSystemArea?.subareas || []
-        
-        return (
-          <div key={area.id} className="space-y-2">
-            {/* Main Area Progress */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-sm mb-1">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    onClick={() => toggleArea(area.id)}
-                  >
-                    {subareas.length > 0 && (
-                      isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )
-                    )}
-                  </Button>
-                  <span>{area.name}</span>
-                </div>
-                {renderProgressControls(
-                  area.id,
-                  currentProgress,
-                  currentTarget,
-                  () => incrementProgress(area.id),
-                  () => decrementProgress(area.id),
-                  area.name,
-                  undefined,
-                  (newTarget) => updateAreaTarget(area.id, newTarget)
-                )}
+      <div className="space-y-1">
+        {areas.map((area) => (
+          <div key={area.id} className="space-y-1">
+            <ProgressItem
+              id={area.id}
+              title={area.name}
+              currentValue={area.current_points || 0}
+              targetValue={area.target_points || 0}
+              onIncrement={() => handleIncrement(area.id)}
+              onDecrement={() => handleDecrement(area.id)}
+              onUpdateTarget={(newTarget) => handleUpdateTarget(area.id, newTarget)}
+              icon={areaIcons[area.name]}
+              level="area"
+              isExpanded={expandedAreas[area.id] || false}
+              onToggle={() => toggleArea(area.id)}
+              hasChildren={area.subareas.length > 0}
+              onClick={() => handleGoalClick(area.id)}
+            />
+            
+            {expandedAreas[area.id] && area.subareas.map((subarea) => (
+              <div key={subarea.id} className="space-y-1">
+                <ProgressItem
+                  id={subarea.id}
+                  title={subarea.name}
+                  currentValue={subarea.current_points || 0}
+                  targetValue={subarea.target_points || 0}
+                  onIncrement={() => handleIncrement(subarea.id)}
+                  onDecrement={() => handleDecrement(subarea.id)}
+                  onUpdateTarget={(newTarget) => handleUpdateTarget(subarea.id, newTarget, true)}
+                  level="subarea"
+                  isExpanded={expandedSubareas[subarea.id] || false}
+                  onToggle={() => toggleSubarea(subarea.id)}
+                  hasChildren={subarea.goals.length > 0}
+                  onClick={() => handleGoalClick(area.id, subarea.id)}
+                />
+
+                {expandedSubareas[subarea.id] && subarea.goals.map((goal) => (
+                  <ProgressItem
+                    key={goal.id}
+                    id={goal.id}
+                    title={goal.title}
+                    currentValue={goal.current_points || 0}
+                    targetValue={goal.target_points || 0}
+                    onIncrement={() => handleIncrement(goal.id)}
+                    onDecrement={() => handleDecrement(goal.id)}
+                    level="goal"
+                    isExpanded={false}
+                    onToggle={() => {}}
+                    hasChildren={false}
+                    onClick={() => handleGoalClick(area.id, subarea.id, goal.id)}
+                  />
+                ))}
               </div>
-              <Progress value={progressPercentage} className="h-2" />
-            </div>
-
-            {/* Subareas */}
-            {isExpanded && subareas.length > 0 && (
-              <div className="pl-8 space-y-3 mt-3">
-                {subareas.map((subarea) => {
-                  const isSubareaExpanded = expandedSubareas[subarea.id]
-                  const subareaState = subareaProgress[subarea.id] || { value: 0, target: Math.min(3, currentTarget) }
-                  const subareaProgressPercentage = (subareaState.value / subareaState.target) * 100
-
-                  return (
-                    <div key={subarea.id} className="space-y-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => toggleSubarea(subarea.id)}
-                            >
-                              {subarea.goals.length > 0 && (
-                                isSubareaExpanded ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )
-                              )}
-                            </Button>
-                            <span>{subarea.name}</span>
-                          </div>
-                          {renderProgressControls(
-                            subarea.id,
-                            subareaState.value,
-                            subareaState.target,
-                            () => incrementSubareaProgress(subarea.id, currentTarget),
-                            () => decrementSubareaProgress(subarea.id),
-                            subarea.name,
-                            currentTarget,
-                            (newTarget) => updateSubareaTarget(subarea.id, newTarget, currentTarget)
-                          )}
-                        </div>
-                        <Progress value={subareaProgressPercentage} className="h-1.5" />
-                      </div>
-
-                      {/* Goals */}
-                      {isSubareaExpanded && subarea.goals.length > 0 && (
-                        <div className="pl-8 space-y-2 mt-2">
-                          {subarea.goals.map(goal => renderGoal(goal, subareaState.target))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            ))}
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 } 
