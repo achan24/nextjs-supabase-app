@@ -213,7 +213,7 @@ function ProgressItem({
           )}
         </div>
       </div>
-      <Progress value={progressPercentage} className="h-0.5 mt-0.5" />
+      <Progress value={progressPercentage} className="h-1 mt-0.5" />
     </div>
   )
 }
