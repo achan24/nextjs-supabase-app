@@ -10,6 +10,7 @@ import { ActiveSequenceIndicator } from '@/components/ActiveSequenceIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import Link from 'next/link';
 import { initializeAutoSave } from '@/services/characterProgressService';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function DashboardLayout({
   children,
@@ -17,18 +18,23 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const notificationContext = useNotifications();
+  const { user } = useAuth();
 
   useEffect(() => {
     const reminderService = new ReminderService(notificationContext);
     reminderService.startCheckingReminders();
 
     // Initialize auto-save for character progress
-    initializeAutoSave();
+    let cleanup: (() => void) | undefined;
+    if (user?.id) {
+      cleanup = initializeAutoSave(user.id);
+    }
 
     return () => {
       reminderService.stopCheckingReminders();
+      if (cleanup) cleanup();
     };
-  }, [notificationContext]);
+  }, [user]);
 
   return (
     <ActiveSequenceProvider>
