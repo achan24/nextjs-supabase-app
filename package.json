@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/copy-pdf-worker.js && next dev",
+    "build": "node scripts/copy-pdf-worker.js && next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -48,6 +48,7 @@
     "lodash-es": "^4.17.21",
     "lucide-react": "^0.503.0",
     "next": "^13.5.6",
+    "pdfjs-dist": "^3.11.174",
     "re-resizable": "^6.11.2",
     "react": "^18.2.0",
     "react-beautiful-dnd": "^13.1.1",

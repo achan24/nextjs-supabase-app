@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input"
 import { LifeGoalArea, LifeGoalSubarea } from '@/types/goal'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
+import { resetAllDailyPoints, savePointsToDate } from '@/services/characterProgressService'
 
 const areaIcons: Record<string, string> = {
   'Work & Learning': '📚',
@@ -167,43 +169,58 @@ function ProgressItem({
   onUpdateTarget,
   onClick
 }: ProgressItemProps) {
-  const progressPercentage = (currentValue / (targetValue || 1)) * 100
-  
+  const progressPercentage = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
+
   return (
-    <div className={`${level === 'goal' ? 'ml-12' : level === 'subarea' ? 'ml-6' : ''}`}>
-      <div className="flex items-center gap-1">
-        {hasChildren && (
-          <button
-            className="h-5 w-5 hover:bg-accent rounded p-0.5 -ml-1"
-            onClick={onToggle}
-          >
-            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
-        )}
-        {!hasChildren && <div className="w-5" />}
-        <div 
-          className={`flex-1 flex items-center gap-1.5 py-0.5 ${level === 'area' ? 'font-bold text-lg' : level === 'subarea' ? 'font-medium' : 'text-sm text-gray-600 hover:text-blue-600 cursor-pointer'}`}
-          onClick={onClick}
-        >
-          {level === 'area' && icon && <span className="text-lg">{icon}</span>}
-          <span>{title}</span>
+    <div className={`pl-${level === 'goal' ? 8 : level === 'subarea' ? 4 : 0}`}>
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <div className="flex items-center gap-1">
+            {hasChildren && (
+              <button
+                onClick={onToggle}
+                className="p-0.5 hover:bg-gray-100 rounded"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+            )}
+            <div
+              className={`flex items-center gap-2 flex-1 ${onClick ? 'cursor-pointer hover:text-blue-600' : ''}`}
+              onClick={onClick}
+            >
+              {icon && <span className={level === 'area' ? 'text-lg' : ''}>{icon}</span>}
+              <span className={`
+                ${level === 'area' ? 'text-lg font-bold' : ''}
+                ${level === 'subarea' ? 'font-medium' : ''}
+                ${level === 'goal' ? 'text-sm text-gray-600' : ''}
+              `}>{title}</span>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[45px] text-right">
-            {currentValue}/{targetValue}
-          </span>
-          <button
-            className="h-5 w-5 hover:bg-accent rounded p-0.5"
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`${level === 'area' ? 'h-7 w-7' : 'h-6 w-6'}`}
             onClick={onDecrement}
           >
-            <Minus className="h-3.5 w-3.5" />
-          </button>
-          <button
-            className="h-5 w-5 hover:bg-accent rounded p-0.5"
+            <Minus className={`${level === 'area' ? 'h-5 w-5' : 'h-4 w-4'}`} />
+          </Button>
+          <span className={`text-sm w-12 text-center ${level === 'goal' ? 'text-gray-600' : ''}`}>
+            {currentValue} / {targetValue}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`${level === 'area' ? 'h-7 w-7' : 'h-6 w-6'}`}
             onClick={onIncrement}
           >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+            <Plus className={`${level === 'area' ? 'h-5 w-5' : 'h-4 w-4'}`} />
+          </Button>
           {onUpdateTarget && (
             <TargetDialog
               title={title}
@@ -220,10 +237,13 @@ function ProgressItem({
 
 export default function ProgressBars() {
   const router = useRouter()
-  const { areas, loading, updateArea, updateSubarea, updateGoal } = useGoalSystem()
+  const { areas, loading, updateArea, updateSubarea, updateGoal, fetchAreas } = useGoalSystem()
   const supabase = createClient()
   const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({})
   const [expandedSubareas, setExpandedSubareas] = useState<Record<string, boolean>>({})
+  const { user } = useAuth()
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [saveYesterdayDialogOpen, setSaveYesterdayDialogOpen] = useState(false)
   
   const handleUpdateTarget = async (id: string, newTarget: number, type: 'area' | 'subarea' | 'goal' = 'area') => {
     try {
@@ -307,20 +327,109 @@ export default function ProgressBars() {
     }
   }
 
+  const handleResetPoints = async () => {
+    console.log('[DEBUG] handleResetPoints called');
+    console.log('[DEBUG] user:', user);
+    if (!user?.id) {
+      console.log('[DEBUG] No user ID found');
+      return;
+    }
+    try {
+      console.log('[DEBUG] Calling resetAllDailyPoints with user ID:', user.id);
+      await resetAllDailyPoints(user.id);
+      console.log('[DEBUG] resetAllDailyPoints completed');
+      // Refresh the areas data by calling fetchAreas from useGoalSystem
+      await fetchAreas();
+      console.log('[DEBUG] fetchAreas completed');
+      toast.success('Daily points have been reset.');
+      setResetDialogOpen(false);
+    } catch (error) {
+      console.error('[DEBUG] Error in handleResetPoints:', error);
+      toast.error('Failed to reset daily points. Please try again.');
+    }
+  };
+
+  const handleSaveToYesterday = async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const formattedDate = yesterday.toISOString().split('T')[0];
+    
+    try {
+      await savePointsToDate(formattedDate);
+      toast.success('Points saved to yesterday');
+      setSaveYesterdayDialogOpen(false);
+    } catch (error) {
+      console.error('Error saving points:', error);
+      toast.error('Failed to save points');
+    }
+  };
+
   if (loading) {
     return <div>Loading...</div>
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <SetTargetsDialog 
-          areas={areas} 
-          onUpdateTargets={handleUpdateTarget}
-        />
+        <div className="flex gap-2">
+          <SetTargetsDialog areas={areas} onUpdateTargets={handleUpdateTarget} />
+          <Dialog open={saveYesterdayDialogOpen} onOpenChange={setSaveYesterdayDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                Save as Yesterday's Points
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Save Current Points as Yesterday's</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <p>Are you sure you want to save current points as yesterday's progress? This will overwrite any existing data for yesterday.</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSaveYesterdayDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveToYesterday}>
+                  Save to Yesterday
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                console.log('[DEBUG] Reset button clicked');
+                setResetDialogOpen(true);
+              }}
+            >
+              Reset Daily Points
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset Daily Points?</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">Are you sure you want to reset all daily points to zero? This cannot be undone for today.</div>
+            <Button 
+              onClick={() => {
+                console.log('[DEBUG] Reset confirmation clicked');
+                handleResetPoints();
+              }} 
+              variant="destructive"
+            >
+              Yes, Reset
+            </Button>
+            <Button onClick={() => setResetDialogOpen(false)} variant="outline">Cancel</Button>
+          </DialogContent>
+        </Dialog>
       </div>
 
-                      <div className="space-y-1">
+      <div className="space-y-1">
         {areas.map((area) => (
           <div key={area.id} className="space-y-1">
             <ProgressItem

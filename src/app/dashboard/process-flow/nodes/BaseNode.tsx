@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { memo, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import ClozeText from '../components/ClozeText';
 import { ResizableBox } from 'react-resizable';
@@ -20,7 +20,7 @@ interface ClozeStats {
 
 export interface BaseNodeData {
   label: string;
-  description?: string;
+  description?: string | ReactNode;
   status?: 'ready' | 'active' | 'completed';
   isTestMode?: boolean;
   clozeStats?: Record<string, ClozeStats>;
@@ -77,6 +77,12 @@ const nodeTypeStyles = {
     bgClass: 'bg-green-50',
     borderClass: 'border-green-200',
     selectedBorderClass: 'border-green-500',
+  },
+  attachment: {
+    icon: '📎',
+    bgClass: 'bg-pink-50',
+    borderClass: 'border-pink-200',
+    selectedBorderClass: 'border-pink-500',
   },
 };
 
@@ -235,46 +241,59 @@ const NodeContent = ({
   onImageResize,
   onImageDelete
 }: { 
-  text: string; 
+  text: string | ReactNode; 
   isTestMode: boolean;
   onImageResize?: (originalMarkdown: string, width: number, height: number) => void;
   onImageDelete?: (originalMarkdown: string) => void;
 }) => {
-  // Find image markdown in the text - fixed regex without escaped backslashes
-  const parts = text.split(/(!\[.*?\]\(.*?\))/g);
+  // If text is a ReactNode, render it directly
+  if (typeof text !== 'string') {
+    return <div className="text-sm">{text}</div>;
+  }
+
+  // Handle string content with markdown and images
+  const [content, setContent] = useState(text);
+  
+  useEffect(() => {
+    setContent(text);
+  }, [text]);
+
+  const handleImageResize = useCallback((originalMarkdown: string, width: number, height: number) => {
+    onImageResize?.(originalMarkdown, width, height);
+  }, [onImageResize]);
+
+  const handleImageDelete = useCallback((originalMarkdown: string) => {
+    onImageDelete?.(originalMarkdown);
+  }, [onImageDelete]);
+
+  // Extract image markdown and replace with custom component
+  const parts = content.split(/(!?\[.*?\]\(.*?\))/);
   
   return (
-    <>
+    <div className="text-sm">
       {parts.map((part, index) => {
-        // Match both standard markdown and markdown with dimensions
-        const imageMatch = part.match(/!\[(.*?)(?:\|width=(\d+)px height=(\d+)px)?\]\((.*?)\)/);
-        if (imageMatch) {
-          const [fullMatch, alt, width, height, src] = imageMatch;
+        if (part.match(/^!\[.*?\]\(.*?\)$/)) {
+          const alt = part.match(/\[(.*?)\]/)?.[1] || '';
+          const src = part.match(/\((.*?)\)/)?.[1] || '';
+          
           return (
-            <ResizableImage 
-              key={index} 
-              src={src} 
+            <ResizableImage
+              key={index}
+              src={src}
               alt={alt}
-              initialWidth={width ? parseInt(width) : 200}
-              initialHeight={height ? parseInt(height) : 200}
-              onResize={(width, height) => {
-                onImageResize?.(fullMatch, width, height);
-              }}
-              onDelete={() => {
-                onImageDelete?.(fullMatch);
-              }}
+              onResize={(width, height) => handleImageResize(part, width, height)}
+              onDelete={() => handleImageDelete(part)}
             />
           );
         }
-        return (
-          <ClozeText 
-            key={index}
-            text={part} 
-            isTestMode={isTestMode}
-          />
-        );
+        
+        if (isTestMode && part.match(/\[.*?\]\(.*?\)/)) {
+          return <ClozeText key={index} text={part} isTestMode={isTestMode} />;
+        }
+        
+        return <span key={index}>{part}</span>;
       })}
-    </>
+    </div>
   );
 };
 
@@ -286,40 +305,33 @@ const BaseNode = ({
   type = 'task',
 }: NodeProps<BaseNodeData>) => {
   const styles = nodeTypeStyles[type as keyof typeof nodeTypeStyles] || nodeTypeStyles.task;
-  const { setNodes } = useReactFlow();
+  const { setNodes, getNode } = useReactFlow();
+  const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedDescription, setEditedDescription] = useState(data.description || '');
+  const [editedLabel, setEditedLabel] = useState(data.label || '');
+  const [showHandles, setShowHandles] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 200, height: 'auto' });
+  const nodeRef = useRef<HTMLDivElement>(null);
 
+  // Only apply string operations if description is a string
   const handleImageResize = useCallback((originalMarkdown: string, width: number, height: number) => {
-    if (!data.description) return;
-    
-    // Extract the alt and src from the original markdown, handling both formats
-    const match = originalMarkdown.match(/!\[(.*?)(?:\|width=\d+px height=\d+px)?\]\((.*?)\)/);
-    if (!match) return;
-    
-    const [_, alt, src] = match;
-    
-    // Create new markdown with the width and height as style parameters
-    const newMarkdown = `![${alt}|width=${Math.round(width)}px height=${Math.round(height)}px](${src})`;
-    const newDescription = data.description.replace(originalMarkdown, newMarkdown);
-    
-    setNodes(nodes => 
-      nodes.map(node => 
-        node.id === id ? { ...node, data: { ...node.data, description: newDescription } } : node
-      )
-    );
-  }, [data.description, id, setNodes]);
+    if (typeof data.description === 'string') {
+      const newDescription = data.description.replace(
+        originalMarkdown,
+        originalMarkdown.replace(/\)$/, `|${width}x${height})`)
+      );
+      setEditedDescription(newDescription);
+    }
+  }, [data.description]);
 
   const handleImageDelete = useCallback((originalMarkdown: string) => {
-    if (!data.description) return;
-    
-    // Remove the image markdown from the description
-    const newDescription = data.description.replace(originalMarkdown, '');
-    
-    setNodes(nodes => 
-      nodes.map(node => 
-        node.id === id ? { ...node, data: { ...node.data, description: newDescription } } : node
-      )
-    );
-  }, [data.description, id, setNodes]);
+    if (typeof data.description === 'string') {
+      const newDescription = data.description.replace(originalMarkdown, '');
+      setEditedDescription(newDescription);
+    }
+  }, [data.description]);
 
   const statusColors = {
     ready: 'bg-yellow-100 border-yellow-400',

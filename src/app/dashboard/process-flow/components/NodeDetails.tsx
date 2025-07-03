@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { toast } from 'sonner';
 import { useTaskTimer } from '@/contexts/TaskTimerContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface CompletionRecord {
   completedAt: number;
@@ -56,6 +58,8 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [notes, setNotes] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [attachments, setAttachments] = useState<Array<{ name: string; url: string; type: string; }>>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // State for link node editing
   const HARDCODED_USER_ID = '875d44ba-8794-4d12-ba86-48e5e90dc796';
@@ -70,6 +74,7 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
     if (node) {
       setLabel(node.data.label || '');
       setDescription(node.data.description || '');
+      setAttachments(node.data.attachments || []);
     }
   }, [node]);
 
@@ -528,6 +533,55 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
       alert('Failed to upload image: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const getViewerUrl = (url: string, type: string): string => {
+    if (type === 'application/pdf') {
+      return url;
+    }
+    // Google Docs Viewer for Office files
+    if (
+      type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      type === 'application/msword' ||
+      type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      type === 'application/vnd.ms-powerpoint'
+    ) {
+      return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+    }
+    return url; // Default to direct URL if not a supported preview type
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !node) return;
+    setIsUploading(true);
+    try {
+      const filename = `${node.id}/${Date.now()}-${file.name}`;
+      const { data: uploadData, error } = await supabase.storage
+        .from('attachments')
+        .upload(filename, file);
+      if (error) throw error;
+
+      // Store canonical URL format instead of signed URL
+      const canonicalUrl = `supabase://attachments/${filename}`;
+      const newAttachment = {
+        name: file.name,
+        url: canonicalUrl,
+        type: file.type,
+      };
+      const newAttachments = [...attachments, newAttachment];
+      setAttachments(newAttachments);
+      // Update node data
+      updateNode(node.id, {
+        attachments: newAttachments,
+      });
+      toast.success('File uploaded successfully');
+    } catch (err) {
+      toast.error('Upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -1335,6 +1389,42 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
           </div>
         </div>
       </div>
+
+      {/* Attachment handling for attachment nodes */}
+      {node.type === 'attachment' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+              {isUploading ? 'Uploading...' : 'Upload Attachment'}
+            </Button>
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+          <div className="space-y-4">
+            {attachments.map((att, idx) => (
+              <div key={idx} className="border rounded p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">{att.name}</span>
+                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">
+                    Download
+                  </a>
+                </div>
+                {att.type === 'application/pdf' && (
+                  <iframe src={att.url} className="w-full h-96 border rounded" title={att.name} />
+                )}
+                {(att.type.startsWith('application/vnd.openxmlformats-officedocument') || att.type.startsWith('application/msword') || att.type.startsWith('application/vnd.ms-powerpoint')) && (
+                  <iframe src={getViewerUrl(att.url, att.type)} className="w-full h-96 border rounded" title={att.name} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

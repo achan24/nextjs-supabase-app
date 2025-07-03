@@ -42,6 +42,7 @@ import FlashcardReview from './components/FlashcardReview';
 import LinkNode from './nodes/LinkNode';
 import NoteReferenceNode from './nodes/NoteReferenceNode';
 import ChecklistNode from './nodes/ChecklistNode';
+import AttachmentNode from './nodes/AttachmentNode';
 
 interface ProcessFlow {
   id: string;
@@ -65,6 +66,7 @@ const nodeTypes = {
   link: LinkNode,
   noteRef: NoteReferenceNode,
   checklist: ChecklistNode,
+  attachment: AttachmentNode,
 };
 
 const edgeTypes = {
