@@ -2,10 +2,15 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-    };
+  webpack: (config, { isServer }) => {
+    // Add fallback for 'canvas' module
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        canvas: false,
+      };
+    }
+
     return config;
   },
   images: {
