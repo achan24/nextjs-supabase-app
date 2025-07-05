@@ -6,4 +6,13 @@ declare module 'supports-color' {
 declare module 'debug' {
   const debug: any;
   export = debug;
+}
+
+declare module 'pdfjs-dist/build/pdf' {
+  export * from 'pdfjs-dist';
+}
+
+declare module 'pdfjs-dist/web/pdf_viewer.css' {
+  const content: any;
+  export default content;
 } 

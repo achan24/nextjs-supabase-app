@@ -1,13 +1,17 @@
+'use client';
+
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-// Import PDF.js properly
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
+// Import PDF.js web version
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import 'pdfjs-dist/web/pdf_viewer.css';
 
 // Set worker path - using local worker file
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+}
 
 interface PDFInlineViewerProps {
   url: string;
@@ -24,6 +28,8 @@ export function PDFInlineViewer({ url, height = 300 }: PDFInlineViewerProps) {
     let cancelled = false;
 
     async function renderPDF() {
+      if (typeof window === 'undefined') return; // Skip on server-side
+
       setLoading(true);
       setError(null);
       try {
@@ -44,17 +50,8 @@ export function PDFInlineViewer({ url, height = 300 }: PDFInlineViewerProps) {
           pdfUrl = signedUrlData.signedUrl;
         }
 
-        // Fetch the PDF with CORS headers
-        const response = await fetch(pdfUrl, {
-          mode: 'cors',
-          credentials: 'include',
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch PDF');
-        const arrayBuffer = await response.arrayBuffer();
-
-        // Load PDF document using array buffer
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        // Load PDF document
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
         const pdf = await loadingTask.promise;
         
         if (cancelled) return;
