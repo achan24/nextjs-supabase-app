@@ -3,6 +3,8 @@ import { Progress } from '@/components/ui/progress'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { getCharacterProgress } from '@/services/characterService'
+import { useAuth } from '@/hooks/useAuth'
 
 interface CharacterData {
   name: string;
@@ -23,11 +25,12 @@ interface TopProgress {
 export default function CharacterCard() {
   const router = useRouter()
   const { areas } = useGoalSystem()
+  const { user } = useAuth()
   const [characterData, setCharacterData] = useState<CharacterData>({
     name: 'Your Character',
-    level: 5,
-    xp: 750,
-    nextLevelXp: 1000,
+    level: 1,
+    xp: 0,
+    nextLevelXp: 200,
     overallScore: 85,
     traits: [
       { name: 'Discipline', value: 75 },
@@ -37,6 +40,21 @@ export default function CharacterCard() {
     ]
   })
   const [topProgress, setTopProgress] = useState<TopProgress | null>(null)
+
+  useEffect(() => {
+    if (user?.id) {
+      getCharacterProgress(user.id).then(data => {
+        setCharacterData(prev => ({
+          ...prev,
+          level: data.level,
+          xp: data.xp,
+          nextLevelXp: data.requiredXP
+        }))
+      }).catch(error => {
+        console.error('Error fetching character data:', error)
+      })
+    }
+  }, [user?.id])
 
   useEffect(() => {
     // Find the top daily progress from areas

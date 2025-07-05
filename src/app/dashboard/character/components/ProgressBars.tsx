@@ -13,6 +13,7 @@ import { LifeGoalArea, LifeGoalSubarea } from '@/types/goal'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { resetAllDailyPoints, savePointsToDate } from '@/services/characterProgressService'
+import { updateXPFromPoints } from '@/services/characterService'
 
 const areaIcons: Record<string, string> = {
   'Work & Learning': '📚',
@@ -268,14 +269,26 @@ export default function ProgressBars() {
         current = subarea?.current_points || 0;
         console.log('[INCREMENT SUBAREA]', { id, current, next: current + 1 });
         await updateSubarea(id, { current_points: current + 1 });
+        // Award XP for subarea progress
+        if (user?.id) {
+          await updateXPFromPoints(user.id, 1);
+        }
       } else if (type === 'goal') {
         const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
         current = goal?.current_points || 0;
         await updateGoal(id, { current_points: current + 1 });
+        // Award XP for goal progress
+        if (user?.id) {
+          await updateXPFromPoints(user.id, 1);
+        }
       } else {
         const area = areas.find(a => a.id === id);
         current = area?.current_points || 0;
         await updateArea(id, { current_points: current + 1 });
+        // Award XP for area progress
+        if (user?.id) {
+          await updateXPFromPoints(user.id, 1);
+        }
       }
     } catch (error) {
       toast.error('Failed to increment points');
@@ -288,15 +301,33 @@ export default function ProgressBars() {
       if (type === 'subarea') {
         const subarea = areas.flatMap(a => a.subareas).find(s => s.id === id);
         current = subarea?.current_points || 0;
-        await updateSubarea(id, { current_points: Math.max(current - 1, 0) });
+        if (current > 0) {
+          await updateSubarea(id, { current_points: current - 1 });
+          // Deduct XP for subarea progress
+          if (user?.id) {
+            await updateXPFromPoints(user.id, -1);
+          }
+        }
       } else if (type === 'goal') {
         const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
         current = goal?.current_points || 0;
-        await updateGoal(id, { current_points: Math.max(current - 1, 0) });
+        if (current > 0) {
+          await updateGoal(id, { current_points: current - 1 });
+          // Deduct XP for goal progress
+          if (user?.id) {
+            await updateXPFromPoints(user.id, -1);
+          }
+        }
       } else {
         const area = areas.find(a => a.id === id);
         current = area?.current_points || 0;
-        await updateArea(id, { current_points: Math.max(current - 1, 0) });
+        if (current > 0) {
+          await updateArea(id, { current_points: current - 1 });
+          // Deduct XP for area progress
+          if (user?.id) {
+            await updateXPFromPoints(user.id, -1);
+          }
+        }
       }
     } catch (error) {
       toast.error('Failed to decrement points');
@@ -337,6 +368,11 @@ export default function ProgressBars() {
     try {
       console.log('[DEBUG] Calling resetAllDailyPoints with user ID:', user.id);
       await resetAllDailyPoints(user.id);
+      // Reset character XP since it's just for today's progress
+      await supabase
+        .from('characters')
+        .update({ xp: 0, level: 1 })
+        .eq('user_id', user.id);
       console.log('[DEBUG] resetAllDailyPoints completed');
       // Refresh the areas data by calling fetchAreas from useGoalSystem
       await fetchAreas();
