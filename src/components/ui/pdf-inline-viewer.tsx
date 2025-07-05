@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-// Import PDF.js web version
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+// Import PDF.js webpack build
+import * as pdfjsLib from 'pdfjs-dist/webpack';
 import { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
 import 'pdfjs-dist/web/pdf_viewer.css';
 

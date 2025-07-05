@@ -5,7 +5,7 @@ const path = require('path');
 const packageJson = require('../package.json');
 const pdfjsVersion = packageJson.dependencies['pdfjs-dist'].replace('^', '');
 
-// Source path in node_modules - using web version
+// Source path in node_modules - using webpack worker
 const workerSrc = path.join(
   __dirname,
   '../node_modules/pdfjs-dist/build/pdf.worker.min.js'
