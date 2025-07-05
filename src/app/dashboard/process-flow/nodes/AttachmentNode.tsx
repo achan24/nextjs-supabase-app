@@ -4,7 +4,9 @@ import { memo, useState, ReactNode } from 'react';
 import { NodeProps } from 'reactflow';
 import BaseNode, { BaseNodeData } from './BaseNode';
 import { DocumentViewer } from '@/components/ui/document-viewer';
-import { PDFInlineViewer } from '@/components/ui/pdf-inline-viewer';
+import dynamic from 'next/dynamic';
+
+const PDFInlineViewer = dynamic(() => import('@/components/ui/pdf-inline-viewer').then(mod => mod.PDFInlineViewer), { ssr: false });
 
 export interface AttachmentNodeData extends Omit<BaseNodeData, 'description'> {
   description?: ReactNode;
