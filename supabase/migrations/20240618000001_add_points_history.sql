@@ -50,6 +50,14 @@ create policy "Users can insert own area points history"
     and user_id = auth.uid()
   ));
 
+create policy "Users can update own area points history"
+  on area_points_history for update
+  using (exists (
+    select 1 from life_goal_areas
+    where id = area_points_history.area_id
+    and user_id = auth.uid()
+  ));
+
 -- Create policies for subarea points history
 create policy "Users can view own subarea points history"
   on subarea_points_history for select
@@ -63,6 +71,15 @@ create policy "Users can view own subarea points history"
 create policy "Users can insert own subarea points history"
   on subarea_points_history for insert
   with check (exists (
+    select 1 from life_goal_areas
+    join life_goal_subareas on life_goal_areas.id = life_goal_subareas.area_id
+    where life_goal_subareas.id = subarea_points_history.subarea_id
+    and life_goal_areas.user_id = auth.uid()
+  ));
+
+create policy "Users can update own subarea points history"
+  on subarea_points_history for update
+  using (exists (
     select 1 from life_goal_areas
     join life_goal_subareas on life_goal_areas.id = life_goal_subareas.area_id
     where life_goal_subareas.id = subarea_points_history.subarea_id
@@ -83,6 +100,16 @@ create policy "Users can view own goal points history"
 create policy "Users can insert own goal points history"
   on goal_points_history for insert
   with check (exists (
+    select 1 from life_goal_areas
+    join life_goal_subareas on life_goal_areas.id = life_goal_subareas.area_id
+    join life_goals on life_goal_subareas.id = life_goals.subarea_id
+    where life_goals.id = goal_points_history.goal_id
+    and life_goal_areas.user_id = auth.uid()
+  ));
+
+create policy "Users can update own goal points history"
+  on goal_points_history for update
+  using (exists (
     select 1 from life_goal_areas
     join life_goal_subareas on life_goal_areas.id = life_goal_subareas.area_id
     join life_goals on life_goal_subareas.id = life_goals.subarea_id

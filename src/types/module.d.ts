@@ -19,4 +19,8 @@ declare module 'pdfjs-dist/webpack' {
 declare module 'pdfjs-dist/web/pdf_viewer.css' {
   const content: any;
   export default content;
+}
+
+declare module 'pdfjs-dist/build/pdf.mjs' {
+  export * from 'pdfjs-dist';
 } 

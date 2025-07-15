@@ -3,13 +3,20 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   webpack: (config, { isServer }) => {
-    // Add fallback for 'canvas' module
+    // Handle canvas and worker_threads modules
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         canvas: false,
+        worker_threads: false,
       };
     }
+
+    // Prevent webpack from trying to bundle the PDF.js worker
+    config.module.rules.push({
+      test: /pdf\.worker\.(min\.)?js/,
+      type: 'asset/resource',
+    });
 
     return config;
   },

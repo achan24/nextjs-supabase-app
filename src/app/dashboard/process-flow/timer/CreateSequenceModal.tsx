@@ -236,8 +236,8 @@ export function CreateSequenceModal({
           </Card>
 
           {/* Sequence Building */}
-          <div className="flex flex-col h-full">
-            <Card className="p-4 flex-1 overflow-y-auto">
+          <div className="flex flex-col h-full overflow-y-auto">
+            <Card className="p-4">
               <h2 className="text-xl font-semibold mb-4">Timer Sequence</h2>
 
               {/* Title and Description */}

@@ -50,66 +50,6 @@ export async function updateSubareaTarget(subareaId: string, target: number) {
   }
 }
 
-export async function resetDailyProgress() {
-  const { error: areaError } = await supabase
-    .from('life_goal_areas')
-    .update({ daily_points: 0 })
-
-  if (areaError) {
-    console.error('Error resetting area progress:', areaError)
-    throw areaError
-  }
-
-  const { error: subareaError } = await supabase
-    .from('life_goal_subareas')
-    .update({ daily_points: 0 })
-
-  if (subareaError) {
-    console.error('Error resetting subarea progress:', subareaError)
-    throw subareaError
-  }
-}
-
-export function initializeAutoSave(userId: string) {
-  // Reset progress at midnight
-  const now = new Date()
-  const night = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1, // next day
-    0, // midnight
-    0,
-    0
-  )
-  const msToMidnight = night.getTime() - now.getTime()
-
-  // Set up the midnight reset
-  setTimeout(async () => {
-    await resetDailyProgress()
-    // Reschedule for next midnight
-    initializeAutoSave(userId)
-  }, msToMidnight)
-
-  // Set up auto-save interval (every minute)
-  const interval = setInterval(async () => {
-    try {
-      // Check if user is still logged in
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || user.id !== userId) {
-        clearInterval(interval)
-        return
-      }
-    } catch (error) {
-      console.error('Error in auto-save:', error)
-    }
-  }, 60000) // every minute
-
-  // Return cleanup function
-  return () => {
-    clearInterval(interval)
-  }
-}
-
 export async function resetAllDailyPoints(userId: string) {
   console.log('[RESET DAILY POINTS] ====== START ======');
   console.log('[RESET DAILY POINTS] User ID:', userId);
@@ -223,6 +163,8 @@ export async function savePointsToDate(date: string) {
           area_id: area.id,
           points: area.current_points,
           date: date
+        }, {
+          onConflict: 'area_id,date'
         });
     }
 
@@ -241,6 +183,8 @@ export async function savePointsToDate(date: string) {
           subarea_id: subarea.id,
           points: subarea.current_points,
           date: date
+        }, {
+          onConflict: 'subarea_id,date'
         });
     }
 
@@ -259,10 +203,60 @@ export async function savePointsToDate(date: string) {
           goal_id: goal.id,
           points: goal.current_points,
           date: date
+        }, {
+          onConflict: 'goal_id,date'
         });
     }
   } catch (error) {
     console.error('Error saving points to date:', error);
     throw error;
+  }
+}
+
+// Deprecated - use resetAllDailyPoints instead
+export async function resetDailyProgress() {
+  console.warn('resetDailyProgress is deprecated. Please use resetAllDailyPoints instead.');
+  const { data: user } = await supabase.auth.getUser();
+  if (!user?.user?.id) throw new Error('No user found');
+  return resetAllDailyPoints(user.user.id);
+}
+
+export function initializeAutoSave(userId: string) {
+  // Reset progress at midnight
+  const now = new Date()
+  const night = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1, // next day
+    0, // midnight
+    0,
+    0
+  )
+  const msToMidnight = night.getTime() - now.getTime()
+
+  // Set up the midnight reset
+  setTimeout(async () => {
+    await resetDailyProgress()
+    // Reschedule for next midnight
+    initializeAutoSave(userId)
+  }, msToMidnight)
+
+  // Set up auto-save interval (every minute)
+  const interval = setInterval(async () => {
+    try {
+      // Check if user is still logged in
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || user.id !== userId) {
+        clearInterval(interval)
+        return
+      }
+    } catch (error) {
+      console.error('Error in auto-save:', error)
+    }
+  }, 60000) // every minute
+
+  // Return cleanup function
+  return () => {
+    clearInterval(interval)
   }
 } 
