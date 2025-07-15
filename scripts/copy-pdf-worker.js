@@ -5,11 +5,13 @@ const path = require('path');
 const packageJson = require('../package.json');
 const pdfjsVersion = packageJson.dependencies['pdfjs-dist'].replace('^', '');
 
-// Source path in node_modules - using ESM worker
-const workerSrc = path.join(
-  __dirname,
-  '../node_modules/pdfjs-dist/build/pdf.worker.mjs'
-);
+// Source path in node_modules - try multiple possible paths
+const possiblePaths = [
+  path.join(__dirname, '../node_modules/pdfjs-dist/build/pdf.worker.mjs'),
+  path.join(__dirname, '../node_modules/pdfjs-dist/build/pdf.worker.min.js'),
+  path.join(__dirname, '../node_modules/pdfjs-dist/legacy/build/pdf.worker.js'),
+  path.join(__dirname, '../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.js')
+];
 
 // Destination path in public directory
 const workerDest = path.join(__dirname, '../public/pdf.worker.min.js');
@@ -20,12 +22,22 @@ if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir);
 }
 
-// Copy the file
-try {
-  fs.copyFileSync(workerSrc, workerDest);
-  console.log(`Copied PDF.js worker (v${pdfjsVersion}) to public directory`);
-} catch (error) {
-  console.error('Failed to copy PDF.js worker file:', error);
-  console.error('Tried path:', workerSrc);
+// Try to find and copy the worker file
+let copied = false;
+for (const workerSrc of possiblePaths) {
+  if (fs.existsSync(workerSrc)) {
+    try {
+      fs.copyFileSync(workerSrc, workerDest);
+      console.log(`Copied PDF.js worker (v${pdfjsVersion}) from ${workerSrc} to public directory`);
+      copied = true;
+      break;
+    } catch (error) {
+      console.error(`Failed to copy from ${workerSrc}:`, error);
+    }
+  }
+}
+
+if (!copied) {
+  console.error('Could not find PDF.js worker file in any of these locations:', possiblePaths);
   process.exit(1);
 } 

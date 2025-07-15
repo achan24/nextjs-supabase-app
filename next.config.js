@@ -12,10 +12,13 @@ const nextConfig = {
       };
     }
 
-    // Prevent webpack from trying to bundle the PDF.js worker
+    // Handle PDF.js worker files
     config.module.rules.push({
-      test: /pdf\.worker\.(min\.)?js/,
+      test: /pdf\.worker\.(min\.)?(m)?js/,
       type: 'asset/resource',
+      generator: {
+        filename: 'static/chunks/[name][ext]',
+      },
     });
 
     return config;
