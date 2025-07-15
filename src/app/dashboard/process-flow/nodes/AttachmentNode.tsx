@@ -1,83 +1,61 @@
 'use client';
 
-import { memo, useState, ReactNode } from 'react';
-import { NodeProps } from 'reactflow';
 import BaseNode, { BaseNodeData } from './BaseNode';
-import { DocumentViewer } from '@/components/ui/document-viewer';
-import dynamic from 'next/dynamic';
+import { Handle, Position } from 'reactflow';
+import { NodeProps } from 'reactflow';
+import { memo } from 'react';
 
-const PDFInlineViewer = dynamic(() => import('@/components/ui/pdf-inline-viewer').then(mod => mod.PDFInlineViewer), { ssr: false });
-
-export interface AttachmentNodeData extends Omit<BaseNodeData, 'description'> {
-  description?: ReactNode;
-  attachments?: Array<{
-    name: string;
-    url: string;
-    type: string;
-  }>;
+interface Attachment {
+  name: string;
+  url: string;
+  type: string;
 }
 
-const AttachmentNode = (props: NodeProps<AttachmentNodeData>) => {
-  const { data, ...rest } = props;
-  const attachments = data.attachments || [];
-  const [selectedFile, setSelectedFile] = useState<{name: string; url: string; type: string} | null>(null);
-  
-  // Render inline previews for PDFs and images
-  const description = attachments.length > 0
-    ? attachments.map(att => {
-        if (att.type === 'application/pdf') {
-          return (
-            <div key={att.name} className="my-2">
-              <PDFInlineViewer url={att.url} height={200} />
-              <div className="text-xs text-center text-gray-500 mt-1">{att.name}</div>
-            </div>
-          );
-        }
-        if (att.type.startsWith('image/')) {
-          return (
-            <div key={att.name} className="my-2">
-              <img src={att.url} alt={att.name} className="max-w-full max-h-40 mx-auto" />
-              <div className="text-xs text-center text-gray-500 mt-1">{att.name}</div>
-            </div>
-          );
-        }
-        // For other types, show a clickable icon
-        return (
-          <div 
-            key={att.name}
-            className="flex items-center cursor-pointer hover:text-pink-500"
-            onClick={e => {
-              e.stopPropagation();
-              setSelectedFile(att);
-            }}
-          >
-            📎 {att.name}
-          </div>
-        );
-      })
-    : 'No attachments';
+interface AttachmentNodeData extends BaseNodeData {
+  attachments?: Attachment[];
+}
 
-  return (
+function AttachmentNodeComponent(props: NodeProps<AttachmentNodeData>) {
+  const { data, id, isConnectable, selected, type, zIndex, xPos, yPos, dragHandle, dragging } = props;
+  
+  const content = (
     <>
-      <BaseNode
-        {...rest}
-        type="attachment"
-        data={{
-          ...data,
-          description,
-        }}
-      />
-      {selectedFile && (
-        <DocumentViewer
-          url={selectedFile.url}
-          type={selectedFile.type}
-          name={selectedFile.name}
-          isOpen={!!selectedFile}
-          onClose={() => setSelectedFile(null)}
-        />
-      )}
+      <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
+      <div className="p-2">
+        {data.attachments?.map((att: Attachment, i: number) => (
+          <div key={i} className="mb-2">
+            <a 
+              href={att.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-700 underline"
+            >
+              {att.name || 'Download Attachment'}
+            </a>
+          </div>
+        ))}
+      </div>
+      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
     </>
   );
-};
 
-export default memo(AttachmentNode); 
+  return (
+    <BaseNode
+      id={id}
+      type="attachment"
+      data={{
+        ...data,
+        description: content
+      }}
+      selected={selected}
+      isConnectable={isConnectable}
+      zIndex={zIndex}
+      xPos={xPos}
+      yPos={yPos}
+      dragHandle={dragHandle}
+      dragging={dragging}
+    />
+  );
+}
+
+export const AttachmentNode = memo(AttachmentNodeComponent); 
