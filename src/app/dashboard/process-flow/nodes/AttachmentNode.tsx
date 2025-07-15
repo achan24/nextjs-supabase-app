@@ -58,4 +58,5 @@ function AttachmentNodeComponent(props: NodeProps<AttachmentNodeData>) {
   );
 }
 
-export const AttachmentNode = memo(AttachmentNodeComponent); 
+const AttachmentNode = memo(AttachmentNodeComponent);
+export default AttachmentNode; 
