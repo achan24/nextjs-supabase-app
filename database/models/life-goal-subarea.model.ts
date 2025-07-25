@@ -31,7 +31,17 @@ export const LifeGoalSubarea: TableDefinition = {
       notNull: true,
       defaultValue: '0'
     },
+    daily_points: {
+      type: 'numeric',
+      notNull: true,
+      defaultValue: '0'
+    },
     target_points: {
+      type: 'numeric',
+      notNull: true,
+      defaultValue: '0'
+    },
+    daily_target: {
       type: 'numeric',
       notNull: true,
       defaultValue: '0'

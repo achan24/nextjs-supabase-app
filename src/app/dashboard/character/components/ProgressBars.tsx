@@ -266,31 +266,22 @@ export default function ProgressBars() {
       let current = 0;
       if (type === 'subarea') {
         const subarea = areas.flatMap(a => a.subareas).find(s => s.id === id);
-        current = subarea?.current_points || 0;
-        console.log('[INCREMENT SUBAREA]', { id, current, next: current + 1 });
-        await updateSubarea(id, { current_points: current + 1 });
-        // Award XP for subarea progress
-        if (user?.id) {
-          await updateXPFromPoints(user.id, 1);
-        }
+        current = subarea?.daily_points || 0;
+        console.log('[INCREMENT SUBAREA]', { id, current, next: current + 1, subarea });
+        await updateSubarea(id, { daily_points: current + 1 });
       } else if (type === 'goal') {
         const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
-        current = goal?.current_points || 0;
-        await updateGoal(id, { current_points: current + 1 });
-        // Award XP for goal progress
-        if (user?.id) {
-          await updateXPFromPoints(user.id, 1);
-        }
+        current = goal?.daily_points || 0;
+        console.log('[INCREMENT GOAL]', { id, current, next: current + 1, goal });
+        await updateGoal(id, { daily_points: current + 1 });
       } else {
         const area = areas.find(a => a.id === id);
-        current = area?.current_points || 0;
-        await updateArea(id, { current_points: current + 1 });
-        // Award XP for area progress
-        if (user?.id) {
-          await updateXPFromPoints(user.id, 1);
-        }
+        current = area?.daily_points || 0;
+        console.log('[INCREMENT AREA]', { id, current, next: current + 1, area });
+        await updateArea(id, { daily_points: current + 1 });
       }
     } catch (error) {
+      console.error('[INCREMENT ERROR]', error);
       toast.error('Failed to increment points');
     }
   };
@@ -300,36 +291,25 @@ export default function ProgressBars() {
       let current = 0;
       if (type === 'subarea') {
         const subarea = areas.flatMap(a => a.subareas).find(s => s.id === id);
-        current = subarea?.current_points || 0;
+        current = subarea?.daily_points || 0;
         if (current > 0) {
-          await updateSubarea(id, { current_points: current - 1 });
-          // Deduct XP for subarea progress
-          if (user?.id) {
-            await updateXPFromPoints(user.id, -1);
-          }
+          await updateSubarea(id, { daily_points: current - 1 });
         }
       } else if (type === 'goal') {
         const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
-        current = goal?.current_points || 0;
+        current = goal?.daily_points || 0;
         if (current > 0) {
-          await updateGoal(id, { current_points: current - 1 });
-          // Deduct XP for goal progress
-          if (user?.id) {
-            await updateXPFromPoints(user.id, -1);
-          }
+          await updateGoal(id, { daily_points: current - 1 });
         }
       } else {
         const area = areas.find(a => a.id === id);
-        current = area?.current_points || 0;
+        current = area?.daily_points || 0;
         if (current > 0) {
-          await updateArea(id, { current_points: current - 1 });
-          // Deduct XP for area progress
-          if (user?.id) {
-            await updateXPFromPoints(user.id, -1);
-          }
+          await updateArea(id, { daily_points: current - 1 });
         }
       }
     } catch (error) {
+      console.error('[DECREMENT ERROR]', error);
       toast.error('Failed to decrement points');
     }
   };
@@ -471,7 +451,7 @@ export default function ProgressBars() {
             <ProgressItem
               id={area.id}
               title={area.name}
-              currentValue={area.current_points || 0}
+              currentValue={area.daily_points || 0}
               targetValue={area.target_points || 0}
               onIncrement={() => handleIncrement(area.id)}
               onDecrement={() => handleDecrement(area.id)}
@@ -489,7 +469,7 @@ export default function ProgressBars() {
                 <ProgressItem
                   id={subarea.id}
                   title={subarea.name}
-                  currentValue={subarea.current_points || 0}
+                  currentValue={subarea.daily_points || 0}
                   targetValue={subarea.target_points || 0}
                   onIncrement={() => handleIncrement(subarea.id, 'subarea')}
                   onDecrement={() => handleDecrement(subarea.id, 'subarea')}
@@ -506,7 +486,7 @@ export default function ProgressBars() {
                     key={goal.id}
                     id={goal.id}
                     title={goal.title}
-                    currentValue={goal.current_points || 0}
+                    currentValue={goal.daily_points || 0}
                     targetValue={goal.target_points || 0}
                     onIncrement={() => handleIncrement(goal.id, 'goal')}
                     onDecrement={() => handleDecrement(goal.id, 'goal')}

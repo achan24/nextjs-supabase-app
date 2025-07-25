@@ -52,96 +52,50 @@ export async function updateSubareaTarget(subareaId: string, target: number) {
 
 export async function resetAllDailyPoints(userId: string) {
   console.log('[RESET DAILY POINTS] ====== START ======');
-  console.log('[RESET DAILY POINTS] User ID:', userId);
   try {
     // Reset areas
-    console.log('[RESET DAILY POINTS] Attempting to reset areas...');
-    const { data: resetAreaData, error: areaError } = await supabase
+    const { error: areaError } = await supabase
       .from('life_goal_areas')
-      .update({ current_points: 0 })
-      .eq('user_id', userId)
-      .select();
+      .update({ daily_points: 0 })
+      .eq('user_id', userId);
     
-    if (areaError) {
-      console.error('[RESET DAILY POINTS] Error resetting areas:', areaError);
-      throw areaError;
-    }
-    console.log('[RESET DAILY POINTS] Areas reset result:', resetAreaData);
+    if (areaError) throw areaError;
 
     // Get area IDs
-    console.log('[RESET DAILY POINTS] Fetching area IDs...');
-    const { data: areaRows, error: areaErr } = await supabase
+    const { data: areas } = await supabase
       .from('life_goal_areas')
       .select('id')
       .eq('user_id', userId);
-    
-    if (areaErr) {
-      console.error('[RESET DAILY POINTS] Error fetching areas:', areaErr);
-      throw areaErr;
-    }
-    console.log('[RESET DAILY POINTS] Found areas:', areaRows);
 
-    const areaIds = (areaRows || []).map(a => a.id);
-    console.log('[RESET DAILY POINTS] Extracted area IDs:', areaIds);
-    
-    if (areaIds.length === 0) {
-      console.log('[RESET DAILY POINTS] No areas found, skipping subareas and goals');
-      return;
-    }
+    if (!areas?.length) return;
 
     // Reset subareas
-    console.log('[RESET DAILY POINTS] Attempting to reset subareas...');
-    const { data: resetSubareaData, error: subareaError } = await supabase
+    const { error: subareaError } = await supabase
       .from('life_goal_subareas')
-      .update({ current_points: 0 })
-      .filter('area_id', 'in', `(${areaIds.join(',')})`)
-      .select();
+      .update({ daily_points: 0 })
+      .in('area_id', areas.map(a => a.id));
     
-    if (subareaError) {
-      console.error('[RESET DAILY POINTS] Error resetting subareas:', subareaError);
-      throw subareaError;
-    }
-    console.log('[RESET DAILY POINTS] Subareas reset result:', resetSubareaData);
+    if (subareaError) throw subareaError;
 
     // Get subarea IDs
-    console.log('[RESET DAILY POINTS] Fetching subarea IDs...');
-    const { data: subareaRows, error: subareaErr } = await supabase
+    const { data: subareas } = await supabase
       .from('life_goal_subareas')
       .select('id')
-      .filter('area_id', 'in', `(${areaIds.join(',')})`);
-    
-    if (subareaErr) {
-      console.error('[RESET DAILY POINTS] Error fetching subareas:', subareaErr);
-      throw subareaErr;
-    }
-    console.log('[RESET DAILY POINTS] Found subareas:', subareaRows);
+      .in('area_id', areas.map(a => a.id));
 
-    const subareaIds = (subareaRows || []).map(s => s.id);
-    console.log('[RESET DAILY POINTS] Extracted subarea IDs:', subareaIds);
-    
-    if (subareaIds.length === 0) {
-      console.log('[RESET DAILY POINTS] No subareas found, skipping goals');
-      return;
-    }
+    if (!subareas?.length) return;
 
     // Reset goals
-    console.log('[RESET DAILY POINTS] Attempting to reset goals...');
-    const { data: resetGoalData, error: goalError } = await supabase
+    const { error: goalError } = await supabase
       .from('life_goals')
-      .update({ current_points: 0 })
-      .filter('subarea_id', 'in', `(${subareaIds.join(',')})`)
-      .select();
+      .update({ daily_points: 0 })
+      .in('subarea_id', subareas.map(s => s.id));
     
-    if (goalError) {
-      console.error('[RESET DAILY POINTS] Error resetting goals:', goalError);
-      throw goalError;
-    }
-    console.log('[RESET DAILY POINTS] Goals reset result:', resetGoalData);
+    if (goalError) throw goalError;
 
     console.log('[RESET DAILY POINTS] ====== SUCCESS ======');
   } catch (error) {
-    console.error('[RESET DAILY POINTS] ====== ERROR ======');
-    console.error('[RESET DAILY POINTS] Error details:', error);
+    console.error('[RESET DAILY POINTS] Error:', error);
     throw error;
   }
 }
