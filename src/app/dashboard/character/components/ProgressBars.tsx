@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { resetAllDailyPoints, savePointsToDate } from '@/services/characterProgressService'
 import { updateXPFromPoints } from '@/services/characterService'
 import { PointsHistoryDialog } from './PointsHistoryDialog'
+import { format } from 'date-fns'
 
 const areaIcons: Record<string, string> = {
   'Work & Learning': '📚',
@@ -518,7 +519,7 @@ export default function ProgressBars() {
   const handleSaveToYesterday = async () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const formattedDate = yesterday.toISOString().split('T')[0];
+    const formattedDate = format(yesterday, 'yyyy-MM-dd');
     
     try {
       await savePointsToDate(formattedDate);

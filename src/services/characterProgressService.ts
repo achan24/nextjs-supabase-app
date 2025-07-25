@@ -101,7 +101,7 @@ export async function resetAllDailyPoints(userId: string) {
   }
 }
 
-export async function savePointsToDate() {
+export async function savePointsToDate(date?: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
@@ -116,9 +116,8 @@ export async function savePointsToDate() {
     return;
   }
 
-  // Get today's date
-  const today = new Date();
-  const dateStr = format(today, 'yyyy-MM-dd');
+  // Use provided date or today's date
+  const dateStr = date || format(new Date(), 'yyyy-MM-dd');
 
   // Save area points to history and reset daily points
   for (const area of areas || []) {
