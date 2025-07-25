@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { Plus, Minus, ChevronRight, ChevronDown, Settings2, Target } from 'lucide-react'
+import { Plus, Minus, ChevronRight, ChevronDown, Settings2, Target, BarChart2 } from 'lucide-react'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { resetAllDailyPoints, savePointsToDate } from '@/services/characterProgressService'
 import { updateXPFromPoints } from '@/services/characterService'
+import { PointsHistoryDialog } from './PointsHistoryDialog'
 
 const areaIcons: Record<string, string> = {
   'Work & Learning': '📚',
@@ -157,6 +158,7 @@ interface ProgressItemProps {
 }
 
 function ProgressItem({
+  id,
   title,
   currentValue,
   targetValue,
@@ -170,6 +172,7 @@ function ProgressItem({
   onUpdateTarget,
   onClick
 }: ProgressItemProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const progressPercentage = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
 
   return (
@@ -223,15 +226,32 @@ function ProgressItem({
             <Plus className={`${level === 'area' ? 'h-5 w-5' : 'h-4 w-4'}`} />
           </Button>
           {onUpdateTarget && (
-            <TargetDialog
-              title={title}
-              currentTarget={targetValue}
-              onUpdateTarget={onUpdateTarget}
-            />
+            <>
+              <TargetDialog
+                title={title}
+                currentTarget={targetValue}
+                onUpdateTarget={onUpdateTarget}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setHistoryOpen(true)}
+              >
+                <BarChart2 className="h-4 w-4" />
+              </Button>
+            </>
           )}
         </div>
       </div>
       <Progress value={progressPercentage} className="h-1 mt-0.5" />
+      <PointsHistoryDialog
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        id={id}
+        type={level}
+        title={title}
+      />
     </div>
   )
 }
@@ -264,22 +284,81 @@ export default function ProgressBars() {
   const handleIncrement = async (id: string, type: 'area' | 'subarea' | 'goal' = 'area') => {
     try {
       let current = 0;
-      if (type === 'subarea') {
-        const subarea = areas.flatMap(a => a.subareas).find(s => s.id === id);
-        current = subarea?.daily_points || 0;
-        console.log('[INCREMENT SUBAREA]', { id, current, next: current + 1, subarea });
-        await updateSubarea(id, { daily_points: current + 1 });
-      } else if (type === 'goal') {
-        const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
-        current = goal?.daily_points || 0;
+
+      if (type === 'goal') {
+        // Get the goal and its parent subarea
+        const { data: goal } = await supabase
+          .from('life_goals')
+          .select('*, life_goal_subareas!inner(*, life_goal_areas!inner(*))')
+          .eq('id', id)
+          .single();
+
+        if (!goal) {
+          console.error('[INCREMENT GOAL] Goal not found');
+          return;
+        }
+
+        // Increment goal points
+        current = goal.daily_points || 0;
         console.log('[INCREMENT GOAL]', { id, current, next: current + 1, goal });
         await updateGoal(id, { daily_points: current + 1 });
+
+        // Increment parent subarea points
+        const subarea = goal.life_goal_subareas;
+        current = subarea.daily_points || 0;
+        console.log('[INCREMENT SUBAREA]', { id: subarea.id, current, next: current + 1 });
+        await updateSubarea(subarea.id, { daily_points: current + 1 });
+
+        // Increment parent area points
+        const area = subarea.life_goal_areas;
+        current = area.daily_points || 0;
+        console.log('[INCREMENT AREA]', { id: area.id, current, next: current + 1 });
+        await updateArea(area.id, { daily_points: current + 1 });
+
+      } else if (type === 'subarea') {
+        // Get the subarea and its parent area
+        const { data: subarea } = await supabase
+          .from('life_goal_subareas')
+          .select('*, life_goal_areas!inner(*)')
+          .eq('id', id)
+          .single();
+
+        if (!subarea) {
+          console.error('[INCREMENT SUBAREA] Subarea not found');
+          return;
+        }
+
+        // Increment subarea points
+        current = subarea.daily_points || 0;
+        console.log('[INCREMENT SUBAREA]', { id, current, next: current + 1, subarea });
+        await updateSubarea(id, { daily_points: current + 1 });
+
+        // Increment parent area points
+        const area = subarea.life_goal_areas;
+        current = area.daily_points || 0;
+        console.log('[INCREMENT AREA]', { id: area.id, current, next: current + 1 });
+        await updateArea(area.id, { daily_points: current + 1 });
+
       } else {
-        const area = areas.find(a => a.id === id);
-        current = area?.daily_points || 0;
+        // Just increment area points
+        const { data: area } = await supabase
+          .from('life_goal_areas')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (!area) {
+          console.error('[INCREMENT AREA] Area not found');
+          return;
+        }
+
+        current = area.daily_points || 0;
         console.log('[INCREMENT AREA]', { id, current, next: current + 1, area });
         await updateArea(id, { daily_points: current + 1 });
       }
+
+      // Refresh data
+      await fetchAreas();
     } catch (error) {
       console.error('[INCREMENT ERROR]', error);
       toast.error('Failed to increment points');
@@ -289,25 +368,96 @@ export default function ProgressBars() {
   const handleDecrement = async (id: string, type: 'area' | 'subarea' | 'goal' = 'area') => {
     try {
       let current = 0;
-      if (type === 'subarea') {
-        const subarea = areas.flatMap(a => a.subareas).find(s => s.id === id);
-        current = subarea?.daily_points || 0;
-        if (current > 0) {
-          await updateSubarea(id, { daily_points: current - 1 });
+
+      if (type === 'goal') {
+        // Get the goal and its parent subarea
+        const { data: goal } = await supabase
+          .from('life_goals')
+          .select('*, life_goal_subareas!inner(*, life_goal_areas!inner(*))')
+          .eq('id', id)
+          .single();
+
+        if (!goal) {
+          console.error('[DECREMENT GOAL] Goal not found');
+          return;
         }
-      } else if (type === 'goal') {
-        const goal = areas.flatMap(a => a.subareas).flatMap(s => s.goals).find(g => g.id === id);
-        current = goal?.daily_points || 0;
+
+        // Don't decrement if already at 0
+        if (goal.daily_points <= 0) return;
+
+        // Decrement goal points
+        current = goal.daily_points;
+        console.log('[DECREMENT GOAL]', { id, current, next: current - 1, goal });
+        await updateGoal(id, { daily_points: current - 1 });
+
+        // Decrement parent subarea points
+        const subarea = goal.life_goal_subareas;
+        current = subarea.daily_points;
         if (current > 0) {
-          await updateGoal(id, { daily_points: current - 1 });
+          console.log('[DECREMENT SUBAREA]', { id: subarea.id, current, next: current - 1 });
+          await updateSubarea(subarea.id, { daily_points: current - 1 });
         }
+
+        // Decrement parent area points
+        const area = subarea.life_goal_areas;
+        current = area.daily_points;
+        if (current > 0) {
+          console.log('[DECREMENT AREA]', { id: area.id, current, next: current - 1 });
+          await updateArea(area.id, { daily_points: current - 1 });
+        }
+
+      } else if (type === 'subarea') {
+        // Get the subarea and its parent area
+        const { data: subarea } = await supabase
+          .from('life_goal_subareas')
+          .select('*, life_goal_areas!inner(*)')
+          .eq('id', id)
+          .single();
+
+        if (!subarea) {
+          console.error('[DECREMENT SUBAREA] Subarea not found');
+          return;
+        }
+
+        // Don't decrement if already at 0
+        if (subarea.daily_points <= 0) return;
+
+        // Decrement subarea points
+        current = subarea.daily_points;
+        console.log('[DECREMENT SUBAREA]', { id, current, next: current - 1, subarea });
+        await updateSubarea(id, { daily_points: current - 1 });
+
+        // Decrement parent area points
+        const area = subarea.life_goal_areas;
+        current = area.daily_points;
+        if (current > 0) {
+          console.log('[DECREMENT AREA]', { id: area.id, current, next: current - 1 });
+          await updateArea(area.id, { daily_points: current - 1 });
+        }
+
       } else {
-        const area = areas.find(a => a.id === id);
-        current = area?.daily_points || 0;
-        if (current > 0) {
-          await updateArea(id, { daily_points: current - 1 });
+        // Just decrement area points
+        const { data: area } = await supabase
+          .from('life_goal_areas')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (!area) {
+          console.error('[DECREMENT AREA] Area not found');
+          return;
         }
+
+        // Don't decrement if already at 0
+        if (area.daily_points <= 0) return;
+
+        current = area.daily_points;
+        console.log('[DECREMENT AREA]', { id, current, next: current - 1, area });
+        await updateArea(id, { daily_points: current - 1 });
       }
+
+      // Refresh data
+      await fetchAreas();
     } catch (error) {
       console.error('[DECREMENT ERROR]', error);
       toast.error('Failed to decrement points');

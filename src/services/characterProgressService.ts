@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { format } from 'date-fns';
 
 const supabase = createClient()
 
@@ -100,70 +101,114 @@ export async function resetAllDailyPoints(userId: string) {
   }
 }
 
-export async function savePointsToDate(date: string) {
-  try {
-    // Get all areas with their current points
-    const { data: areas, error: areaError } = await supabase
-      .from('life_goal_areas')
-      .select('id, current_points');
-    
-    if (areaError) throw areaError;
+export async function savePointsToDate() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
 
-    // Save points to history for each area
-    for (const area of areas || []) {
+  // Get all areas with daily points
+  const { data: areas, error: areaError } = await supabase
+    .from('life_goal_areas')
+    .select('id, daily_points, daily_target')
+    .eq('user_id', user.id);
+
+  if (areaError) {
+    console.error('Error fetching areas:', areaError);
+    return;
+  }
+
+  // Get today's date
+  const today = new Date();
+  const dateStr = format(today, 'yyyy-MM-dd');
+
+  // Save area points to history and reset daily points
+  for (const area of areas || []) {
+    if (area.daily_points > 0) {
+      // Save to history
       await supabase
         .from('area_points_history')
         .upsert({
           area_id: area.id,
-          points: area.current_points,
-          date: date
-        }, {
-          onConflict: 'area_id,date'
+          date: dateStr,
+          points: area.daily_points,
+          target: area.daily_target
         });
+
+      // Reset daily points
+      await supabase
+        .from('life_goal_areas')
+        .update({
+          daily_points: 0
+        })
+        .eq('id', area.id);
     }
+  }
 
-    // Get all subareas with their current points
-    const { data: subareas, error: subareaError } = await supabase
-      .from('life_goal_subareas')
-      .select('id, current_points');
-    
-    if (subareaError) throw subareaError;
+  // Get all subareas with daily points
+  const { data: subareas, error: subareaError } = await supabase
+    .from('life_goal_subareas')
+    .select('id, area_id, daily_points, daily_target')
+    .in('area_id', (areas || []).map(a => a.id));
 
-    // Save points to history for each subarea
-    for (const subarea of subareas || []) {
+  if (subareaError) {
+    console.error('Error fetching subareas:', subareaError);
+    return;
+  }
+
+  // Save subarea points to history and reset daily points
+  for (const subarea of subareas || []) {
+    if (subarea.daily_points > 0) {
+      // Save to history
       await supabase
         .from('subarea_points_history')
         .upsert({
           subarea_id: subarea.id,
-          points: subarea.current_points,
-          date: date
-        }, {
-          onConflict: 'subarea_id,date'
+          date: dateStr,
+          points: subarea.daily_points,
+          target: subarea.daily_target
         });
+
+      // Reset daily points
+      await supabase
+        .from('life_goal_subareas')
+        .update({
+          daily_points: 0
+        })
+        .eq('id', subarea.id);
     }
+  }
 
-    // Get all goals with their current points
-    const { data: goals, error: goalError } = await supabase
-      .from('life_goals')
-      .select('id, current_points');
-    
-    if (goalError) throw goalError;
+  // Get all goals with daily points
+  const { data: goals, error: goalError } = await supabase
+    .from('life_goals')
+    .select('id, subarea_id, daily_points, daily_target')
+    .in('subarea_id', (subareas || []).map(s => s.id));
 
-    // Save points to history for each goal
-    for (const goal of goals || []) {
+  if (goalError) {
+    console.error('Error fetching goals:', goalError);
+    return;
+  }
+
+  // Save goal points to history and reset daily points
+  for (const goal of goals || []) {
+    if (goal.daily_points > 0) {
+      // Save to history
       await supabase
         .from('goal_points_history')
         .upsert({
           goal_id: goal.id,
-          points: goal.current_points,
-          date: date
-        }, {
-          onConflict: 'goal_id,date'
+          date: dateStr,
+          points: goal.daily_points,
+          target: goal.daily_target
         });
+
+      // Reset daily points
+      await supabase
+        .from('life_goals')
+        .update({
+          daily_points: 0
+        })
+        .eq('id', goal.id);
     }
-  } catch (error) {
-    console.error('Error saving points to date:', error);
-    throw error;
   }
 }
 

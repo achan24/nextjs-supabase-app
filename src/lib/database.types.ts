@@ -322,10 +322,11 @@ export interface Database {
 
 interface LifeGoalArea {
   id: string;
-  user_id: string;
   name: string;
-  description: string | null;
+  description?: string;
+  user_id: string;
   daily_points: number;
+  target_points: number;
   daily_target: number;
   created_at: string;
   updated_at: string;
@@ -333,10 +334,24 @@ interface LifeGoalArea {
 
 interface LifeGoalSubarea {
   id: string;
-  area_id: string;
   name: string;
-  description: string | null;
+  description?: string;
+  area_id: string;
   daily_points: number;
+  target_points: number;
+  daily_target: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface LifeGoal {
+  id: string;
+  title: string;
+  description?: string;
+  subarea_id: string;
+  status: 'active' | 'completed' | 'archived';
+  daily_points: number;
+  target_points: number;
   daily_target: number;
   created_at: string;
   updated_at: string;

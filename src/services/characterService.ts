@@ -22,97 +22,52 @@ export function calculateRequiredXP(level: number): number {
   return Math.round(exact / 10) * 10; // Round to nearest 10
 }
 
-async function calculateTotalPoints(userId: string): Promise<number> {
-  // First get all goal IDs for this user through the hierarchy
-  const { data: areas, error: areasError } = await supabase
-    .from('life_goal_areas')
-    .select(`
-      life_goal_subareas (
-        life_goals (
-          id,
-          current_points
-        )
-      )
-    `)
-    .eq('user_id', userId);
+export async function updateXPFromPoints(userId: string, points: number) {
+  // Get current character
+  const { data: characters } = await supabase
+    .from('characters')
+    .select('id, xp')
+    .eq('user_id', userId)
+    .limit(1);
 
-  if (areasError) {
-    console.error('Error fetching areas:', areasError);
-    throw areasError;
-  }
-  if (!areas) return 0;
+  if (!characters?.length) return;
 
-  // Extract all goal IDs
-  const goalIds = areas.flatMap(a => 
-    a.life_goal_subareas?.flatMap(s => s.life_goals?.map(g => g.id) || []) || []
-  );
+  const character = characters[0];
+  const newXP = (character.xp || 0) + points;
 
-  if (goalIds.length === 0) return 0;
-
-  // Get historical points only from goals
-  const { data: goalHistory } = await supabase
-    .from('goal_points_history')
-    .select('points')
-    .in('goal_id', goalIds);
-
-  // Sum up historical goal points
-  const historicalPoints = goalHistory?.reduce((sum, record) => sum + (record.points || 0), 0) || 0;
-
-  // Sum up current goal points
-  const currentPoints = areas.reduce((total, area) => {
-    const subareaPoints = area.life_goal_subareas?.reduce((subTotal, subarea) => {
-      const goalPoints = subarea.life_goals?.reduce((goalTotal, goal) => 
-        goalTotal + (goal.current_points || 0), 0) || 0;
-      return subTotal + goalPoints;
-    }, 0) || 0;
-    return total + subareaPoints;
-  }, 0);
-
-  console.log('[XP] Points calculation:', {
-    historicalPoints,
-    currentPoints,
-    total: historicalPoints + currentPoints,
-    totalXP: (historicalPoints + currentPoints) * XP_PER_POINT
-  });
-
-  return historicalPoints + currentPoints;
+  // Update character XP
+  await supabase
+    .from('characters')
+    .update({ xp: newXP })
+    .eq('id', character.id);
 }
 
-export async function updateXPFromPoints(userId: string, pointDelta: number) {
-  // Get total points including history
-  const totalPoints = await calculateTotalPoints(userId);
-  const totalXP = totalPoints * XP_PER_POINT;
-  
-  // Calculate level based on total XP
-  let level = 1;
-  let remainingXP = totalXP;
-  
-  while (remainingXP >= calculateRequiredXP(level)) {
-    remainingXP -= calculateRequiredXP(level);
-    level++;
-  }
-  
-  // Update character
-  const { error: updateError } = await supabase
-    .from('characters')
-    .update({ 
-      level,
-      xp: remainingXP
-    })
-    .eq('user_id', userId);
+export async function calculateTotalPoints(userId: string) {
+  const { data: totalPoints } = await supabase
+    .rpc('get_user_total_points', { p_user_id: userId });
 
-  if (updateError) {
-    throw updateError;
-  }
+  return totalPoints || 0;
+}
 
-  const requiredXP = calculateRequiredXP(level);
-  
-  return { 
-    level, 
-    xp: remainingXP,
-    requiredXP,
-    progress: Math.round((remainingXP / requiredXP) * 100)
-  };
+export async function getAreaPoints(areaId: string) {
+  const { data: totalPoints } = await supabase
+    .rpc('get_area_total_points', { p_area_id: areaId });
+
+  return totalPoints || 0;
+}
+
+export async function getSubareaPoints(subareaId: string) {
+  const { data: totalPoints } = await supabase
+    .rpc('get_subarea_total_points', { p_subarea_id: subareaId });
+
+  return totalPoints || 0;
+}
+
+export async function getGoalPoints(goalId: string) {
+  const { data: totalPoints } = await supabase
+    .rpc('get_goal_total_points', { p_goal_id: goalId });
+
+  return totalPoints || 0;
 }
 
 export async function getCharacterProgress(userId: string) {

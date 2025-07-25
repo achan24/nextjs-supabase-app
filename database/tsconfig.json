@@ -8,9 +8,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "rootDir": ".",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "resolveJsonModule": true
   },
-  "include": ["./**/*"],
+  "include": ["./**/*", "../src/**/*"],
   "exclude": ["node_modules", "dist"]
 } 

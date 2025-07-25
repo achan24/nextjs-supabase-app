@@ -31,11 +31,6 @@ export const LifeGoal: TableDefinition = {
       notNull: true,
       defaultValue: "'active'"
     },
-    current_points: {
-      type: 'numeric',
-      notNull: true,
-      defaultValue: '0'
-    },
     daily_points: {
       type: 'numeric',
       notNull: true,
