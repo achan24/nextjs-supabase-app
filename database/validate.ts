@@ -2,6 +2,38 @@ import { createClient } from '@supabase/supabase-js';
 import { TableDefinition } from './models/types';
 import * as dotenv from 'dotenv';
 import { join } from 'path';
+import { config } from 'dotenv';
+import { LifeGoalArea } from './models/life-goal-area.model';
+import { LifeGoalSubarea } from './models/life-goal-subarea.model';
+import { LifeGoal } from './models/life-goal.model';
+import { LifeGoalMilestone } from './models/life-goal-milestone.model';
+import { LifeGoalMetric } from './models/life-goal-metric.model';
+import { LifeGoalMetricThreshold } from './models/life-goal-metric-threshold.model';
+import { LifeGoalSequenceContribution } from './models/life-goal-sequence-contribution.model';
+import { ProcessFlow } from './models/process-flow.model';
+import { Node } from './models/node.model';
+import { ProjectNodeLink } from './models/project-node-link.model';
+import { ProcessFlowFavorite } from './models/process-flow-favorite.model';
+import { Task } from './models/task.model';
+import { Project } from './models/project.model';
+import { Habit } from './models/habit.model';
+import { Character } from './models/character.model';
+import { CharacterTrait } from './models/character-trait.model';
+import { TraitHistory } from './models/trait-history.model';
+import { CharacterArea } from './models/character-area.model';
+import { CharacterSubarea } from './models/character-subarea.model';
+import { CharacterGoal } from './models/character-goal.model';
+import { CharacterWeeklyTarget } from './models/character-weekly-target.model';
+import { AreaPointsHistory } from './models/area-points-history.model';
+import { SubareaPointsHistory } from './models/subarea-points-history.model';
+import { GoalPointsHistory } from './models/goal-points-history.model';
+import { CrmPeople } from './models/crm-people.model';
+import { CrmPersonMetadata } from './models/crm-person-metadata.model';
+import { CrmTracks } from './models/crm-tracks.model';
+import { CrmStages } from './models/crm-stages.model';
+import { CrmPersonTracks } from './models/crm-person-tracks.model';
+import { CrmActions } from './models/crm-actions.model';
+import { CrmActionFeedback } from './models/crm-action-feedback.model';
 
 // Load environment variables from root .env.local
 dotenv.config({ path: join(__dirname, '..', '.env.local') });
@@ -18,33 +50,8 @@ async function validateDatabase() {
   );
 
   // Import all models
-  const { LifeGoalArea } = require('./models/life-goal-area.model');
-  const { LifeGoalSubarea } = require('./models/life-goal-subarea.model');
-  const { LifeGoal } = require('./models/life-goal.model');
-  const { LifeGoalMilestone } = require('./models/life-goal-milestone.model');
-  const { LifeGoalMetric } = require('./models/life-goal-metric.model');
-  const { LifeGoalMetricThreshold } = require('./models/life-goal-metric-threshold.model');
-  const { LifeGoalSequenceContribution } = require('./models/life-goal-sequence-contribution.model');
-  const { ProcessFlow } = require('./models/process-flow.model');
-  const { Node } = require('./models/node.model');
-  const { ProjectNodeLink } = require('./models/project-node-link.model');
-  const { ProcessFlowFavorite } = require('./models/process-flow-favorite.model');
-  const { Task } = require('./models/task.model');
-  const { Project } = require('./models/project.model');
-  const { Habit } = require('./models/habit.model');
-  const { Character } = require('./models/character.model');
-  const { CharacterTrait } = require('./models/character-trait.model');
-  const { TraitHistory } = require('./models/trait-history.model');
-  const { CharacterArea } = require('./models/character-area.model');
-  const { CharacterSubarea } = require('./models/character-subarea.model');
-  const { CharacterGoal } = require('./models/character-goal.model');
-  const { CharacterWeeklyTarget } = require('./models/character-weekly-target.model');
-  const { AreaPointsHistory } = require('./models/area-points-history.model');
-  const { SubareaPointsHistory } = require('./models/subarea-points-history.model');
-  const { GoalPointsHistory } = require('./models/goal-points-history.model');
-  
-  const models = { 
-    LifeGoalArea, 
+  const models = [
+    LifeGoalArea,
     LifeGoalSubarea,
     LifeGoal,
     LifeGoalMilestone,
@@ -55,8 +62,8 @@ async function validateDatabase() {
     Node,
     ProjectNodeLink,
     ProcessFlowFavorite,
-    Task, 
-    Project, 
+    Task,
+    Project,
     Habit,
     Character,
     CharacterTrait,
@@ -67,8 +74,15 @@ async function validateDatabase() {
     CharacterWeeklyTarget,
     AreaPointsHistory,
     SubareaPointsHistory,
-    GoalPointsHistory
-  };
+    GoalPointsHistory,
+    CrmPeople,
+    CrmPersonMetadata,
+    CrmTracks,
+    CrmStages,
+    CrmPersonTracks,
+    CrmActions,
+    CrmActionFeedback,
+  ];
 
   for (const [modelName, model] of Object.entries(models)) {
     console.log(`\nValidating ${modelName} against database...`);

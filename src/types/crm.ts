@@ -20,7 +20,7 @@ export interface Person {
 export interface PersonMetadata {
   id: string;
   person_id: string;
-  category: 'interests' | 'personality' | 'values' | 'emotional_hooks' | 'conversation_starters';
+  category: 'interests' | 'personality' | 'values' | 'emotional_hooks' | 'conversation_starters' | 'signals';
   key: string;
   value: string;
   created_at: string;

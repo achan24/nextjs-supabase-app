@@ -39,9 +39,16 @@ export function AddPersonDialog({ isOpen, onClose, onPersonAdded }: AddPersonDia
     try {
       const supabase = createClient();
       
+      // 1. Get current session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session?.user?.id) throw new Error('No authenticated user');
+
+      // 2. Include user_id in the operation
       const { data: person, error } = await supabase
         .from('crm_people')
         .insert([{
+          user_id: sessionData.session.user.id,
           name: formData.name,
           nickname: formData.nickname || null,
           role: formData.role,
@@ -54,7 +61,12 @@ export function AddPersonDialog({ isOpen, onClose, onPersonAdded }: AddPersonDia
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '42501') {
+          throw new Error('You do not have permission to add a person');
+        }
+        throw error;
+      }
 
       onPersonAdded(person);
       onClose();
@@ -69,7 +81,7 @@ export function AddPersonDialog({ isOpen, onClose, onPersonAdded }: AddPersonDia
       });
     } catch (err) {
       console.error('Error adding person:', err);
-      setError('Failed to add person. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to add person. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
