@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/card';
 interface TrackSignalsDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  person: Person;
+  person: Person | null;
   onSignalAdded: () => void;
 }
 
@@ -48,6 +48,8 @@ export function TrackSignalsDialog({ isOpen, onClose, person, onSignalAdded }: T
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!person) return;
+    
     setIsSubmitting(true);
     setError(null);
 
@@ -117,6 +119,8 @@ export function TrackSignalsDialog({ isOpen, onClose, person, onSignalAdded }: T
       setIsSubmitting(false);
     }
   };
+
+  if (!person) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

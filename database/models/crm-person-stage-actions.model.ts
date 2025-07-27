@@ -1,17 +1,11 @@
-export const CrmActions = {
-  name: 'crm_actions',
-  description: 'Stores planned and completed actions for CRM relationships',
+export const CrmPersonStageActions = {
+  name: 'crm_person_stage_actions',
+  description: 'Stores action checklist progress for each person',
   columns: {
     id: {
       type: 'uuid',
       primaryKey: true,
       defaultValue: 'uuid_generate_v4()',
-    },
-    user_id: {
-      type: 'uuid',
-      references: 'auth.users(id)',
-      onDelete: 'CASCADE',
-      notNull: true,
     },
     person_id: {
       type: 'uuid',
@@ -19,40 +13,27 @@ export const CrmActions = {
       onDelete: 'CASCADE',
       notNull: true,
     },
-    track_id: {
+    user_id: {
       type: 'uuid',
-      references: 'crm_tracks(id)',
+      references: 'auth.users(id)',
       onDelete: 'CASCADE',
       notNull: true,
     },
-    stage_id: {
+    stage_action_id: {
       type: 'uuid',
-      references: 'crm_stages(id)',
+      references: 'crm_stage_actions(id)',
       onDelete: 'CASCADE',
       notNull: true,
     },
-    type: {
-      type: 'action_type',
-      notNull: true,
-    },
-    title: {
+    status: {
       type: 'text',
       notNull: true,
+      defaultValue: "'pending'",
     },
-    description: {
-      type: 'text',
-    },
-    planned_date: {
+    completed_at: {
       type: 'timestamptz',
     },
-    completed_date: {
-      type: 'timestamptz',
-    },
-    is_recurring: {
-      type: 'boolean',
-      defaultValue: 'false',
-    },
-    recurrence_pattern: {
+    notes: {
       type: 'text',
     },
     created_at: {
@@ -66,36 +47,28 @@ export const CrmActions = {
   },
   indexes: [
     {
-      name: 'crm_actions_user_id_idx',
-      columns: ['user_id'],
-    },
-    {
-      name: 'crm_actions_person_id_idx',
+      name: 'crm_person_stage_actions_person_id_idx',
       columns: ['person_id'],
     },
     {
-      name: 'crm_actions_track_id_idx',
-      columns: ['track_id'],
+      name: 'crm_person_stage_actions_user_id_idx',
+      columns: ['user_id'],
     },
     {
-      name: 'crm_actions_stage_id_idx',
-      columns: ['stage_id'],
-    },
-    {
-      name: 'crm_actions_planned_date_idx',
-      columns: ['planned_date'],
+      name: 'crm_person_stage_actions_stage_action_id_idx',
+      columns: ['stage_action_id'],
     },
   ],
   foreignKeys: [
     {
-      name: 'crm_actions_user_person_fkey',
+      name: 'crm_person_stage_actions_user_person_fkey',
       columns: ['user_id', 'person_id'],
       references: 'crm_people(user_id, id)',
     },
   ],
   policies: [
     {
-      name: 'Users can manage their own actions',
+      name: 'Users can manage their own person stage actions',
       using: 'user_id = auth.uid()',
       check: 'user_id = auth.uid()',
       operation: 'ALL',
@@ -103,7 +76,7 @@ export const CrmActions = {
   ],
   triggers: [
     {
-      name: 'update_crm_actions_updated_at',
+      name: 'update_crm_person_stage_actions_updated_at',
       timing: 'BEFORE',
       event: 'UPDATE',
       level: 'ROW',

@@ -1,23 +1,25 @@
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { X, ArrowRight, CheckCircle2, AlertCircle, Milestone, ArrowUpRight } from 'lucide-react';
 
+interface TrackWithStages {
+  id: string;
+  name: string;
+  icon: any;
+  description: string;
+  stages: {
+    name: string;
+    description: string;
+  }[];
+}
+
 interface TrackDetailDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  track: {
-    id: string;
-    name: string;
-    icon: any;
-    description: string;
-    stages: {
-      name: string;
-      description: string;
-    }[];
-  };
+  track: TrackWithStages | null;
   peopleCount: number;
 }
 
@@ -31,6 +33,8 @@ interface StageGuidance {
 }
 
 export function TrackDetailDialog({ isOpen, onClose, track, peopleCount }: TrackDetailDialogProps) {
+  if (!track) return null;
+
   const Icon = track.icon;
 
   const getStageGuidance = (stageName: string): StageGuidance => {
@@ -575,10 +579,9 @@ export function TrackDetailDialog({ isOpen, onClose, track, peopleCount }: Track
               <X className="h-4 w-4 text-gray-500" />
             </Button>
           </div>
-          <p className="text-sm text-gray-600 mt-2">{track.description}</p>
-          <p className="text-sm text-gray-500 mt-1">
-            {peopleCount} {peopleCount === 1 ? 'person' : 'people'} in this track
-          </p>
+          <DialogDescription>
+            {track.description} • {peopleCount} {peopleCount === 1 ? 'person' : 'people'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6">

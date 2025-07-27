@@ -34,6 +34,7 @@ import { CrmStages } from './models/crm-stages.model';
 import { CrmPersonTracks } from './models/crm-person-tracks.model';
 import { CrmActions } from './models/crm-actions.model';
 import { CrmActionFeedback } from './models/crm-action-feedback.model';
+import { CrmStageActionModel, CrmPersonStageActionModel } from './models/crm-stage-actions.model';
 
 // Load environment variables from root .env.local
 dotenv.config({ path: join(__dirname, '..', '.env.local') });
@@ -51,6 +52,7 @@ async function validateDatabase() {
 
   // Import all models
   const models = [
+    Habit,
     LifeGoalArea,
     LifeGoalSubarea,
     LifeGoal,
@@ -64,7 +66,6 @@ async function validateDatabase() {
     ProcessFlowFavorite,
     Task,
     Project,
-    Habit,
     Character,
     CharacterTrait,
     TraitHistory,
@@ -82,6 +83,8 @@ async function validateDatabase() {
     CrmPersonTracks,
     CrmActions,
     CrmActionFeedback,
+    CrmStageActionModel,
+    CrmPersonStageActionModel,
   ];
 
   for (const [modelName, model] of Object.entries(models)) {
