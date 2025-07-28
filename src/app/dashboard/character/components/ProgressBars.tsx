@@ -192,9 +192,12 @@ function ProgressItem({
 
   return (
     <div 
-      className={`pl-${level === 'goal' ? 8 : level === 'subarea' ? 4 : 0} transition-all duration-500 ${
-        isCompleted ? 'opacity-50' : ''
-      }`}
+      className={`
+        pl-${level === 'goal' ? 8 : level === 'subarea' ? 4 : 0} 
+        transition-all duration-500 
+        group
+        ${isCompleted ? 'opacity-0 hover:opacity-100 focus-within:opacity-100' : ''}
+      `}
     >
       <div className="flex items-center gap-2">
         <div className="flex-1">
@@ -309,30 +312,47 @@ export default function ProgressBars() {
   }, [showCompleted])
 
   // Filter out completed items unless showCompleted is true
-  const filterCompletedItems = <T extends { daily_points?: number; target_points?: number }>(items: T[]): T[] => {
+  const filterCompletedItems = <T extends { daily_points?: number; target_points?: number; status?: string }>(items: T[]): T[] => {
     if (showCompleted) return items;
     return items.filter(item => {
+      // First check if the item is active (for goals)
+      if ('status' in item && item.status !== 'active') {
+        return false;
+      }
       const current = item.daily_points || 0;
       const target = item.target_points || 0;
-      return current < target;
+      // Show item if:
+      // 1. No target set (target_points = 0)
+      // 2. OR not reached target yet
+      return target === 0 || current < target;
     });
   };
 
   // Check if an area should be visible (has incomplete children or showCompleted is true)
   const shouldShowArea = (area: LifeGoalArea): boolean => {
     if (showCompleted) return true;
-    const areaComplete = (area.daily_points || 0) >= (area.target_points || 0);
+    const current = area.daily_points || 0;
+    const target = area.target_points || 0;
+    // Not complete if:
+    // 1. No target set (target_points = 0)
+    // 2. OR not reached target yet
+    const areaComplete = target > 0 && current >= target;
     if (!areaComplete) return true;
     
     // Check if any subareas are incomplete
     const hasIncompleteSubareas = area.subareas.some((subarea: LifeGoalSubarea) => {
-      const subareaComplete = (subarea.daily_points || 0) >= (subarea.target_points || 0);
+      const current = subarea.daily_points || 0;
+      const target = subarea.target_points || 0;
+      const subareaComplete = target > 0 && current >= target;
       if (!subareaComplete) return true;
       
-      // Check if any goals are incomplete
-      return subarea.goals.some((goal: LifeGoal) => 
-        (goal.daily_points || 0) < (goal.target_points || 0)
-      );
+      // Check if any goals are incomplete and active
+      return subarea.goals.some((goal: LifeGoal) => {
+        if (goal.status !== 'active') return false;
+        const current = goal.daily_points || 0;
+        const target = goal.target_points || 0;
+        return target === 0 || current < target;
+      });
     });
     
     return hasIncompleteSubareas;
@@ -341,13 +361,21 @@ export default function ProgressBars() {
   // Check if a subarea should be visible
   const shouldShowSubarea = (subarea: LifeGoalSubarea): boolean => {
     if (showCompleted) return true;
-    const subareaComplete = (subarea.daily_points || 0) >= (subarea.target_points || 0);
+    const current = subarea.daily_points || 0;
+    const target = subarea.target_points || 0;
+    // Not complete if:
+    // 1. No target set (target_points = 0)
+    // 2. OR not reached target yet
+    const subareaComplete = target > 0 && current >= target;
     if (!subareaComplete) return true;
     
-    // Check if any goals are incomplete
-    return subarea.goals.some((goal: LifeGoal) => 
-      (goal.daily_points || 0) < (goal.target_points || 0)
-    );
+    // Check if any goals are incomplete and active
+    return subarea.goals.some((goal: LifeGoal) => {
+      if (goal.status !== 'active') return false;
+      const current = goal.daily_points || 0;
+      const target = goal.target_points || 0;
+      return target === 0 || current < target;
+    });
   };
 
   // Filter areas and their children

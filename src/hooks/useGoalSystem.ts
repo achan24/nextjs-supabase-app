@@ -36,6 +36,9 @@ export function useGoalSystem() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchAreas();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -47,6 +50,15 @@ export function useGoalSystem() {
     setError(null);
     
     try {
+      // Get current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.user) {
+        console.log('No authenticated user');
+        setAreas([]);
+        return;
+      }
+
       const { data: areasData, error: areasError } = await supabase
         .from('life_goal_areas')
         .select(`
@@ -93,6 +105,7 @@ export function useGoalSystem() {
             )
           )
         `)
+        .eq('user_id', session.user.id)
         .order('created_at', { ascending: true });
 
       if (areasError) {
