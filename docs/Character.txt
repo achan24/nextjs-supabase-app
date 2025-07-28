@@ -141,6 +141,57 @@ If only some → mixed appearance (fresh, but messy room)
 
 # Character Attribute Definitions
 
+# NEW FEATURE: Daily Target Completion UI (2024-06-18)
+
+🎯 GOAL
+To reduce visual clutter and increase focus by hiding completed areas/subareas/goals for the current day.
+
+📋 REQUIREMENTS
+
+1. Completion Criteria
+   - An area is considered "complete" when its daily_points >= daily_target
+   - A subarea is considered "complete" when its daily_points >= daily_target
+   - A goal is considered "complete" when its daily_points >= daily_target
+
+2. UI Behavior
+   - When an area/subarea/goal reaches its daily target:
+     - The item smoothly fades out (animation)
+     - A small "completed" indicator appears briefly before fade
+     - The item is hidden from the main view
+   
+3. Access to Hidden Items
+   - Add a "Show Completed" toggle button at the top of the list
+   - When toggled ON:
+     - Show all items, with completed ones having a visual distinction (e.g., checkmark, opacity)
+     - Keep the completed items at the bottom of the list
+   - When toggled OFF:
+     - Hide completed items
+     - Show only items still needing work
+
+4. Persistence
+   - The hidden state resets at midnight (when daily points reset)
+   - The user's toggle preference (show/hide completed) should persist across sessions
+
+5. Edge Cases
+   - If a completed item's points are reduced below target:
+     - Item should smoothly fade back in
+     - Item should return to its original position in the list
+   - Parent items (areas/subareas) should remain visible if they have incomplete children
+   - Empty state: Show encouraging message when all items are complete
+
+6. Technical Considerations
+   - Use CSS transitions for smooth animations
+   - Store toggle state in localStorage
+   - Update points calculations to trigger visibility changes
+   - Maintain proper spacing/layout when items are hidden
+
+7. Accessibility
+   - Toggle button should be keyboard accessible
+   - Screen readers should announce when items are completed
+   - Hidden items should still be in the DOM but visually hidden
+
+This feature aims to help users focus on remaining tasks while maintaining access to completed items when needed.
+
 **Discipline**: Doing tasks you've done before. Sticking to routines, habits, or familiar actions.
 
 **Courage**: Doing tasks you've never done before. Attempting something new or unknown, where you don't know how you'll perform.

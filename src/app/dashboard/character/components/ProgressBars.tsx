@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { LifeGoalArea, LifeGoalSubarea } from '@/types/goal'
+import { LifeGoalArea, LifeGoalSubarea, LifeGoal } from '@/types/goal';
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { resetAllDailyPoints, savePointsToDate } from '@/services/characterProgressService'
@@ -174,10 +174,28 @@ function ProgressItem({
   onClick
 }: ProgressItemProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const progressPercentage = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
 
+  // Check if item is completed whenever currentValue or targetValue changes
+  useEffect(() => {
+    const completed = currentValue >= targetValue;
+    if (completed && !isCompleted) {
+      // Item just got completed
+      setIsCompleted(true);
+      toast.success(`${title} completed! 🎉`);
+    } else if (!completed && isCompleted) {
+      // Item is no longer completed
+      setIsCompleted(false);
+    }
+  }, [currentValue, targetValue, title, isCompleted]);
+
   return (
-    <div className={`pl-${level === 'goal' ? 8 : level === 'subarea' ? 4 : 0}`}>
+    <div 
+      className={`pl-${level === 'goal' ? 8 : level === 'subarea' ? 4 : 0} transition-all duration-500 ${
+        isCompleted ? 'opacity-50' : ''
+      }`}
+    >
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-1">
@@ -203,6 +221,11 @@ function ProgressItem({
                 ${level === 'subarea' ? 'font-medium' : ''}
                 ${level === 'goal' ? 'text-sm text-gray-600' : ''}
               `}>{title}</span>
+              {isCompleted && (
+                <span className="text-green-500 text-sm font-medium ml-2">
+                  ✓ Complete
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -245,7 +268,12 @@ function ProgressItem({
           )}
         </div>
       </div>
-      <Progress value={progressPercentage} className="h-1 mt-0.5" />
+      <Progress 
+        value={progressPercentage} 
+        className={`h-1 mt-0.5 transition-all duration-500 ${
+          isCompleted ? 'bg-green-100' : ''
+        }`}
+      />
       <PointsHistoryDialog
         open={historyOpen}
         onOpenChange={setHistoryOpen}
@@ -254,7 +282,7 @@ function ProgressItem({
         title={title}
       />
     </div>
-  )
+  );
 }
 
 export default function ProgressBars() {
@@ -266,7 +294,71 @@ export default function ProgressBars() {
   const { user } = useAuth()
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [saveYesterdayDialogOpen, setSaveYesterdayDialogOpen] = useState(false)
-  
+  const [showCompleted, setShowCompleted] = useState(() => {
+    // Initialize from localStorage if available
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('showCompleted')
+      return saved ? JSON.parse(saved) : false
+    }
+    return false
+  })
+
+  // Save showCompleted preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('showCompleted', JSON.stringify(showCompleted))
+  }, [showCompleted])
+
+  // Filter out completed items unless showCompleted is true
+  const filterCompletedItems = <T extends { daily_points?: number; target_points?: number }>(items: T[]): T[] => {
+    if (showCompleted) return items;
+    return items.filter(item => {
+      const current = item.daily_points || 0;
+      const target = item.target_points || 0;
+      return current < target;
+    });
+  };
+
+  // Check if an area should be visible (has incomplete children or showCompleted is true)
+  const shouldShowArea = (area: LifeGoalArea): boolean => {
+    if (showCompleted) return true;
+    const areaComplete = (area.daily_points || 0) >= (area.target_points || 0);
+    if (!areaComplete) return true;
+    
+    // Check if any subareas are incomplete
+    const hasIncompleteSubareas = area.subareas.some((subarea: LifeGoalSubarea) => {
+      const subareaComplete = (subarea.daily_points || 0) >= (subarea.target_points || 0);
+      if (!subareaComplete) return true;
+      
+      // Check if any goals are incomplete
+      return subarea.goals.some((goal: LifeGoal) => 
+        (goal.daily_points || 0) < (goal.target_points || 0)
+      );
+    });
+    
+    return hasIncompleteSubareas;
+  };
+
+  // Check if a subarea should be visible
+  const shouldShowSubarea = (subarea: LifeGoalSubarea): boolean => {
+    if (showCompleted) return true;
+    const subareaComplete = (subarea.daily_points || 0) >= (subarea.target_points || 0);
+    if (!subareaComplete) return true;
+    
+    // Check if any goals are incomplete
+    return subarea.goals.some((goal: LifeGoal) => 
+      (goal.daily_points || 0) < (goal.target_points || 0)
+    );
+  };
+
+  // Filter areas and their children
+  const visibleAreas = areas.filter(shouldShowArea).map(area => ({
+    ...area,
+    subareas: area.subareas.filter(shouldShowSubarea).map((subarea: LifeGoalSubarea) => ({
+      ...subarea,
+      goals: filterCompletedItems(subarea.goals)
+    }))
+  }));
+
   const handleUpdateTarget = async (id: string, newTarget: number, type: 'area' | 'subarea' | 'goal' = 'area') => {
     try {
       if (type === 'subarea') {
@@ -522,11 +614,15 @@ export default function ProgressBars() {
     const formattedDate = format(yesterday, 'yyyy-MM-dd');
     
     try {
+      console.log('[SAVE TO YESTERDAY] Starting save operation...');
       await savePointsToDate(formattedDate);
+      console.log('[SAVE TO YESTERDAY] Points saved, refreshing areas...');
+      await fetchAreas();
+      console.log('[SAVE TO YESTERDAY] Areas refreshed');
       toast.success('Points saved to yesterday');
       setSaveYesterdayDialogOpen(false);
     } catch (error) {
-      console.error('Error saving points:', error);
+      console.error('[SAVE TO YESTERDAY] Error:', error);
       toast.error('Failed to save points');
     }
   };
@@ -563,6 +659,14 @@ export default function ProgressBars() {
               </div>
             </DialogContent>
           </Dialog>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setShowCompleted(!showCompleted)}
+          >
+            {showCompleted ? 'Hide Completed' : 'Show Completed'}
+          </Button>
         </div>
         <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
           <DialogTrigger asChild>
@@ -597,62 +701,69 @@ export default function ProgressBars() {
       </div>
 
       <div className="space-y-1">
-        {areas.map((area) => (
-          <div key={area.id} className="space-y-1">
-            <ProgressItem
-              id={area.id}
-              title={area.name}
-              currentValue={area.daily_points || 0}
-              targetValue={area.target_points || 0}
-              onIncrement={() => handleIncrement(area.id)}
-              onDecrement={() => handleDecrement(area.id)}
-              onUpdateTarget={(newTarget) => handleUpdateTarget(area.id, newTarget)}
-              icon={areaIcons[area.name]}
-              level="area"
-              isExpanded={expandedAreas[area.id] || false}
-              onToggle={() => toggleArea(area.id)}
-              hasChildren={area.subareas.length > 0}
-              onClick={() => handleGoalClick(area.id)}
-            />
-            
-            {expandedAreas[area.id] && area.subareas.map((subarea) => (
-              <div key={subarea.id} className="space-y-1">
-                <ProgressItem
-                  id={subarea.id}
-                  title={subarea.name}
-                  currentValue={subarea.daily_points || 0}
-                  targetValue={subarea.target_points || 0}
-                  onIncrement={() => handleIncrement(subarea.id, 'subarea')}
-                  onDecrement={() => handleDecrement(subarea.id, 'subarea')}
-                  onUpdateTarget={(newTarget) => handleUpdateTarget(subarea.id, newTarget, 'subarea')}
-                  level="subarea"
-                  isExpanded={expandedSubareas[subarea.id] || false}
-                  onToggle={() => toggleSubarea(subarea.id)}
-                  hasChildren={subarea.goals.length > 0}
-                  onClick={() => handleGoalClick(area.id, subarea.id)}
-                />
-
-                {expandedSubareas[subarea.id] && subarea.goals.map((goal) => (
-                  <ProgressItem
-                    key={goal.id}
-                    id={goal.id}
-                    title={goal.title}
-                    currentValue={goal.daily_points || 0}
-                    targetValue={goal.target_points || 0}
-                    onIncrement={() => handleIncrement(goal.id, 'goal')}
-                    onDecrement={() => handleDecrement(goal.id, 'goal')}
-                    onUpdateTarget={(newTarget) => handleUpdateTarget(goal.id, newTarget, 'goal')}
-                    level="goal"
-                    isExpanded={false}
-                    onToggle={() => {}}
-                    hasChildren={false}
-                    onClick={() => handleGoalClick(area.id, subarea.id, goal.id)}
-                  />
-                ))}
-              </div>
-            ))}
+        {visibleAreas.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <p className="text-lg font-medium">All targets completed! 🎉</p>
+            <p className="text-sm mt-2">Great job! Click "Show Completed" to see your achievements.</p>
           </div>
-        ))}
+        ) : (
+          visibleAreas.map((area) => (
+            <div key={area.id} className="space-y-1">
+              <ProgressItem
+                id={area.id}
+                title={area.name}
+                currentValue={area.daily_points || 0}
+                targetValue={area.target_points || 0}
+                onIncrement={() => handleIncrement(area.id)}
+                onDecrement={() => handleDecrement(area.id)}
+                onUpdateTarget={(newTarget) => handleUpdateTarget(area.id, newTarget)}
+                icon={areaIcons[area.name]}
+                level="area"
+                isExpanded={expandedAreas[area.id] || false}
+                onToggle={() => toggleArea(area.id)}
+                hasChildren={area.subareas.length > 0}
+                onClick={() => handleGoalClick(area.id)}
+              />
+              
+              {expandedAreas[area.id] && area.subareas.map((subarea) => (
+                <div key={subarea.id} className="space-y-1">
+                  <ProgressItem
+                    id={subarea.id}
+                    title={subarea.name}
+                    currentValue={subarea.daily_points || 0}
+                    targetValue={subarea.target_points || 0}
+                    onIncrement={() => handleIncrement(subarea.id, 'subarea')}
+                    onDecrement={() => handleDecrement(subarea.id, 'subarea')}
+                    onUpdateTarget={(newTarget) => handleUpdateTarget(subarea.id, newTarget, 'subarea')}
+                    level="subarea"
+                    isExpanded={expandedSubareas[subarea.id] || false}
+                    onToggle={() => toggleSubarea(subarea.id)}
+                    hasChildren={subarea.goals.length > 0}
+                    onClick={() => handleGoalClick(area.id, subarea.id)}
+                  />
+
+                  {expandedSubareas[subarea.id] && subarea.goals.map((goal) => (
+                    <ProgressItem
+                      key={goal.id}
+                      id={goal.id}
+                      title={goal.title}
+                      currentValue={goal.daily_points || 0}
+                      targetValue={goal.target_points || 0}
+                      onIncrement={() => handleIncrement(goal.id, 'goal')}
+                      onDecrement={() => handleDecrement(goal.id, 'goal')}
+                      onUpdateTarget={(newTarget) => handleUpdateTarget(goal.id, newTarget, 'goal')}
+                      level="goal"
+                      isExpanded={false}
+                      onToggle={() => {}}
+                      hasChildren={false}
+                      onClick={() => handleGoalClick(area.id, subarea.id, goal.id)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
