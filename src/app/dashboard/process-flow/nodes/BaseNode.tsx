@@ -27,6 +27,7 @@ export interface BaseNodeData {
   tags?: string[];
   value?: number;
   isCalculationNode?: boolean;
+  isExpanded?: boolean; // Track if child nodes are visible
 }
 
 const nodeTypeStyles = {
@@ -305,7 +306,7 @@ const BaseNode = ({
   type = 'task',
 }: NodeProps<BaseNodeData>) => {
   const styles = nodeTypeStyles[type as keyof typeof nodeTypeStyles] || nodeTypeStyles.task;
-  const { setNodes, getNode } = useReactFlow();
+  const { setNodes, getNodes, getEdges } = useReactFlow();
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedDescription, setEditedDescription] = useState(data.description || '');
@@ -314,6 +315,49 @@ const BaseNode = ({
   const [isResizing, setIsResizing] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 200, height: 'auto' });
   const nodeRef = useRef<HTMLDivElement>(null);
+
+  // Get all child nodes recursively
+  const getChildNodes = useCallback((nodeId: string, visited = new Set<string>()): string[] => {
+    if (visited.has(nodeId)) return [];
+    visited.add(nodeId);
+    
+    const edges = getEdges();
+    const childIds = edges
+      .filter(edge => edge.source === nodeId)
+      .map(edge => edge.target);
+    
+    const allChildren = [...childIds];
+    childIds.forEach(childId => {
+      allChildren.push(...getChildNodes(childId, visited));
+    });
+    
+    return allChildren;
+  }, [getEdges]);
+
+  // Toggle expansion state
+  const toggleExpand = useCallback(() => {
+    const isCurrentlyExpanded = data.isExpanded ?? true;
+    const childNodeIds = getChildNodes(id);
+    
+    setNodes(nodes => nodes.map(node => {
+      if (node.id === id) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isExpanded: !isCurrentlyExpanded
+          }
+        };
+      }
+      if (childNodeIds.includes(node.id)) {
+        return {
+          ...node,
+          hidden: isCurrentlyExpanded
+        };
+      }
+      return node;
+    }));
+  }, [id, data.isExpanded, getChildNodes, setNodes]);
 
   // Only apply string operations if description is a string
   const handleImageResize = useCallback((originalMarkdown: string, width: number, height: number) => {
@@ -361,30 +405,52 @@ const BaseNode = ({
         className="w-2 h-2 !bg-gray-500"
       />
 
-      <div className="flex items-center space-x-2">
-        <span className="text-xl">{styles.icon}</span>
-        <div className="flex flex-col">
-          <div className="text-sm font-bold">{data.label}</div>
-          {data.description && (
-            <div className="text-xs text-black whitespace-pre-wrap">
-              <NodeContent 
-                text={data.description} 
-                isTestMode={!!data.isTestMode}
-                onImageResize={handleImageResize}
-                onImageDelete={handleImageDelete}
-              />
-            </div>
-          )}
-          {data.tags && data.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {data.tags.map((tag, index) => (
-                <span key={index} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <span className="text-xl">{styles.icon}</span>
+          <div className="flex flex-col">
+            <div className="text-sm font-bold">{data.label}</div>
+          </div>
         </div>
+        {getEdges().some(edge => edge.source === id) && (
+          <button
+            onClick={toggleExpand}
+            className="p-1 hover:bg-gray-100 rounded transition-colors duration-200"
+            title={data.isExpanded ? "Collapse child nodes" : "Expand child nodes"}
+          >
+            {data.isExpanded ? (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19 9L12 15L5 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 5L15 12L9 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
+
+      <div className="mt-2">
+        {data.description && (
+          <div className="text-xs text-black whitespace-pre-wrap">
+            <NodeContent 
+              text={data.description} 
+              isTestMode={!!data.isTestMode}
+              onImageResize={handleImageResize}
+              onImageDelete={handleImageDelete}
+            />
+          </div>
+        )}
+        {data.tags && data.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {data.tags.map((tag, index) => (
+              <span key={index} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <Handle

@@ -59,49 +59,40 @@ export function useGoalSystem() {
         return;
       }
 
+      // For progress view, we only need basic area/subarea/goal data
       const { data: areasData, error: areasError } = await supabase
         .from('life_goal_areas')
         .select(`
-          *,
-          area_notes:area_note_links (
-            *,
-            note:notes (*)
-          ),
+          id,
+          name,
+          description,
+          user_id,
+          daily_points,
+          target_points,
+          daily_target,
+          created_at,
+          updated_at,
           subareas:life_goal_subareas (
-            *,
-            subarea_notes:subarea_note_links (
-              *,
-              note:notes (*)
-            ),
+            id,
+            name,
+            description,
+            area_id,
+            daily_points,
+            target_points,
+            daily_target,
+            created_at,
+            updated_at,
             goals:life_goals (
-              *,
-              goal_notes:goal_note_links (
-                *,
-                note:notes (*)
-              ),
-              milestones:life_goal_milestones (*),
-              metrics:life_goal_metrics (
-                *,
-                thresholds:life_goal_metric_thresholds (*),
-                sequence_contributions:life_goal_sequence_contributions (
-                  *,
-                  sequence:timer_sequences (*)
-                )
-              ),
-              tasks:life_goal_tasks (
-                *,
-                task:tasks (*)
-              ),
-              process_flows:goal_flow_links (
-                id,
-                flow_id,
-                created_at,
-                process_flows:process_flows (
-                  id,
-                  title,
-                  description
-                )
-              )
+              id,
+              title,
+              description,
+              subarea_id,
+              status,
+              daily_points,
+              target_points,
+              daily_target,
+              created_at,
+              updated_at
             )
           )
         `)
@@ -114,19 +105,21 @@ export function useGoalSystem() {
       }
 
       console.log('Raw areas data:', areasData);
-      const mappedAreas = (areasData || []).map((area: any) => ({
+      
+      // Map the data to match the expected types
+      const mappedAreas = (areasData || []).map(area => ({
         ...area,
-        subareas: (area.subareas || []).map((subarea: any) => ({
+        area_notes: [], // Empty arrays for fields we don't need in progress view
+        subareas: (area.subareas || []).map(subarea => ({
           ...subarea,
-          goals: (subarea.goals || []).map((goal: any) => ({
+          subarea_notes: [],
+          goals: (subarea.goals || []).map(goal => ({
             ...goal,
-            process_flows: (goal.process_flows || []).map((link: any) => ({
-              id: link.id,
-              flow_id: link.flow_id,
-              created_at: link.created_at,
-              title: link.process_flows?.title,
-              description: link.process_flows?.description
-            }))
+            goal_notes: [],
+            milestones: [],
+            metrics: [],
+            tasks: [],
+            process_flows: []
           }))
         }))
       }));

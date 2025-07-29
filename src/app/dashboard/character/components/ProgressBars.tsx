@@ -16,6 +16,7 @@ import { resetAllDailyPoints, savePointsToDate } from '@/services/characterProgr
 import { updateXPFromPoints } from '@/services/characterService'
 import { PointsHistoryDialog } from './PointsHistoryDialog'
 import { format } from 'date-fns'
+import React from 'react'
 
 const areaIcons: Record<string, string> = {
   'Work & Learning': '📚',
@@ -179,7 +180,7 @@ function ProgressItem({
 
   // Check if item is completed whenever currentValue or targetValue changes
   useEffect(() => {
-    const completed = currentValue >= targetValue;
+    const completed = targetValue > 0 && currentValue >= targetValue;
     if (completed && !isCompleted) {
       // Item just got completed
       setIsCompleted(true);
@@ -196,7 +197,7 @@ function ProgressItem({
         pl-${level === 'goal' ? 8 : level === 'subarea' ? 4 : 0} 
         transition-all duration-500 
         group
-        ${isCompleted ? 'opacity-0 hover:opacity-100 focus-within:opacity-100' : ''}
+        ${isCompleted ? 'opacity-50 hover:opacity-100 focus-within:opacity-100' : ''}
       `}
     >
       <div className="flex items-center gap-2">
@@ -288,104 +289,67 @@ function ProgressItem({
   );
 }
 
-export default function ProgressBars() {
-  const router = useRouter()
-  const { areas, loading, updateArea, updateSubarea, updateGoal, fetchAreas } = useGoalSystem()
-  const supabase = createClient()
-  const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({})
-  const [expandedSubareas, setExpandedSubareas] = useState<Record<string, boolean>>({})
-  const { user } = useAuth()
-  const [resetDialogOpen, setResetDialogOpen] = useState(false)
-  const [saveYesterdayDialogOpen, setSaveYesterdayDialogOpen] = useState(false)
-  const [showCompleted, setShowCompleted] = useState(() => {
-    // Initialize from localStorage if available
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('showCompleted')
-      return saved ? JSON.parse(saved) : false
-    }
-    return false
-  })
+// Add these helper types and functions at the top of the file
+interface VisibilityCheck {
+  daily_points?: number;
+  target_points?: number;
+  status?: string;
+}
 
-  // Save showCompleted preference to localStorage
-  useEffect(() => {
-    localStorage.setItem('showCompleted', JSON.stringify(showCompleted))
-  }, [showCompleted])
+const isComplete = (item: VisibilityCheck): boolean => {
+  const current = item.daily_points || 0;
+  const target = item.target_points || 0;
+  return target > 0 && current >= target;
+};
 
-  // Filter out completed items unless showCompleted is true
-  const filterCompletedItems = <T extends { daily_points?: number; target_points?: number; status?: string }>(items: T[]): T[] => {
-    if (showCompleted) return items;
-    return items.filter(item => {
-      // First check if the item is active (for goals)
+const isVisible = (showCompleted: boolean) => 
+  (item: VisibilityCheck & { status?: string }) => {
+    if (!showCompleted) {
+      // For goals, check active status
       if ('status' in item && item.status !== 'active') {
         return false;
       }
-      const current = item.daily_points || 0;
-      const target = item.target_points || 0;
-      // Show item if:
-      // 1. No target set (target_points = 0)
-      // 2. OR not reached target yet
-      return target === 0 || current < target;
-    });
+      // Hide if complete
+      return !isComplete(item);
+    }
+    return true;
   };
 
-  // Check if an area should be visible (has incomplete children or showCompleted is true)
-  const shouldShowArea = (area: LifeGoalArea): boolean => {
-    if (showCompleted) return true;
-    const current = area.daily_points || 0;
-    const target = area.target_points || 0;
-    // Not complete if:
-    // 1. No target set (target_points = 0)
-    // 2. OR not reached target yet
-    const areaComplete = target > 0 && current >= target;
-    if (!areaComplete) return true;
-    
-    // Check if any subareas are incomplete
-    const hasIncompleteSubareas = area.subareas.some((subarea: LifeGoalSubarea) => {
-      const current = subarea.daily_points || 0;
-      const target = subarea.target_points || 0;
-      const subareaComplete = target > 0 && current >= target;
-      if (!subareaComplete) return true;
-      
-      // Check if any goals are incomplete and active
-      return subarea.goals.some((goal: LifeGoal) => {
-        if (goal.status !== 'active') return false;
-        const current = goal.daily_points || 0;
-        const target = goal.target_points || 0;
-        return target === 0 || current < target;
-      });
-    });
-    
-    return hasIncompleteSubareas;
-  };
+export default function ProgressBars() {
+  const router = useRouter();
+  const { areas, loading, updateArea, updateSubarea, updateGoal, fetchAreas } = useGoalSystem();
+  const supabase = createClient();
+  const [expandedAreas, setExpandedAreas] = useState<Record<string, boolean>>({});
+  const [expandedSubareas, setExpandedSubareas] = useState<Record<string, boolean>>({});
+  const { user } = useAuth();
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [saveYesterdayDialogOpen, setSaveYesterdayDialogOpen] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
 
-  // Check if a subarea should be visible
-  const shouldShowSubarea = (subarea: LifeGoalSubarea): boolean => {
-    if (showCompleted) return true;
-    const current = subarea.daily_points || 0;
-    const target = subarea.target_points || 0;
-    // Not complete if:
-    // 1. No target set (target_points = 0)
-    // 2. OR not reached target yet
-    const subareaComplete = target > 0 && current >= target;
-    if (!subareaComplete) return true;
-    
-    // Check if any goals are incomplete and active
-    return subarea.goals.some((goal: LifeGoal) => {
-      if (goal.status !== 'active') return false;
-      const current = goal.daily_points || 0;
-      const target = goal.target_points || 0;
-      return target === 0 || current < target;
+  // Add check for all targets complete
+  const allTargetsComplete = React.useMemo(() => {
+    return areas.every(area => {
+      if (!area.target_points) return true;
+      return area.daily_points >= area.target_points;
     });
-  };
+  }, [areas]);
 
-  // Filter areas and their children
-  const visibleAreas = areas.filter(shouldShowArea).map(area => ({
-    ...area,
-    subareas: area.subareas.filter(shouldShowSubarea).map((subarea: LifeGoalSubarea) => ({
-      ...subarea,
-      goals: filterCompletedItems(subarea.goals)
-    }))
-  }));
+  // Keep existing visibleAreas computation
+  const visibleAreas = React.useMemo(() => {
+    return areas.map(area => {
+      const visibleSubareas = area.subareas
+        .filter(subarea => subarea.goals.some(goal => goal.status === 'active'))
+        .map(subarea => ({
+          ...subarea,
+          goals: subarea.goals.filter(goal => goal.status === 'active')
+        }));
+
+      return {
+        ...area,
+        subareas: visibleSubareas
+      };
+    });
+  }, [areas]);
 
   const handleUpdateTarget = async (id: string, newTarget: number, type: 'area' | 'subarea' | 'goal' = 'area') => {
     try {
@@ -407,7 +371,6 @@ export default function ProgressBars() {
       let current = 0;
 
       if (type === 'goal') {
-        // Get the goal and its parent subarea
         const { data: goal } = await supabase
           .from('life_goals')
           .select('*, life_goal_subareas!inner(*, life_goal_areas!inner(*))')
@@ -419,25 +382,18 @@ export default function ProgressBars() {
           return;
         }
 
-        // Increment goal points
         current = goal.daily_points || 0;
-        console.log('[INCREMENT GOAL]', { id, current, next: current + 1, goal });
         await updateGoal(id, { daily_points: current + 1 });
 
-        // Increment parent subarea points
         const subarea = goal.life_goal_subareas;
         current = subarea.daily_points || 0;
-        console.log('[INCREMENT SUBAREA]', { id: subarea.id, current, next: current + 1 });
         await updateSubarea(subarea.id, { daily_points: current + 1 });
 
-        // Increment parent area points
         const area = subarea.life_goal_areas;
         current = area.daily_points || 0;
-        console.log('[INCREMENT AREA]', { id: area.id, current, next: current + 1 });
         await updateArea(area.id, { daily_points: current + 1 });
 
       } else if (type === 'subarea') {
-        // Get the subarea and its parent area
         const { data: subarea } = await supabase
           .from('life_goal_subareas')
           .select('*, life_goal_areas!inner(*)')
@@ -449,19 +405,14 @@ export default function ProgressBars() {
           return;
         }
 
-        // Increment subarea points
         current = subarea.daily_points || 0;
-        console.log('[INCREMENT SUBAREA]', { id, current, next: current + 1, subarea });
         await updateSubarea(id, { daily_points: current + 1 });
 
-        // Increment parent area points
         const area = subarea.life_goal_areas;
         current = area.daily_points || 0;
-        console.log('[INCREMENT AREA]', { id: area.id, current, next: current + 1 });
         await updateArea(area.id, { daily_points: current + 1 });
 
       } else {
-        // Just increment area points
         const { data: area } = await supabase
           .from('life_goal_areas')
           .select('*')
@@ -474,11 +425,9 @@ export default function ProgressBars() {
         }
 
         current = area.daily_points || 0;
-        console.log('[INCREMENT AREA]', { id, current, next: current + 1, area });
         await updateArea(id, { daily_points: current + 1 });
       }
 
-      // Refresh data
       await fetchAreas();
     } catch (error) {
       console.error('[INCREMENT ERROR]', error);
@@ -491,7 +440,6 @@ export default function ProgressBars() {
       let current = 0;
 
       if (type === 'goal') {
-        // Get the goal and its parent subarea
         const { data: goal } = await supabase
           .from('life_goals')
           .select('*, life_goal_subareas!inner(*, life_goal_areas!inner(*))')
@@ -503,32 +451,24 @@ export default function ProgressBars() {
           return;
         }
 
-        // Don't decrement if already at 0
         if (goal.daily_points <= 0) return;
 
-        // Decrement goal points
         current = goal.daily_points;
-        console.log('[DECREMENT GOAL]', { id, current, next: current - 1, goal });
         await updateGoal(id, { daily_points: current - 1 });
 
-        // Decrement parent subarea points
         const subarea = goal.life_goal_subareas;
         current = subarea.daily_points;
         if (current > 0) {
-          console.log('[DECREMENT SUBAREA]', { id: subarea.id, current, next: current - 1 });
           await updateSubarea(subarea.id, { daily_points: current - 1 });
         }
 
-        // Decrement parent area points
         const area = subarea.life_goal_areas;
         current = area.daily_points;
         if (current > 0) {
-          console.log('[DECREMENT AREA]', { id: area.id, current, next: current - 1 });
           await updateArea(area.id, { daily_points: current - 1 });
         }
 
       } else if (type === 'subarea') {
-        // Get the subarea and its parent area
         const { data: subarea } = await supabase
           .from('life_goal_subareas')
           .select('*, life_goal_areas!inner(*)')
@@ -540,24 +480,18 @@ export default function ProgressBars() {
           return;
         }
 
-        // Don't decrement if already at 0
         if (subarea.daily_points <= 0) return;
 
-        // Decrement subarea points
         current = subarea.daily_points;
-        console.log('[DECREMENT SUBAREA]', { id, current, next: current - 1, subarea });
         await updateSubarea(id, { daily_points: current - 1 });
 
-        // Decrement parent area points
         const area = subarea.life_goal_areas;
         current = area.daily_points;
         if (current > 0) {
-          console.log('[DECREMENT AREA]', { id: area.id, current, next: current - 1 });
           await updateArea(area.id, { daily_points: current - 1 });
         }
 
       } else {
-        // Just decrement area points
         const { data: area } = await supabase
           .from('life_goal_areas')
           .select('*')
@@ -569,15 +503,12 @@ export default function ProgressBars() {
           return;
         }
 
-        // Don't decrement if already at 0
         if (area.daily_points <= 0) return;
 
         current = area.daily_points;
-        console.log('[DECREMENT AREA]', { id, current, next: current - 1, area });
         await updateArea(id, { daily_points: current - 1 });
       }
 
-      // Refresh data
       await fetchAreas();
     } catch (error) {
       console.error('[DECREMENT ERROR]', error);
@@ -589,49 +520,39 @@ export default function ProgressBars() {
     setExpandedAreas(prev => ({
       ...prev,
       [areaId]: !prev[areaId]
-    }))
-  }
+    }));
+  };
 
   const toggleSubarea = (subareaId: string) => {
     setExpandedSubareas(prev => ({
       ...prev,
       [subareaId]: !prev[subareaId]
-    }))
-  }
+    }));
+  };
 
   const handleGoalClick = (areaId: string, subareaId?: string, goalId?: string) => {
     if (goalId) {
-      router.push(`/dashboard/goal?tab=goals&goal=${goalId}&subarea=${subareaId}`)
+      router.push(`/dashboard/goal?tab=goals&goal=${goalId}&subarea=${subareaId}`);
     } else if (subareaId) {
-      router.push(`/dashboard/goal?tab=goals&subarea=${subareaId}`)
+      router.push(`/dashboard/goal?tab=goals&subarea=${subareaId}`);
     } else {
-      router.push(`/dashboard/goal?tab=goals&area=${areaId}`)
+      router.push(`/dashboard/goal?tab=goals&area=${areaId}`);
     }
-  }
+  };
 
   const handleResetPoints = async () => {
-    console.log('[DEBUG] handleResetPoints called');
-    console.log('[DEBUG] user:', user);
-    if (!user?.id) {
-      console.log('[DEBUG] No user ID found');
-      return;
-    }
+    if (!user?.id) return;
     try {
-      console.log('[DEBUG] Calling resetAllDailyPoints with user ID:', user.id);
       await resetAllDailyPoints(user.id);
-      // Reset character XP since it's just for today's progress
       await supabase
         .from('characters')
         .update({ xp: 0, level: 1 })
         .eq('user_id', user.id);
-      console.log('[DEBUG] resetAllDailyPoints completed');
-      // Refresh the areas data by calling fetchAreas from useGoalSystem
       await fetchAreas();
-      console.log('[DEBUG] fetchAreas completed');
       toast.success('Daily points have been reset.');
       setResetDialogOpen(false);
     } catch (error) {
-      console.error('[DEBUG] Error in handleResetPoints:', error);
+      console.error('Error in handleResetPoints:', error);
       toast.error('Failed to reset daily points. Please try again.');
     }
   };
@@ -642,157 +563,105 @@ export default function ProgressBars() {
     const formattedDate = format(yesterday, 'yyyy-MM-dd');
     
     try {
-      console.log('[SAVE TO YESTERDAY] Starting save operation...');
       await savePointsToDate(formattedDate);
-      console.log('[SAVE TO YESTERDAY] Points saved, refreshing areas...');
       await fetchAreas();
-      console.log('[SAVE TO YESTERDAY] Areas refreshed');
       toast.success('Points saved to yesterday');
       setSaveYesterdayDialogOpen(false);
     } catch (error) {
-      console.error('[SAVE TO YESTERDAY] Error:', error);
+      console.error('Error:', error);
       toast.error('Failed to save points');
     }
   };
 
   if (loading) {
-    return <div>Loading...</div>
+    return <div>Loading...</div>;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          <SetTargetsDialog areas={areas} onUpdateTargets={handleUpdateTarget} />
-          <Dialog open={saveYesterdayDialogOpen} onOpenChange={setSaveYesterdayDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                Save as Yesterday's Points
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Save Current Points as Yesterday's</DialogTitle>
-              </DialogHeader>
-              <div className="py-4">
-                <p>Are you sure you want to save current points as yesterday's progress? This will overwrite any existing data for yesterday.</p>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setSaveYesterdayDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSaveToYesterday}>
-                  Save to Yesterday
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setShowCompleted(!showCompleted)}
-          >
-            {showCompleted ? 'Hide Completed' : 'Show Completed'}
-          </Button>
-        </div>
-        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                console.log('[DEBUG] Reset button clicked');
-                setResetDialogOpen(true);
-              }}
-            >
-              Reset Daily Points
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Reset Daily Points?</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">Are you sure you want to reset all daily points to zero? This cannot be undone for today.</div>
-            <Button 
-              onClick={() => {
-                console.log('[DEBUG] Reset confirmation clicked');
-                handleResetPoints();
-              }} 
-              variant="destructive"
-            >
-              Yes, Reset
-            </Button>
-            <Button onClick={() => setResetDialogOpen(false)} variant="outline">Cancel</Button>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2 items-center">
+        <SetTargetsDialog areas={areas} onUpdateTargets={handleUpdateTarget} />
+        <Button variant="outline" size="sm" onClick={handleSaveToYesterday}>
+          Save as Yesterday's Points
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleResetPoints}>
+          Reset Daily
+        </Button>
       </div>
 
-      <div className="space-y-1">
-        {visibleAreas.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p className="text-lg font-medium">All targets completed! 🎉</p>
-            <p className="text-sm mt-2">Great job! Click "Show Completed" to see your achievements.</p>
-          </div>
-        ) : (
-          visibleAreas.map((area) => (
-            <div key={area.id} className="space-y-1">
-              <ProgressItem
-                id={area.id}
-                title={area.name}
-                currentValue={area.daily_points || 0}
-                targetValue={area.target_points || 0}
-                onIncrement={() => handleIncrement(area.id)}
-                onDecrement={() => handleDecrement(area.id)}
-                onUpdateTarget={(newTarget) => handleUpdateTarget(area.id, newTarget)}
-                icon={areaIcons[area.name]}
-                level="area"
-                isExpanded={expandedAreas[area.id] || false}
-                onToggle={() => toggleArea(area.id)}
-                hasChildren={area.subareas.length > 0}
-                onClick={() => handleGoalClick(area.id)}
-              />
-              
-              {expandedAreas[area.id] && area.subareas.map((subarea) => (
-                <div key={subarea.id} className="space-y-1">
-                  <ProgressItem
-                    id={subarea.id}
-                    title={subarea.name}
-                    currentValue={subarea.daily_points || 0}
-                    targetValue={subarea.target_points || 0}
-                    onIncrement={() => handleIncrement(subarea.id, 'subarea')}
-                    onDecrement={() => handleDecrement(subarea.id, 'subarea')}
-                    onUpdateTarget={(newTarget) => handleUpdateTarget(subarea.id, newTarget, 'subarea')}
-                    level="subarea"
-                    isExpanded={expandedSubareas[subarea.id] || false}
-                    onToggle={() => toggleSubarea(subarea.id)}
-                    hasChildren={subarea.goals.length > 0}
-                    onClick={() => handleGoalClick(area.id, subarea.id)}
-                  />
+      {allTargetsComplete && (
+        <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-900 rounded-lg p-8 text-center max-w-2xl mx-auto my-12">
+          <h3 className="text-2xl font-semibold text-green-800 dark:text-green-200 mb-4">
+            🎉 Amazing Job! All Daily Targets Complete! 🎉
+          </h3>
+          <p className="text-lg text-green-600 dark:text-green-300">
+            You've hit all your goals for today. Keep up the great work!
+          </p>
+        </div>
+      )}
 
-                  {expandedSubareas[subarea.id] && subarea.goals.map((goal) => (
+      <div className="space-y-4">
+        {visibleAreas.map((area) => (
+          <div key={area.id} className="space-y-1">
+            <ProgressItem
+              id={area.id}
+              title={area.name}
+              currentValue={area.daily_points || 0}
+              targetValue={area.target_points || 0}
+              level="area"
+              icon={areaIcons[area.name]}
+              isExpanded={expandedAreas[area.id]}
+              hasChildren={area.subareas.length > 0}
+              onToggle={() => toggleArea(area.id)}
+              onIncrement={() => handleIncrement(area.id, 'area')}
+              onDecrement={() => handleDecrement(area.id, 'area')}
+              onUpdateTarget={(target) => handleUpdateTarget(area.id, target, 'area')}
+            />
+            {expandedAreas[area.id] && (
+              <div className="ml-6 space-y-1">
+                {area.subareas.map((subarea) => (
+                  <div key={subarea.id} className="space-y-1">
                     <ProgressItem
-                      key={goal.id}
-                      id={goal.id}
-                      title={goal.title}
-                      currentValue={goal.daily_points || 0}
-                      targetValue={goal.target_points || 0}
-                      onIncrement={() => handleIncrement(goal.id, 'goal')}
-                      onDecrement={() => handleDecrement(goal.id, 'goal')}
-                      onUpdateTarget={(newTarget) => handleUpdateTarget(goal.id, newTarget, 'goal')}
-                      level="goal"
-                      isExpanded={false}
-                      onToggle={() => {}}
-                      hasChildren={false}
-                      onClick={() => handleGoalClick(area.id, subarea.id, goal.id)}
+                      id={subarea.id}
+                      title={subarea.name}
+                      currentValue={subarea.daily_points || 0}
+                      targetValue={subarea.target_points || 0}
+                      level="subarea"
+                      isExpanded={expandedSubareas[subarea.id]}
+                      hasChildren={subarea.goals.length > 0}
+                      onToggle={() => toggleSubarea(subarea.id)}
+                      onIncrement={() => handleIncrement(subarea.id, 'subarea')}
+                      onDecrement={() => handleDecrement(subarea.id, 'subarea')}
+                      onUpdateTarget={(target) => handleUpdateTarget(subarea.id, target, 'subarea')}
                     />
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))
-        )}
+                    {expandedSubareas[subarea.id] && (
+                      <div className="ml-6 space-y-1">
+                        {subarea.goals.map((goal) => (
+                          <ProgressItem
+                            key={goal.id}
+                            id={goal.id}
+                            title={goal.title}
+                            currentValue={goal.daily_points || 0}
+                            targetValue={goal.target_points || 0}
+                            level="goal"
+                            isExpanded={false}
+                            hasChildren={false}
+                            onToggle={() => {}}
+                            onIncrement={() => handleIncrement(goal.id, 'goal')}
+                            onDecrement={() => handleDecrement(goal.id, 'goal')}
+                            onUpdateTarget={(target) => handleUpdateTarget(goal.id, target, 'goal')}
+                            onClick={() => handleGoalClick(area.id, subarea.id, goal.id)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
-  )
+  );
 } 
