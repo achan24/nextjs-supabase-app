@@ -1,7 +1,7 @@
 'use client';
 
 import type { Node } from 'reactflow';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ClozeText from './ClozeText';
 import FlashcardReview from './FlashcardReview';
 import { createClient } from '@/lib/supabase';
@@ -69,6 +69,34 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [selectedNodeId, setSelectedNodeId] = useState<string>(node?.data?.linkedNodeId || '');
   const supabase = createClient();
   const { startTimer, stopTimer, resetTimer } = useTaskTimer();
+
+  // Add state for skill-specific fields
+  const [skillLevel, setSkillLevel] = useState(node?.data?.level || 0);
+  const [effectiveness, setEffectiveness] = useState(node?.data?.effectiveness || 0);
+  const [lastPracticed, setLastPracticed] = useState(node?.data?.lastPracticed || null);
+
+  // Update skill-specific fields
+  const handleSkillUpdate = useCallback(() => {
+    if (node && node.type === 'skill') {
+      updateNode(node.id, {
+        ...node.data,
+        level: skillLevel,
+        effectiveness: effectiveness,
+        lastPracticed: lastPracticed || new Date()
+      });
+    }
+  }, [node, skillLevel, effectiveness, lastPracticed, updateNode]);
+
+  // Practice button handler
+  const handlePractice = useCallback(() => {
+    if (node && node.type === 'skill') {
+      setLastPracticed(new Date());
+      updateNode(node.id, {
+        ...node.data,
+        lastPracticed: new Date()
+      });
+    }
+  }, [node, updateNode]);
 
   useEffect(() => {
     if (node) {
@@ -1330,6 +1358,94 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
                 </pre>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Skill-specific controls */}
+      {node.type === 'skill' && (
+        <div className="pt-4 mt-4 border-t">
+          <h4 className="text-sm font-medium mb-2">Skill Progress</h4>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Skill Level (0-100)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={skillLevel}
+                  onChange={(e) => setSkillLevel(parseInt(e.target.value))}
+                  onMouseUp={handleSkillUpdate}
+                  onTouchEnd={handleSkillUpdate}
+                  className="flex-1"
+                />
+                <span className="text-sm font-medium w-12">{skillLevel}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Effectiveness (0-100)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={effectiveness}
+                  onChange={(e) => setEffectiveness(parseInt(e.target.value))}
+                  onMouseUp={handleSkillUpdate}
+                  onTouchEnd={handleSkillUpdate}
+                  className="flex-1"
+                />
+                <span className="text-sm font-medium w-12">{effectiveness}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Last Practiced</label>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">
+                  {lastPracticed ? new Date(lastPracticed).toLocaleDateString() : 'Never practiced'}
+                </span>
+                <button
+                  onClick={handlePractice}
+                  className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                >
+                  Practice Now
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Progress Overview</label>
+              <div className="space-y-2 p-2 bg-gray-50 rounded">
+                <div>
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>Level</span>
+                    <span>{skillLevel}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${skillLevel}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>Effectiveness</span>
+                    <span>{effectiveness}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${effectiveness}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -197,7 +197,7 @@ function ProgressItem({
         pl-${level === 'goal' ? 8 : level === 'subarea' ? 4 : 0} 
         transition-all duration-500 
         group
-        ${isCompleted ? 'opacity-50 hover:opacity-100 focus-within:opacity-100' : ''}
+        ${isCompleted ? 'opacity-0 hover:opacity-100 focus-within:opacity-100' : ''}
       `}
     >
       <div className="flex items-center gap-2">
@@ -337,16 +337,12 @@ export default function ProgressBars() {
   // Keep existing visibleAreas computation
   const visibleAreas = React.useMemo(() => {
     return areas.map(area => {
-      const visibleSubareas = area.subareas
-        .filter(subarea => subarea.goals.some(goal => goal.status === 'active'))
-        .map(subarea => ({
-          ...subarea,
-          goals: subarea.goals.filter(goal => goal.status === 'active')
-        }));
-
       return {
         ...area,
-        subareas: visibleSubareas
+        subareas: area.subareas.map(subarea => ({
+          ...subarea,
+          goals: subarea.goals.filter(goal => goal.status === 'active')
+        }))
       };
     });
   }, [areas]);

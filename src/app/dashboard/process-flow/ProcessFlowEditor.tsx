@@ -35,7 +35,6 @@ import { TaskNode } from './nodes/TaskNode';
 import { NoteNode } from './nodes/NoteNode';
 import { ProcessNode } from './nodes/ProcessNode';
 import { SkillNode } from './nodes/SkillNode';
-import { TechniqueNode } from './nodes/TechniqueNode';
 import { AnalyticsNode } from './nodes/AnalyticsNode';
 import CalculationNode from './nodes/CalculationNode';
 import FlashcardReview from './components/FlashcardReview';
@@ -60,7 +59,7 @@ const nodeTypes = {
   note: NoteNode,
   process: ProcessNode,
   skill: SkillNode,
-  technique: TechniqueNode,
+
   analytics: AnalyticsNode,
   calculation: CalculationNode,
   link: LinkNode,

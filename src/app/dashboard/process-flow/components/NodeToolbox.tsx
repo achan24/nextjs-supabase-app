@@ -12,63 +12,51 @@ const nodeTypes = [
   {
     type: 'task',
     label: 'Task',
-    description: 'A single actionable task',
     icon: '🔨',
+    description: 'A task with timer tracking'
   },
   {
     type: 'note',
     label: 'Note',
-    description: 'Add context or thoughts',
     icon: '📋',
+    description: 'Text notes and documentation'
   },
   {
     type: 'process',
     label: 'Process',
-    description: 'Group of related tasks',
     icon: '🔄',
+    description: 'A group of related tasks'
   },
   {
     type: 'skill',
     label: 'Skill',
-    description: 'Area of expertise',
     icon: '🎯',
-  },
-  {
-    type: 'technique',
-    label: 'Technique',
-    description: 'Specific practice method',
-    icon: '⚡',
+    description: 'A skill or subskill to develop'
   },
   {
     type: 'analytics',
     label: 'Analytics',
-    description: 'Visualize task completion data',
     icon: '📊',
+    description: 'Data visualization'
   },
   {
     type: 'calculation',
     label: 'Calculation',
-    description: 'Sum up values from connected nodes',
     icon: '🧮',
-  },
-  {
-    type: 'link',
-    label: 'Node Link',
-    description: 'Jump to a node in another map',
-    icon: '🔗',
+    description: 'Numerical calculations'
   },
   {
     type: 'checklist',
     label: 'Checklist',
-    description: 'Create a list of checkable items',
     icon: '✅',
+    description: 'A list of items to check off'
   },
   {
     type: 'attachment',
     label: 'Attachment',
-    description: 'Upload and display files (PDF, Word, PowerPoint)',
     icon: '📎',
-  },
+    description: 'Attached files or links'
+  }
 ];
 
 export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolboxProps) {
