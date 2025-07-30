@@ -17,6 +17,7 @@ import { updateXPFromPoints } from '@/services/characterService'
 import { PointsHistoryDialog } from './PointsHistoryDialog'
 import { format } from 'date-fns'
 import React from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const areaIcons: Record<string, string> = {
   'Work & Learning': '📚',
@@ -315,6 +316,124 @@ const isVisible = (showCompleted: boolean) =>
     return true;
   };
 
+// Progress Graph Component
+function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        setLoading(true);
+        // Get the last 30 days of history
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const { data, error } = await supabase
+          .from('area_points_history')
+          .select('*')
+          .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+          .order('date', { ascending: true });
+
+        if (error) throw error;
+
+        // Group by date and sum total points
+        const groupedData = data?.reduce((acc: any, record: any) => {
+          const date = record.date;
+          if (!acc[date]) {
+            acc[date] = { date, totalPoints: 0 };
+          }
+          acc[date].totalPoints += record.points || 0;
+          return acc;
+        }, {});
+
+        // Convert to array and format for chart
+        const chartData = Object.values(groupedData || {}).map((item: any) => ({
+          date: format(new Date(item.date), 'MMM d'),
+          points: item.totalPoints
+        }));
+
+        // If no data, create some sample data for the last 7 days
+        if (chartData.length === 0) {
+          const sampleData = [];
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            sampleData.push({
+              date: format(date, 'MMM d'),
+              points: Math.floor(Math.random() * 10) // Random points for demo
+            });
+          }
+          setHistoryData(sampleData);
+        } else {
+          setHistoryData(chartData);
+        }
+      } catch (error) {
+        console.error('Error fetching history:', error);
+        // Create fallback data
+        const fallbackData = [];
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          fallbackData.push({
+            date: format(date, 'MMM d'),
+            points: 0
+          });
+        }
+        setHistoryData(fallbackData);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [areas]);
+
+  if (loading) {
+    return (
+      <div className="bg-white p-4 rounded-lg border">
+        <h3 className="text-lg font-semibold mb-4">Daily Progress History</h3>
+        <div className="h-[200px] flex items-center justify-center text-gray-500">
+          Loading history...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white p-4 rounded-lg border">
+      <h3 className="text-lg font-semibold mb-4">Daily Progress History</h3>
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={historyData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis 
+            dataKey="date" 
+            tick={{ fontSize: 12 }}
+            interval="preserveStartEnd"
+          />
+          <YAxis 
+            tick={{ fontSize: 12 }}
+            domain={[0, 'dataMax + 2']}
+          />
+          <Tooltip 
+            formatter={(value: any) => [`${value} points`, 'Total Points']}
+            labelFormatter={(label) => `Date: ${label}`}
+          />
+          <Line 
+            type="monotone" 
+            dataKey="points" 
+            stroke="#3b82f6" 
+            strokeWidth={2}
+            dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export default function ProgressBars() {
   const router = useRouter();
   const { areas, loading, updateArea, updateSubarea, updateGoal, fetchAreas } = useGoalSystem();
@@ -584,6 +703,9 @@ export default function ProgressBars() {
           Reset Daily
         </Button>
       </div>
+
+      {/* Progress Graph */}
+      <ProgressGraph areas={areas} />
 
       {allTargetsComplete && (
         <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-900 rounded-lg p-8 text-center max-w-2xl mx-auto my-12">

@@ -304,17 +304,17 @@ export default function SkillsExplorerClient() {
 
         // Query process_flows to get nodes stored as JSONB
         const { data: processFlowsData, error } = await supabase
-          .from('process_flows')
+        .from('process_flows')
           .select('id, title, nodes, edges');
 
         console.log('Process flows query result:', { data: processFlowsData, error });
 
-        if (error) {
+      if (error) {
           console.error('Database error:', error);
           setDebugTotalNodes(-1);
           setDebugTypeCounts({ error: error.message });
-          return;
-        }
+        return;
+      }
 
         // Extract all nodes and edges from all process flows
         const allNodes: any[] = [];
@@ -363,7 +363,7 @@ export default function SkillsExplorerClient() {
         setDebugTotalNodes(-1);
         setDebugTypeCounts({ error: 'Unexpected error occurred' });
       } finally {
-        setLoading(false);
+      setLoading(false);
       }
     }
 
@@ -401,10 +401,10 @@ export default function SkillsExplorerClient() {
       <div className="flex gap-6">
         {/* Skills Tree */}
         <div className="w-1/3">
-          <Card className="p-4">
+        <Card className="p-4">
             <h2 className="text-lg font-semibold mb-4">Skills & Targets</h2>
-            {loading ? (
-              <div>Loading skills...</div>
+          {loading ? (
+            <div>Loading skills...</div>
             ) : skillTree.length === 0 ? (
               <div className="text-gray-500">No skills or targets found</div>
             ) : (
@@ -422,15 +422,15 @@ export default function SkillsExplorerClient() {
                     selectedNode={selectedNode}
                   />
                 ))}
-              </div>
-            )}
-          </Card>
-        </div>
+            </div>
+          )}
+        </Card>
+      </div>
 
         {/* Skill Details */}
         <div className="w-2/3">
-          <Card className="p-4">
-            <h2 className="text-lg font-semibold mb-4">Skill Details</h2>
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold mb-4">Skill Details</h2>
             {selectedNode ? (
               <div className="space-y-6">
                 {/* Header */}
@@ -577,11 +577,11 @@ export default function SkillsExplorerClient() {
                     </div>
                   </div>
                 )}
-              </div>
+          </div>
             ) : (
               <div className="text-gray-500">Select a skill or target to view details</div>
             )}
-          </Card>
+        </Card>
         </div>
       </div>
 
