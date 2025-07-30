@@ -316,6 +316,24 @@ const isVisible = (showCompleted: boolean) =>
     return true;
   };
 
+// Custom Tick Component for two-line date display
+const CustomTick = ({ x, y, payload }: any) => {
+  if (!payload || !payload.value) return null;
+  
+  const [date, day] = payload.value.split('\n');
+  
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={16} textAnchor="middle" fill="#666" fontSize={10}>
+        {date}
+      </text>
+      <text x={0} y={0} dy={28} textAnchor="middle" fill="#999" fontSize={9}>
+        {day}
+      </text>
+    </g>
+  );
+};
+
 // Progress Graph Component
 function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
   const [historyData, setHistoryData] = useState<any[]>([]);
@@ -362,19 +380,20 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
           const date = new Date();
           date.setDate(date.getDate() - i);
           const dateStr = date.toISOString().split('T')[0];
-          const formattedDate = format(date, 'MMM d');
+          const dateLabel = format(date, 'MMM d');
+          const dayLabel = format(date, 'EEE');
           
           if (i === 0) {
             // Today - use current score
             chartData.push({
-              date: formattedDate,
+              date: `${dateLabel}\n${dayLabel}`,
               points: currentScore
             });
           } else {
             // Historical days - use data from database or 0
             const historicalPoints = groupedData?.[dateStr]?.totalPoints || 0;
             chartData.push({
-              date: formattedDate,
+              date: `${dateLabel}\n${dayLabel}`,
               points: historicalPoints
             });
           }
@@ -388,8 +407,10 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
         for (let i = 9; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
+          const dateLabel = format(date, 'MMM d');
+          const dayLabel = format(date, 'EEE');
           fallbackData.push({
-            date: format(date, 'MMM d'),
+            date: `${dateLabel}\n${dayLabel}`,
             points: i === 0 ? currentScore : 0 // Today gets current score, others get 0
           });
         }
@@ -465,11 +486,11 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
         </div>
       </div>
       <ResponsiveContainer width="100%" height={120}>
-        <LineChart data={historyData}>
+        <LineChart data={historyData} margin={{ left: 10, right: 10, top: 10, bottom: 30 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis 
             dataKey="date" 
-            tick={{ fontSize: 10 }}
+            tick={<CustomTick />}
             interval={0} // Show all 10 days
           />
           <YAxis 
