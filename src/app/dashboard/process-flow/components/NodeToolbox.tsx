@@ -30,8 +30,14 @@ const nodeTypes = [
   {
     type: 'skill',
     label: 'Skill',
-    icon: '🎯',
+    icon: '⚔️',  // or '🔨' or '⚡'
     description: 'A skill or subskill to develop'
+  },
+  {
+    type: 'target',
+    label: 'Target',
+    icon: '🎯',
+    description: 'A measurable goal or checkpoint'
   },
   {
     type: 'analytics',
@@ -187,15 +193,15 @@ export default function NodeToolbox({ setNodes, reactFlowInstance }: NodeToolbox
             onClick={() => addNode('skill')}
             draggable
           >
-            🎯 Skill
+            ⚔️ Skill
           </div>
           <div
-            className="p-3 bg-orange-50 border-2 border-orange-200 rounded-md cursor-pointer hover:bg-orange-100"
-            onDragStart={(event) => onDragStart(event, 'technique')}
-            onClick={() => addNode('technique')}
+            className="p-3 bg-green-50 border-2 border-green-200 rounded-md cursor-pointer hover:bg-green-100"
+            onDragStart={(event) => onDragStart(event, 'target')}
+            onClick={() => addNode('target')}
             draggable
           >
-            ⚡ Technique
+            🎯 Target
           </div>
           <div
             className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-md cursor-pointer hover:bg-indigo-100"

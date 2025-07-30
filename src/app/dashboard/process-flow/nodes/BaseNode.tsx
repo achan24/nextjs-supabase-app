@@ -56,7 +56,7 @@ const nodeTypeStyles = {
     selectedBorderClass: 'border-teal-500',
   },
   skill: {
-    icon: '🎯',
+    icon: '⚔️',
     bgClass: 'bg-green-50',
     borderClass: 'border-green-200',
     selectedBorderClass: 'border-green-500',
@@ -84,6 +84,12 @@ const nodeTypeStyles = {
     bgClass: 'bg-pink-50',
     borderClass: 'border-pink-200',
     selectedBorderClass: 'border-pink-500',
+  },
+  target: {
+    icon: '🎯',
+    bgClass: 'bg-yellow-50',
+    borderClass: 'border-yellow-200',
+    selectedBorderClass: 'border-yellow-500',
   },
 };
 

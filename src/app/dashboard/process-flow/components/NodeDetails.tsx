@@ -1,6 +1,6 @@
 'use client';
 
-import type { Node } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ClozeText from './ClozeText';
 import FlashcardReview from './FlashcardReview';
@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { useTaskTimer } from '@/contexts/TaskTimerContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import TargetEvalModal from './TargetEvalModal';
+import { useReactFlow } from 'reactflow';
 
 interface CompletionRecord {
   completedAt: number;
@@ -34,6 +36,35 @@ interface Reminder {
   sent_at?: string;
 }
 
+interface Target {
+  id: string;
+  type: 'target';
+  data: {
+    type: 'number' | 'boolean';
+    targetValue: number | boolean;
+    units?: string;
+    metric: string;
+    isCompleted?: boolean;
+    attempts?: Array<{
+      date: string;
+      value: number | boolean;
+      notes?: string;
+    }>;
+  };
+}
+
+interface TargetResult {
+  targetId: string;
+  value: number | boolean;
+  notes: string;
+}
+
+interface TargetEvalModalState {
+  isOpen: boolean;
+  targets: Target[];
+  onComplete: (results: TargetResult[]) => void;
+}
+
 interface NodeDetailsProps {
   node: Node | null;
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
@@ -42,7 +73,32 @@ interface NodeDetailsProps {
   jumpToNode?: (flowId: string, nodeId: string) => void;
 }
 
+interface FlowEdge {
+  source: string;
+  target: string;
+  id: string;
+}
+
+interface FlowNode {
+  id: string;
+  type: string;
+  data: any; // We'll keep this any since different node types have different data
+}
+
+// Add type guard at the top of the file
+type NodeType = 'skill' | 'target' | 'attachment' | 'note' | 'process';
+
+function isSkillNode(node: any): boolean {
+  return node?.type === 'skill';
+}
+
+// Add type guard for target nodes at the top
+function isTargetNode(node: any): boolean {
+  return node?.type === 'target';
+}
+
 export default function NodeDetails({ node, setNodes, updateNode, onStartReview, jumpToNode }: NodeDetailsProps) {
+  console.warn('[TARGETS SELECTION] Node selected:', node?.type, node?.id);
   const [isEditing, setIsEditing] = useState(false);
   const [historyOrder, setHistoryOrder] = useState<'desc' | 'asc'>('desc');
   const [newNote, setNewNote] = useState('');
@@ -74,6 +130,41 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
   const [skillLevel, setSkillLevel] = useState(node?.data?.level || 0);
   const [effectiveness, setEffectiveness] = useState(node?.data?.effectiveness || 0);
   const [lastPracticed, setLastPracticed] = useState(node?.data?.lastPracticed || null);
+  const [newTargetValue, setNewTargetValue] = useState<number | null>(null);
+  const [newTargetType, setNewTargetType] = useState<'number' | 'boolean'>('number');
+  const [newTargetMetric, setNewTargetMetric] = useState('');
+  const [newAttemptValue, setNewAttemptValue] = useState<number | boolean | null>(null);
+  const [newAttemptNote, setNewAttemptNote] = useState('');
+
+  const [targetEvalModal, setTargetEvalModal] = useState<TargetEvalModalState>({
+    isOpen: false,
+    targets: [],
+    onComplete: () => {}
+  });
+
+  const { getEdges, getNodes } = useReactFlow();
+
+  // Find connected targets for skill nodes
+  let connectedTargets: any[] = [];
+  if (node?.type === 'skill') {
+    const allEdges = getEdges();
+    const allNodes = getNodes();
+    const outgoingEdges = allEdges.filter(e => e.source === node.id);
+    connectedTargets = allNodes.filter(n => 
+      outgoingEdges.some(e => e.target === n.id)
+    );
+  }
+
+  // Find connected skills for target nodes
+  let connectedSkills: any[] = [];
+  if (node?.type === 'target') {
+    const allEdges = getEdges();
+    const allNodes = getNodes();
+    const incomingEdges = allEdges.filter(e => e.target === node.id);
+    connectedSkills = allNodes.filter(n => 
+      incomingEdges.some(e => e.source === n.id)
+    );
+  }
 
   // Update skill-specific fields
   const handleSkillUpdate = useCallback(() => {
@@ -336,37 +427,190 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
     });
   };
 
-  const handleCompleteTask = () => {
-    if (!node) return;
-    const now = Date.now();
-    const currentTimeSpent = node.data.isRunning 
-      ? (node.data.timeSpent || 0) + (now - (node.data.startTime || now))
-      : node.data.timeSpent || 0;
+  // Add this function to find connected target nodes
+  const getConnectedTargets = useCallback(async () => {
+    console.warn('[TARGETS DEBUG] Starting target fetch for node:', node?.id);
+    
+    if (!node?.id || !node.data.flowId) {
+      console.error('[TARGETS ERROR] Missing node id or flowId:', { 
+        nodeId: node?.id, 
+        flowId: node?.data.flowId 
+      });
+      return [];
+    }
+    
+    // Get the flow data to find edges
+    const { data: flow, error } = await supabase
+      .from('process_flows')
+      .select('*')
+      .eq('id', node.data.flowId)
+      .single();
 
-    const completionRecord: CompletionRecord = {
-      completedAt: now,
-      timeSpent: currentTimeSpent,
-      note: newNote || undefined,
-    };
-
-    // Parse value from label if it exists
-    let value = node.data.value;
-    if (node.data.label) {
-      const valueMatch = node.data.label.match(/VALUE:\s*(-?\d+)/);
-      if (valueMatch) {
-        value = Number(valueMatch[1]);
-      }
+    if (error) {
+      console.error('[TARGETS ERROR] Error fetching flow:', error);
+      return [];
     }
 
-    updateNode(node.id, {
-      isRunning: false,
-      timeSpent: 0,
-      startTime: undefined,
-      status: 'completed',
-      value: value,
-      completionHistory: [...(node.data.completionHistory || []), completionRecord],
+    if (!flow) {
+      console.error('[TARGETS ERROR] No flow data found');
+      return [];
+    }
+
+    // Log the entire flow structure
+    console.warn('[TARGETS DEBUG] Full flow data:', {
+      id: flow.id,
+      edges: flow.edges,
+      nodes: flow.nodes,
+      currentNodeId: node.id
     });
-    setNewNote(''); // Reset note input
+
+    // Validate edge structure
+    const edges = (flow.edges || []) as FlowEdge[];
+    console.warn('[TARGETS DEBUG] Edge structure check:', edges.map((edge: FlowEdge) => ({
+      source: edge.source,
+      target: edge.target,
+      isValid: typeof edge.source === 'string' && typeof edge.target === 'string'
+    })));
+
+    // Find all outgoing edges from this skill node to target nodes
+    const outgoingEdges = edges.filter((edge: FlowEdge) => 
+      edge.source === node.id
+    );
+    
+    console.warn('[TARGETS DEBUG] Found outgoing edges:', {
+      skillNodeId: node.id,
+      count: outgoingEdges.length,
+      edges: outgoingEdges
+    });
+
+    // Get all target nodes that this skill connects to
+    const nodes = (flow.nodes || []) as FlowNode[];
+    console.warn('[TARGETS DEBUG] Node structure check:', nodes.map((n: FlowNode) => ({
+      id: n.id,
+      type: n.type,
+      isValid: typeof n.id === 'string' && typeof n.type === 'string'
+    })));
+
+    const connectedNodes = nodes.filter((n: FlowNode) => 
+      outgoingEdges.some((edge: FlowEdge) => edge.target === n.id) && 
+      n.type === 'target'
+    ) as Target[];
+
+    console.warn('[TARGETS DEBUG] Found connected target nodes:', {
+      count: connectedNodes.length,
+      nodes: connectedNodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        data: n.data
+      }))
+    });
+
+    return connectedNodes;
+  }, [node?.id, node?.data.flowId, supabase]);
+
+  // Add effect to fetch targets when node changes
+  useEffect(() => {
+    console.warn('[TARGETS SELECTION] Node type changed:', node?.type);
+    
+    if (node?.type === 'skill') {
+      console.warn('[TARGETS INFO] Selected skill node:', {
+        id: node.id,
+        flowId: node.data.flowId,
+        data: node.data
+      });
+      
+      getConnectedTargets().then(targets => {
+        console.warn('[TARGETS INFO] Setting connected targets:', targets);
+      }).catch(error => {
+        console.error('[TARGETS ERROR] Failed to get targets:', error);
+      });
+    }
+  }, [node, getConnectedTargets]);
+
+  const handleCompleteTask = async () => {
+    if (!node) return;
+
+    // Get connected target nodes
+    const targetNodes = await getConnectedTargets();
+    
+    // If there are target nodes, show the target evaluation modal
+    if (targetNodes.length > 0) {
+      setTargetEvalModal({
+        isOpen: true,
+        targets: targetNodes,
+        onComplete: async (targetResults) => {
+          // Record the practice completion with target evaluations
+          const now = Date.now();
+          const currentTimeSpent = node.data.isRunning 
+            ? (node.data.timeSpent || 0) + (now - (node.data.startTime || now))
+            : node.data.timeSpent || 0;
+
+          const completionRecord = {
+            completedAt: now,
+            timeSpent: currentTimeSpent,
+            note: newNote || undefined,
+            targetEvaluations: targetResults.map(result => ({
+              targetId: result.targetId,
+              value: result.value,
+              notes: result.notes
+            }))
+          };
+
+          updateNode(node.id, {
+            isRunning: false,
+            timeSpent: 0,
+            startTime: undefined,
+            status: 'completed',
+            completionHistory: [...(node.data.completionHistory || []), completionRecord],
+          });
+
+          // Update each target node with the results
+          targetResults.forEach(result => {
+            const targetNode = targetNodes.find(t => t.id === result.targetId);
+            if (targetNode) {
+              updateNode(targetNode.id, {
+                ...targetNode.data,
+                attempts: [
+                  ...(targetNode.data.attempts || []),
+                  {
+                    date: new Date(now).toISOString(),
+                    value: result.value,
+                    notes: result.notes
+                  }
+                ],
+                isCompleted: targetNode.data.type === 'number'
+                  ? (result.value as number) >= (targetNode.data.targetValue as number)
+                  : result.value === targetNode.data.targetValue
+              });
+            }
+          });
+
+          setTargetEvalModal({ isOpen: false, targets: [], onComplete: () => {} });
+          setNewNote('');
+        }
+      });
+    } else {
+      // No targets, just complete the practice as normal
+      const now = Date.now();
+      const currentTimeSpent = node.data.isRunning 
+        ? (node.data.timeSpent || 0) + (now - (node.data.startTime || now))
+        : node.data.timeSpent || 0;
+
+      const completionRecord = {
+        completedAt: now,
+        timeSpent: currentTimeSpent,
+        note: newNote || undefined,
+      };
+
+      updateNode(node.id, {
+        isRunning: false,
+        timeSpent: 0,
+        startTime: undefined,
+        status: 'completed',
+        completionHistory: [...(node.data.completionHistory || []), completionRecord],
+      });
+      setNewNote('');
+    }
   };
 
   const formatTime = (ms: number) => {
@@ -613,8 +857,60 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
     }
   };
 
+  // Add this function to find connected skill nodes
+  const getConnectedSkills = useCallback(async () => {
+    if (!node?.id || !node.data.flowId) {
+      console.warn('[SKILLS ERROR] Missing node id or flowId:', { nodeId: node?.id, flowId: node?.data.flowId });
+      return [];
+    }
+
+    const { data: flow, error } = await supabase
+      .from('process_flows')
+      .select('*')
+      .eq('id', node.data.flowId)
+      .single();
+
+    if (error || !flow) {
+      console.error('[SKILLS ERROR] Error fetching flow:', error);
+      return [];
+    }
+
+    const edges = (flow.edges || []) as FlowEdge[];
+    const nodes = (flow.nodes || []) as FlowNode[];
+
+    // Find edges where this target is the target
+    const incomingEdges = edges.filter((edge: FlowEdge) => 
+      edge.target === node.id
+    );
+
+    // Get all skill nodes that connect to this target
+    const connectedNodes = nodes.filter((n: FlowNode) => 
+      incomingEdges.some((edge: FlowEdge) => edge.source === n.id) && 
+      n.type === 'skill'
+    );
+
+    console.warn('[SKILLS DEBUG] Found connected skill nodes:', {
+      count: connectedNodes.length,
+      nodes: connectedNodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        label: n.data.label
+      }))
+    });
+
+    return connectedNodes;
+  }, [node?.id, node?.data.flowId, supabase]);
+
   return (
     <div className="space-y-4">
+      {/* Target Evaluation Modal */}
+      <TargetEvalModal
+        isOpen={targetEvalModal.isOpen}
+        targets={targetEvalModal.targets}
+        onComplete={targetEvalModal.onComplete}
+        onCancel={() => setTargetEvalModal({ isOpen: false, targets: [], onComplete: () => {} })}
+      />
+
       {/* Show link reference if node is a link node */}
       {node?.type === 'link' && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
@@ -1363,91 +1659,361 @@ export default function NodeDetails({ node, setNodes, updateNode, onStartReview,
       )}
 
       {/* Skill-specific controls */}
-      {node.type === 'skill' && (
-        <div className="pt-4 mt-4 border-t">
-          <h4 className="text-sm font-medium mb-2">Skill Progress</h4>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Skill Level (0-100)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={skillLevel}
-                  onChange={(e) => setSkillLevel(parseInt(e.target.value))}
-                  onMouseUp={handleSkillUpdate}
-                  onTouchEnd={handleSkillUpdate}
-                  className="flex-1"
-                />
-                <span className="text-sm font-medium w-12">{skillLevel}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Effectiveness (0-100)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={effectiveness}
-                  onChange={(e) => setEffectiveness(parseInt(e.target.value))}
-                  onMouseUp={handleSkillUpdate}
-                  onTouchEnd={handleSkillUpdate}
-                  className="flex-1"
-                />
-                <span className="text-sm font-medium w-12">{effectiveness}</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Last Practiced</label>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">
-                  {lastPracticed ? new Date(lastPracticed).toLocaleDateString() : 'Never practiced'}
-                </span>
-                <button
-                  onClick={handlePractice}
-                  className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
-                >
-                  Practice Now
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">Progress Overview</label>
-              <div className="space-y-2 p-2 bg-gray-50 rounded">
-                <div>
-                  <div className="flex justify-between text-xs text-gray-600 mb-1">
-                    <span>Level</span>
-                    <span>{skillLevel}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${skillLevel}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs text-gray-600 mb-1">
-                    <span>Effectiveness</span>
-                    <span>{effectiveness}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-600 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${effectiveness}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
+      {isSkillNode(node) && (
+        <>
+          {/* Connected Targets */}
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">
+              Targets ({getEdges().filter(e => e.target === node.id).length})
+            </h4>
+            <div className="space-y-2">
+              {(() => {
+                // Target nodes point TO skill nodes (target is source, skill is target)
+                const targetIds = getEdges()
+                  .filter(e => e.target === node.id)  // Find INCOMING edges where skill is target
+                  .map(e => e.source);  // Get the source IDs (which are the target nodes)
+                
+                const targetNodes = getNodes()
+                  .filter(n => targetIds.includes(n.id) && n.type === 'target');
+                
+                return targetNodes.length === 0 ? (
+                  <div className="text-sm text-gray-500">No targets connected</div>
+                ) : (
+                  targetNodes.map((target) => (
+                    <div key={target.id} className="p-2 bg-gray-50 rounded space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🎯</span>
+                          <span className="text-sm font-medium">{target.data.metric}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {target.data.isCompleted ? (
+                            <span className="text-green-500">●</span>
+                          ) : (
+                            <span className="text-gray-400">○</span>
+                          )}
+                          {target.data.attempts && target.data.attempts.length > 0 && (
+                            <span className="text-blue-500 font-medium">
+                              {target.data.attempts.length}⚡
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                        <div>
+                          <span className="font-medium">Type:</span>{' '}
+                          {target.data.type === 'number' ? 'Number' : 'Yes/No'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Value:</span>{' '}
+                          {target.data.type === 'number' 
+                            ? `${target.data.targetValue}${target.data.units ? ` ${target.data.units}` : ''}`
+                            : target.data.targetValue ? 'Yes' : 'No'
+                          }
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-medium">What to measure:</span>{' '}
+                          {target.data.metric}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                );
+              })()}
             </div>
           </div>
-        </div>
+
+          {/* Timer Controls */}
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Timer Controls</h4>
+            <div className="flex flex-wrap gap-2">
+              {!node.data.isRunning ? (
+                <button
+                  onClick={handleStartTimer}
+                  className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Start Timer
+                </button>
+              ) : (
+                <button
+                  onClick={handleStopTimer}
+                  className="px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  Stop Timer
+                </button>
+              )}
+              <div className="w-full mt-2">
+                <textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Add a note about this practice session..."
+                  className="w-full p-2 text-sm border rounded-md"
+                  rows={2}
+                />
+              </div>
+              <button
+                onClick={handleCompleteTask}
+                className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Complete Practice
+              </button>
+              <button
+                onClick={handleResetTask}
+                className="px-3 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                Reset Timer
+              </button>
+            </div>
+          </div>
+
+          {/* Practice History */}
+          {node.data.completionHistory && node.data.completionHistory.length > 0 && (
+            <div className="pt-4 border-t">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    Practice History ({node.data.completionHistory.length})
+                  </h4>
+                  <span className="text-sm text-blue-600">
+                    Avg: {formatTime(node.data.completionHistory.reduce((sum: number, rec: CompletionRecord) => sum + rec.timeSpent, 0) / node.data.completionHistory.length)}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setHistoryOrder(historyOrder === 'desc' ? 'asc' : 'desc')}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  {historyOrder === 'desc' ? 'Oldest First' : 'Newest First'}
+                </button>
+              </div>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {[...node.data.completionHistory]
+                  .sort((a, b) => historyOrder === 'desc' ? b.completedAt - a.completedAt : a.completedAt - b.completedAt)
+                  .map((record: CompletionRecord, index: number) => (
+                    <div 
+                      key={record.completedAt}
+                      className="text-xs p-2 bg-gray-50 rounded"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span>{formatDate(record.completedAt)}</span>
+                        <span className="text-gray-500">
+                          Time: {formatTime(record.timeSpent)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-gray-600">
+                        {editingNoteId === record.completedAt ? (
+                          <div className="flex flex-col space-y-2">
+                            <textarea
+                              value={editingNoteText}
+                              onChange={(e) => setEditingNoteText(e.target.value)}
+                              className="w-full p-1 text-sm border rounded"
+                              rows={2}
+                              autoFocus
+                              placeholder="Add a note about this practice session..."
+                            />
+                            <div className="flex justify-end space-x-2">
+                              <button
+                                onClick={() => setEditingNoteId(null)}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleEditNote(record, editingNoteText)}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-start">
+                            <span>{record.note || 'No note added'}</span>
+                            <button
+                              onClick={() => {
+                                setEditingNoteId(record.completedAt);
+                                setEditingNoteText(record.note || '');
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 ml-2"
+                            >
+                              {record.note ? 'Edit' : 'Add Note'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Debug Info</h4>
+            <div className="space-y-1 text-sm">
+              <div>Outgoing edges: {getEdges().filter(e => e.source === node.id).length}</div>
+              <div>Targets: {getEdges().filter(e => e.source === node.id).map(e => e.target).join(', ') || 'None'}</div>
+              <div>Incoming edges: {getEdges().filter(e => e.target === node.id).length}</div>
+              <div>Sources: {getEdges().filter(e => e.target === node.id).map(e => e.source).join(', ') || 'None'}</div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Target-specific controls */}
+      {node.type === 'target' && (
+        <>
+          <div className="pt-4 border-t">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Target</h4>
+            <div className="space-y-3">
+              {/* Target Type */}
+              <div className="flex gap-2">
+                <div className="w-1/4">
+                  <label className="block text-sm text-gray-600 mb-1">Type</label>
+                  <select
+                    value={node.data.type}
+                    onChange={(e) => {
+                      const newType = e.target.value as 'number' | 'boolean';
+                      updateNode(node.id, {
+                        ...node.data,
+                        type: newType,
+                        targetValue: newType === 'number' ? 0 : false
+                      });
+                    }}
+                    className="w-full p-2 text-sm border rounded-md"
+                  >
+                    <option value="number">Number</option>
+                    <option value="boolean">Yes/No</option>
+                  </select>
+                </div>
+
+                {/* Target Value */}
+                {node.data.type === 'number' ? (
+                  <>
+                    <div className="w-1/4">
+                      <label className="block text-sm text-gray-600 mb-1">Value</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={node.data.targetValue}
+                        onChange={(e) => updateNode(node.id, {
+                          ...node.data,
+                          targetValue: Number(e.target.value)
+                        })}
+                        className="w-full p-2 text-sm border rounded-md"
+                      />
+                    </div>
+                    <div className="w-2/4">
+                      <label className="block text-sm text-gray-600 mb-1">Units</label>
+                      <input
+                        type="text"
+                        value={node.data.units || ''}
+                        onChange={(e) => updateNode(node.id, {
+                          ...node.data,
+                          units: e.target.value
+                        })}
+                        placeholder="e.g., seconds, words, etc."
+                        className="w-full p-2 text-sm border rounded-md"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-3/4">
+                    <label className="block text-sm text-gray-600 mb-1">Value</label>
+                    <select
+                      value={String(node.data.targetValue)}
+                      onChange={(e) => updateNode(node.id, {
+                        ...node.data,
+                        targetValue: e.target.value === 'true'
+                      })}
+                      className="w-full p-2 text-sm border rounded-md"
+                    >
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Metric */}
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">What to measure</label>
+                <input
+                  type="text"
+                  value={node.data.metric}
+                  onChange={(e) => updateNode(node.id, {
+                    ...node.data,
+                    metric: e.target.value
+                  })}
+                  className="w-full p-2 text-sm border rounded-md"
+                  placeholder="e.g., Talking without pausing"
+                />
+              </div>
+
+              {/* History display with units */}
+              {node.data.attempts && node.data.attempts.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-700">History</h4>
+                  <div className="max-h-40 overflow-y-auto space-y-2">
+                    {[...node.data.attempts]
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((attempt, index) => (
+                        <div key={index} className="text-xs p-2 bg-gray-50 rounded">
+                          <div className="flex justify-between items-center">
+                            <span>{new Date(attempt.date).toLocaleString()}</span>
+                            <span className={attempt.value === node.data.targetValue ? 'text-green-500' : 'text-red-500'}>
+                              {node.data.type === 'number' 
+                                ? `${attempt.value} ${node.data.units || ''}`
+                                : attempt.value ? 'Yes' : 'No'
+                              }
+                            </span>
+                          </div>
+                          {attempt.notes && (
+                            <div className="mt-1 text-gray-600">{attempt.notes}</div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Add connected skills section */}
+          {isTargetNode(node) && (
+            <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                Connected Skills ({getEdges().filter(e => e.source === node.id).length})
+              </h4>
+              <div className="space-y-2">
+                <>{(() => {
+                  const skillIds = getEdges()
+                    .filter(e => e.source === node.id)
+                    .map(e => e.target);
+                  
+                  const skillNodes = getNodes()
+                    .filter(n => skillIds.includes(n.id) && n.type === 'skill');
+                  
+                  if (skillNodes.length === 0) {
+                    return <div className="text-sm text-gray-500">No skills connected</div>;
+                  }
+                  
+                  return skillNodes.map((skill) => (
+                    <div key={skill.id} className="p-2 bg-gray-50 rounded flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">⚔️</span>
+                        <span className="text-sm font-medium">{skill.data.label}</span>
+                      </div>
+                      {skill.data.completionHistory?.length > 0 && (
+                        <span className="text-xs text-blue-500">
+                          {skill.data.completionHistory.length}⚡
+                        </span>
+                      )}
+                    </div>
+                  ));
+                })()}</>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Node Appearance Options */}

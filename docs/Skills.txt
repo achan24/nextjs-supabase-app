@@ -673,3 +673,263 @@ Continuous Improvement Cycle
           │
           └─────> Repeat
 ``` 
+
+
+
+# Guardian Angel – Skill Development & Progression System
+
+## 0  Purpose & Scope
+
+Design a **comprehensive, production‑ready skill development subsystem** for the Guardian Angel productivity app. The subsystem must:
+1. Model any human skill as a hierarchical tree of sub‑skills and techniques.
+2. Track practice sessions granularly, surface actionable analytics, and trigger reminders based on decay curves.
+3. Provide **two synced visual layers**:
+
+* a dynamic **Mind‑Map / Process Flow** view (free‑form graph), and
+* a **Formal Tree / File‑Explorer** view (structural drill‑down).
+  4. Offer rich dashboards, gamified feedback, and export / API access for third‑party tools.
+
+---
+
+## 1  Definitions & Terminology
+
+| Term                   | Meaning                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| **Skill Node (🎯)**    | Abstract competence (e.g. “Public Speaking”). Holds *levels, XP, mastery state*.            |
+| **Technique Node (⚡)** | Concrete method / drill (e.g. "Box Breathing"). Tracks *steps, success rate.*               |
+| **Task Node (🔨)**     | Executable action with timer (e.g. "Practice Elevator Pitch 5 ×"). Stores *duration, reps*. |
+| **Process Node (🔄)**  | Logical bundle of tasks (e.g. Morning Routine).                                             |
+| **Note Node (📋)**     | Markdown doc linked anywhere.                                                               |
+| **Composite Skill**    | Node representing combination of ≥2 skills or techniques.                                   |
+| **Mastery**            | Skill level ≥ custom threshold AND recency < decay limit.                                   |
+| **Decay Curve**        | Function declining effective level after inactivity. Defaults to spaced‑repetition SM‑2.    |
+
+---
+
+## 2  Functional Requirements
+
+### 2.1 Skill & Technique Data Model (Backend)
+
+| Field                              | Skill | Technique |
+| ---------------------------------- | ----- | --------- |
+| id (UUID)                          | ✔     | ✔         |
+| name                               | ✔     | ✔         |
+| description                        | ✔     | ✔         |
+| parent\_id                         | ✔     | –         |
+| dependency\_ids (array)            | ✔     | –         |
+| level (0‑10)                       | ✔     | –         |
+| xp (float)                         | ✔     | –         |
+| mastery\_threshold (lvl + metrics) | ✔     | –         |
+| last\_practiced\_at                | ✔     | ✔         |
+| practice\_totals (int)             | ✔     | ✔         |
+| avg\_per\_session                  | ✔     | ✔         |
+| effectiveness\_pct                 | –     | ✔         |
+| ordered\_steps (json)              | –     | ✔         |
+| tags (string\[])                   | ✔     | ✔         |
+| created\_at / updated\_at          | ✔     | ✔         |
+
+*Persist to PostgreSQL via Prisma ORM; emit domain events (`skill.practiced`, `skill.mastered`).*
+
+### 2.2 Practice Session Engine
+
+* **Start Session** → user selects node(s) → engine loads timer / step list.
+* **Tracking Modes**: count‑reps, count‑time, checklist, quiz.
+* **Auto‑Logging**: store `duration`, `reps`, `success_rate`, note.
+* **XP Award** = ƒ(difficulty, reps, quality).
+* **Decay Job** (hourly worker) lowers `effective_level` per node using SM‑2.
+
+### 2.3 Composite Logic
+
+* Node type `composite` has `dependency_ids` order.
+* Level = min(level(deps)) until mastered; XP = Σweighted.
+* Practice on composite splits XP across deps unless "focus mode".
+
+### 2.4 Visualization Layer
+
+#### A. Mind‑Map (existing)
+
+* Nodes carry new badges (`lvl`, `XP`, `🟢mastered`).
+* Drag‑drop links create dependencies.
+
+#### B. Formal Tree Explorer
+
+* Vue/React side‑panel; virtualised list for >5k nodes.
+* Context menu: **Add Subskill**, **Convert to Composite**, **Move**.
+* Breadcrumb stack: `Root / Communication / Public Speaking / Storytelling`.
+
+#### C. Dashboards
+
+* **Skill Detail** card: sparkline of practice frequency, radar chart of subskills.
+* **Heatmap** view: calendar grid à la GitHub commits.
+* **Progress Report**: PDF/CSV export, weekly email summary.
+
+### 2.5 Notifications & Scheduling
+
+| Trigger                    | Action                                                   |
+| -------------------------- | -------------------------------------------------------- |
+| `effective_level` < target | Push “Time to review *Skill X* – 6 days since last rep.” |
+| New mastery                | Confetti + avatar upgrade.                               |
+| Technique success ↓ 20 %   | Suggest related drill.                                   |
+
+### 2.6 Gamification
+
+* **XP Curve:** exponential `next_lvl_xp = base * growth^(lvl-1)` (defaults 100·1.35^(lvl‑1)).
+* **Streaks** tracked per skill and globally.
+* **Avatar cosmetics** unlock on total XP or mastery milestones.
+
+### 2.7 Import / Export / API
+
+* JSON & CSV import (Anki deck, etc.).
+* REST & WebSocket endpoints:
+
+  * `GET /skills`, `POST /practice-session`, `PATCH /skill/{id}`.
+* OAuth 2.0 bearer auth; rate‑limited.
+
+---
+
+## 3  Integration & Sync
+
+1. **Scanner** runs on demand or when graph changes:
+
+   * Find nodes tagged `skill_node` → build adjacency list.
+   * Resolve cycles → warn & offer fixes.
+   * Persist ordered tree; emit `tree.updated`.
+2. **Two‑Way Editing**: edits in Explorer update graph instantly; drag in graph updates tree via event bus.
+3. **Conflict Handling**: last‑writer‑wins with audit log; expose diff UI.
+
+---
+
+## 4  Non‑Functional Requirements
+
+| Category          | Requirement                                                         |
+| ----------------- | ------------------------------------------------------------------- |
+| **Performance**   | <50 ms DB read on skill detail; bulk scan <2 s for 10k nodes.       |
+| **Scalability**   | Horizontal pod autoscale; stateless API; use Redis for hot metrics. |
+| **Availability**  | 99.5 % monthly (Free tier); 99.9 % for Pro.                         |
+| **Security**      | JWT auth; encrypted at rest; OWASP Top‑10 mitigations.              |
+| **Accessibility** | WCAG 2.2 AA; keyboard‑only nav; high‑contrast theme.                |
+| **Localization**  | i18n strings; RTL layout support.                                   |
+
+---
+
+## 5  System Architecture
+
+```
+┌───────────┐    REST/WS    ┌──────────────┐
+│  Frontend │◀────────────▶│  API Gateway │
+└───────────┘               └──────┬───────┘
+        ▲  Event Bus (NATS)        │
+        │                          ▼
+ ┌────────────┐   writes  ┌────────────────┐
+ │ Practice   │──────────▶│  Postgres DB   │
+ │ Engine     │           └────────────────┘
+ └────────────┘
+        ▲                       ▲
+        │  metrics (Redis)      │
+ ┌────────────┐   events   ┌──────────────┐
+ │ Analytics  │◀──────────▶│  Sync Worker │
+ └────────────┘            └──────────────┘
+```
+
+---
+
+## 6  API Outline (OpenAPI 3.1 excerpt)
+
+```yaml
+/skills:
+  get:
+    summary: List skills
+    parameters:
+      - in: query
+        name: level_min
+        schema: { type: integer }
+  post:
+    summary: Create skill
+/practice-sessions:
+  post:
+    summary: Log session
+    requestBody:
+      …
+```
+
+---
+
+## 7  User Stories & Acceptance
+
+| ID    | User Story                                                                           | Acceptance Criteria                                      |
+| ----- | ------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| US‑01 | *As a learner* I can create a new subskill under “Guitar”                            | Node appears in both Mind‑Map & Explorer; level 0; XP 0. |
+| US‑07 | *As a learner* I receive a reminder when I have not practiced “Vocabulary” in 7 days | Push sent; dashboard shows overdue badge.                |
+| US‑12 | *As a coach* I export my mentee’s progress to CSV                                    | File downloads with columns: skill\_id, level, xp,…      |
+
+---
+
+## 8  Future Enhancements
+
+* Adaptive difficulty (AI recommends easier/harder drills).
+* Community shared skill templates marketplace.
+* AR practice overlay for physical techniques.
+
+---
+
+> **Next Steps**: confirm domain model, then create DB schema & initial API stubs.
+
+# Theory-Practice Node Combination
+
+## Leveraging Existing Note System
+- Note nodes already have quiz/test functionality
+- Can be used for theoretical knowledge assessment
+- Supports cloze deletions and flashcard review
+
+## Node Type Combinations
+```
+Theory-Practice Stack
+├── Theory Node (📚)
+│   ├── Uses existing Note functionality
+│   ├── Quiz/Test for knowledge verification
+│   ├── Cloze deletions for active recall
+│   └── Flashcard review system
+│
+└── Practice Node (⚡)
+    ├── Concrete implementation
+    ├── Timer tracking
+    ├── Success rate
+    └── Real-world application
+
+Example: React Hooks
+├── Theory (📚)
+│   ├── Note: Hook rules and concepts
+│   ├── Quiz: When to use useEffect
+│   └── Test: Hook behavior understanding
+│
+└── Practice (⚡)
+    ├── Implement custom hook
+    ├── Solve hook-based problems
+    ├── Track implementation time
+    └── Measure success rate
+```
+
+## Implementation Approach
+1. **Mind Map Focus First**
+   - Enhance existing process flow system
+   - Add skill-specific badges and metrics
+   - Integrate theory-practice node connections
+   - Keep tree explorer as separate app
+
+2. **Theory Node (Enhanced Note)**
+   - Leverage existing note functionality
+   - Add skill-specific metadata
+   - Track quiz/test performance
+   - Calculate theoretical understanding level
+
+3. **Practice Node (Enhanced Task)**
+   - Build on existing task timer system
+   - Add success rate tracking
+   - Include implementation metrics
+   - Track real-world application
+
+4. **Combined Metrics**
+   - Theory mastery (quiz/test scores)
+   - Practice proficiency (success rate)
+   - Combined mastery level
+   - More accurate skill assessment 

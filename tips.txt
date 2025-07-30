@@ -409,3 +409,37 @@ When encountering the error "Module '@/types/goal' has no exported member 'Metri
    - created_at (not createdAt)
    - updated_at (not updatedAt)
    - goal_id (not goalId)
+
+SKILL-TARGET CONNECTIONS:
+- Target nodes point TO skill nodes (target is source, skill is target)
+- When finding targets for a skill node, look for INCOMING edges where the skill is the target
+- When finding skills for a target node, look for OUTGOING edges where the target is the source
+- Debug boxes in nodes show the correct edge directions - use them as reference
+
+TARGET NODE DATA STRUCTURE & DISPLAY:
+1. Target Data Fields:
+   - type: 'number' | 'boolean' - Determines input and display format
+   - targetValue: number | boolean - The actual target value
+   - metric: string - What is being measured
+   - units: string (optional) - Only for number type
+   - isCompleted: boolean - Current completion status
+   - attempts: Array - History of attempts
+
+2. Details Panel Display:
+   - Show ALL target fields, not just the label
+   - For number targets: Show "Value: X units"
+   - For boolean targets: Show "Value: Yes/No"
+   - Always show completion status (●/○) and attempt count (⚡)
+   - Group related fields (type/value, what to measure)
+
+3. Common Mistakes to Avoid:
+   - Don't just show target ID or label
+   - Don't ignore the target type when displaying value
+   - Don't forget to show units for number targets
+   - Don't skip the completion status or attempts
+
+4. Edge Direction (CRITICAL):
+   - Target nodes are the SOURCE
+   - Skill nodes are the TARGET
+   - Use e.target === node.id to find incoming edges
+   - Use e.source to get the target node IDs

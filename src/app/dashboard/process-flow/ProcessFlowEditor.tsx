@@ -35,6 +35,7 @@ import { TaskNode } from './nodes/TaskNode';
 import { NoteNode } from './nodes/NoteNode';
 import { ProcessNode } from './nodes/ProcessNode';
 import { SkillNode } from './nodes/SkillNode';
+import { TargetNode } from './nodes/TargetNode';
 import { AnalyticsNode } from './nodes/AnalyticsNode';
 import CalculationNode from './nodes/CalculationNode';
 import FlashcardReview from './components/FlashcardReview';
@@ -59,7 +60,7 @@ const nodeTypes = {
   note: NoteNode,
   process: ProcessNode,
   skill: SkillNode,
-
+  target: TargetNode,
   analytics: AnalyticsNode,
   calculation: CalculationNode,
   link: LinkNode,
@@ -304,9 +305,23 @@ export default function ProcessFlowEditor({ user, flowTitle, setFlowTitle, onFlo
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     event.stopPropagation();
+    console.warn('[FLOW DEBUG] Node clicked:', {
+      id: node.id,
+      type: node.type,
+      data: node.data
+    });
     setSelectedNode(node);
     setIsDetailsOpen(true);
   }, []);
+
+  // Add this to check when selectedNode changes
+  useEffect(() => {
+    console.warn('[FLOW DEBUG] Selected node changed:', {
+      id: selectedNode?.id,
+      type: selectedNode?.type,
+      data: selectedNode?.data
+    });
+  }, [selectedNode]);
 
   const closeDetails = useCallback(() => {
     setIsDetailsOpen(false);
