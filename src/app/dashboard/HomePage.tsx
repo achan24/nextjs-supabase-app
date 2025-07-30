@@ -146,7 +146,7 @@ export default function HomePage({ user }: { user: User }) {
 
         {/* Feature Cards */}
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {/* Character Card */}
           <Link href="/dashboard/character" className="group">
             <Card className="hover:shadow-md transition-shadow">
@@ -459,6 +459,37 @@ export default function HomePage({ user }: { user: User }) {
               </CardContent>
             </Card>
           </Link>
+
+          {/* Skills Explorer Card */}
+          <Card className="p-4 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/dashboard/skills')}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Skills Explorer</h3>
+              <span className="text-2xl">⚔️</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Active Skills</span>
+                <span className="font-medium">3</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">In Progress</span>
+                <span className="font-medium">2</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Mastered</span>
+                <span className="font-medium">1</span>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t">
+              <div className="text-sm text-gray-600">Recent Activity</div>
+              <div className="mt-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-500">●</span>
+                  <span>"Talk out loud" practiced</span>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
     </div>

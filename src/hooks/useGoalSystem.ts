@@ -59,7 +59,7 @@ export function useGoalSystem() {
         return;
       }
 
-      // For progress view, we only need basic area/subarea/goal data
+      // Fetch all nested relationships
       const { data: areasData, error: areasError } = await supabase
         .from('life_goal_areas')
         .select(`
@@ -92,7 +92,66 @@ export function useGoalSystem() {
               target_points,
               daily_target,
               created_at,
-              updated_at
+              updated_at,
+              milestones:life_goal_milestones (
+                id,
+                title,
+                description,
+                due_date,
+                created_at,
+                updated_at
+              ),
+              metrics:life_goal_metrics (
+                id,
+                name,
+                type,
+                unit,
+                current_value,
+                created_at,
+                updated_at,
+                thresholds:life_goal_metric_thresholds (
+                  id,
+                  metric_id,
+                  milestone_id,
+                  target_value,
+                  created_at,
+                  updated_at
+                ),
+                sequence_contributions:life_goal_sequence_contributions (
+                  id,
+                  sequence_id,
+                  metric_id,
+                  contribution_value,
+                  created_at,
+                  updated_at
+                )
+              ),
+              tasks:life_goal_tasks (
+                id,
+                task_id,
+                time_worth,
+                created_at,
+                updated_at,
+                task:tasks (
+                  id,
+                  title,
+                  description,
+                  status,
+                  due_date,
+                  created_at,
+                  updated_at
+                )
+              ),
+              goal_flow_links:goal_flow_links (
+                id,
+                flow_id,
+                created_at,
+                process_flows (
+                  id,
+                  title,
+                  description
+                )
+              )
             )
           )
         `)
@@ -106,25 +165,56 @@ export function useGoalSystem() {
 
       console.log('Raw areas data:', areasData);
       
-      // Map the data to match the expected types
-      const mappedAreas = (areasData || []).map(area => ({
+      // Map the data to match the expected types, but DO NOT overwrite nested arrays
+      const mappedAreas: LifeGoalArea[] = (areasData || []).map(area => ({
         ...area,
-        area_notes: [], // Empty arrays for fields we don't need in progress view
+        area_notes: [],
         subareas: (area.subareas || []).map(subarea => ({
           ...subarea,
           subarea_notes: [],
           goals: (subarea.goals || []).map(goal => ({
             ...goal,
             goal_notes: [],
-            milestones: [],
-            metrics: [],
-            tasks: [],
-            process_flows: []
+            milestones: (goal.milestones || []).map((milestone: any) => ({
+              completed: false, // default
+              goal_id: goal.id,
+              severity: undefined, // or a default value if needed
+              ...milestone
+            })),
+            metrics: (goal.metrics || []).map((metric: any) => ({
+              goal_id: goal.id,
+              thresholds: metric.thresholds || [],
+              sequence_contributions: metric.sequence_contributions || [],
+              id: metric.id,
+              name: metric.name,
+              type: metric.type,
+              unit: metric.unit,
+              current_value: metric.current_value,
+              created_at: metric.created_at,
+              updated_at: metric.updated_at
+            })),
+            tasks: (goal.tasks || []).map((taskLink: any) => ({
+              goal_id: goal.id,
+              id: taskLink.id,
+              task_id: taskLink.task_id,
+              time_worth: taskLink.time_worth,
+              created_at: taskLink.created_at || new Date().toISOString(),
+              updated_at: taskLink.updated_at || new Date().toISOString(),
+              task: taskLink.task
+            })),
+            process_flows: (goal.goal_flow_links || []).map((link: any) => ({
+              id: link.id,
+              title: link.process_flows?.title || '',
+              description: link.process_flows?.description || '',
+              flow_id: link.flow_id,
+              created_at: link.created_at
+            }))
           }))
         }))
       }));
 
-      setAreas(mappedAreas);
+      setAreas(mappedAreas as LifeGoalArea[]);
+      setLoading(false);
     } catch (error) {
       console.error('Error in fetchAreas:', error);
       setError(error as Error);

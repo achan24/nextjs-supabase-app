@@ -945,7 +945,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                               )}
                               {/* Add metric thresholds display */}
                               {selectedGoal.metrics.flatMap(metric => 
-                                metric.thresholds
+                                (metric.thresholds || [])
                                   .filter(threshold => threshold.milestone_id === milestone.id)
                                   .map(threshold => (
                                     <p key={threshold.id} className="text-xs text-gray-500 mt-1 flex items-center">
