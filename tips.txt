@@ -443,3 +443,100 @@ TARGET NODE DATA STRUCTURE & DISPLAY:
    - Skill nodes are the TARGET
    - Use e.target === node.id to find incoming edges
    - Use e.source to get the target node IDs
+
+# Supabase Relationship Query Issues & Fixes
+
+## The Problem: "Could not find a relationship between X and Y in the schema cache"
+
+### Root Cause
+This error occurs when trying to query nested relationships that don't exist in the database schema. The most common cause is misunderstanding the actual relationship structure in the database.
+
+### Real Example: Goal System Data Loading
+**Issue Encountered:**
+- Error: "Could not find a relationship between 'life_goals' and 'life_goal_sequence_contributions'"
+- Attempted query structure:
+  ```sql
+  life_goals (
+    ...,
+    sequence_contributions:life_goal_sequence_contributions (...)
+  )
+  ```
+
+**Actual Database Schema:**
+- `life_goals` → `life_goal_metrics` → `life_goal_sequence_contributions`
+- `life_goal_sequence_contributions` is related to `life_goal_metrics`, NOT directly to `life_goals`
+
+**Correct Query Structure:**
+  ```sql
+  life_goals (
+    ...,
+    metrics:life_goal_metrics (
+      ...,
+      sequence_contributions:life_goal_sequence_contributions (...)
+    )
+  )
+  ```
+
+### Prevention Strategies
+
+1. **Always Check Database Models First**
+   - Look at the actual table definitions in `database/models/`
+   - Check the `relationships` array in each model
+   - Understand the foreign key structure
+   - Don't assume relationships based on naming conventions
+
+2. **Follow the Foreign Key Chain**
+   - Start with the base table
+   - Follow foreign key references to understand relationships
+   - Build nested queries that match the actual schema
+   - Use the database models as the source of truth
+
+3. **Common Relationship Patterns**
+   - One-to-many: Parent table → Child table (child has parent_id)
+   - Many-to-many: Junction table connects two main tables
+   - Self-referencing: Table references itself (e.g., categories)
+
+4. **Debugging Steps**
+   - Check the exact error message for table names
+   - Look up both tables in the database models
+   - Verify the relationship exists in the schema
+   - Test the relationship with a simple query first
+
+### Best Practices
+
+1. **Query Structure**
+   ```sql
+   -- ✅ Correct: Follow actual relationships
+   parent_table (
+     child_table (
+       grandchild_table (...)
+     )
+   )
+   
+   -- ❌ Wrong: Assume direct relationship
+   parent_table (
+     grandchild_table (...)  -- This won't work if no direct relationship
+   )
+   ```
+
+2. **Data Mapping**
+   - Map nested data correctly in the frontend
+   - Remove duplicate mappings for the same relationship
+   - Use type assertions if TypeScript types are complex
+   - Handle null/undefined cases with fallbacks
+
+3. **Error Handling**
+   - Add null checks for nested properties: `(metric.thresholds || [])`
+   - Use optional chaining: `link.process_flows?.title`
+   - Provide default values for missing data
+   - Log the actual data structure for debugging
+
+### Quick Reference
+- **Check models first**: `database/models/table-name.model.ts`
+- **Follow foreign keys**: Child tables reference parent tables
+- **Nest queries properly**: Match the actual database relationships
+- **Handle missing data**: Use null checks and default values
+- **Test relationships**: Use simple queries before complex nested ones
+
+### Remember
+The database schema is the source of truth. Always verify relationships exist before trying to query them. If you get a "relationship not found" error, check the actual table definitions and foreign key structure.

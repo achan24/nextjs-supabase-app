@@ -123,7 +123,14 @@ export function useGoalSystem() {
                   metric_id,
                   contribution_value,
                   created_at,
-                  updated_at
+                  updated_at,
+                  sequence:timer_sequences (
+                    id,
+                    title,
+                    description,
+                    created_at,
+                    updated_at
+                  )
                 )
               ),
               tasks:life_goal_tasks (
