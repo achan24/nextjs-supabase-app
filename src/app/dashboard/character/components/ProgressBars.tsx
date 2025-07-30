@@ -322,18 +322,26 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
+  // Calculate current total score and target
+  const currentScore = areas.reduce((total, area) => total + (area.daily_points || 0), 0);
+  const targetScore = areas.reduce((total, area) => total + (area.target_points || 0), 0);
+
+  // Get areas with points for today's breakdown
+  const areasWithPoints = areas.filter(area => (area.daily_points || 0) > 0);
+
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         setLoading(true);
-        // Get the last 30 days of history
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        // Get the last 9 days of history (we'll add today separately)
+        const nineDaysAgo = new Date();
+        nineDaysAgo.setDate(nineDaysAgo.getDate() - 9);
         
         const { data, error } = await supabase
           .from('area_points_history')
           .select('*')
-          .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+          .gte('date', nineDaysAgo.toISOString().split('T')[0])
+          .lt('date', new Date().toISOString().split('T')[0]) // Exclude today
           .order('date', { ascending: true });
 
         if (error) throw error;
@@ -348,37 +356,41 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
           return acc;
         }, {});
 
-        // Convert to array and format for chart
-        const chartData = Object.values(groupedData || {}).map((item: any) => ({
-          date: format(new Date(item.date), 'MMM d'),
-          points: item.totalPoints
-        }));
-
-        // If no data, create some sample data for the last 7 days
-        if (chartData.length === 0) {
-          const sampleData = [];
-          for (let i = 6; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            sampleData.push({
-              date: format(date, 'MMM d'),
-              points: Math.floor(Math.random() * 10) // Random points for demo
+        // Create array with exactly 10 days (9 historical + today)
+        const chartData = [];
+        for (let i = 9; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          const formattedDate = format(date, 'MMM d');
+          
+          if (i === 0) {
+            // Today - use current score
+            chartData.push({
+              date: formattedDate,
+              points: currentScore
+            });
+          } else {
+            // Historical days - use data from database or 0
+            const historicalPoints = groupedData?.[dateStr]?.totalPoints || 0;
+            chartData.push({
+              date: formattedDate,
+              points: historicalPoints
             });
           }
-          setHistoryData(sampleData);
-        } else {
-          setHistoryData(chartData);
         }
+
+        setHistoryData(chartData);
       } catch (error) {
         console.error('Error fetching history:', error);
-        // Create fallback data
+        // Create fallback data with exactly 10 days
         const fallbackData = [];
-        for (let i = 6; i >= 0; i--) {
+        for (let i = 9; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
           fallbackData.push({
             date: format(date, 'MMM d'),
-            points: 0
+            points: i === 0 ? currentScore : 0 // Today gets current score, others get 0
           });
         }
         setHistoryData(fallbackData);
@@ -388,13 +400,37 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
     };
 
     fetchHistory();
-  }, [areas]);
+  }, [areas, currentScore]);
 
   if (loading) {
     return (
       <div className="bg-white p-4 rounded-lg border">
-        <h3 className="text-lg font-semibold mb-4">Daily Progress History</h3>
-        <div className="h-[200px] flex items-center justify-center text-gray-500">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Daily Progress</h3>
+          <div className="relative group">
+            <div className="text-sm text-gray-600 cursor-help">
+              {currentScore}/{targetScore} points
+            </div>
+            {/* Hover tooltip */}
+            <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+              <div className="font-medium mb-1">Today's Points Breakdown:</div>
+              {areasWithPoints.length > 0 ? (
+                <div className="space-y-1">
+                  {areasWithPoints.map((area) => (
+                    <div key={area.id} className="flex justify-between gap-2">
+                      <span>{area.name}:</span>
+                      <span className="font-medium">{area.daily_points} pts</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-300">No points earned today</div>
+              )}
+              <div className="absolute top-full right-2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+            </div>
+          </div>
+        </div>
+        <div className="h-[120px] flex items-center justify-center text-gray-500">
           Loading history...
         </div>
       </div>
@@ -403,17 +439,41 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
 
   return (
     <div className="bg-white p-4 rounded-lg border">
-      <h3 className="text-lg font-semibold mb-4">Daily Progress History</h3>
-      <ResponsiveContainer width="100%" height={200}>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">Daily Progress</h3>
+        <div className="relative group">
+          <div className="text-sm text-gray-600 cursor-help">
+            {currentScore}/{targetScore} points
+          </div>
+          {/* Hover tooltip */}
+          <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+            <div className="font-medium mb-1">Today's Points Breakdown:</div>
+            {areasWithPoints.length > 0 ? (
+              <div className="space-y-1">
+                {areasWithPoints.map((area) => (
+                  <div key={area.id} className="flex justify-between gap-2">
+                    <span>{area.name}:</span>
+                    <span className="font-medium">{area.daily_points} pts</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-gray-300">No points earned today</div>
+            )}
+            <div className="absolute top-full right-2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+          </div>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={120}>
         <LineChart data={historyData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis 
             dataKey="date" 
-            tick={{ fontSize: 12 }}
-            interval="preserveStartEnd"
+            tick={{ fontSize: 10 }}
+            interval={0} // Show all 10 days
           />
           <YAxis 
-            tick={{ fontSize: 12 }}
+            tick={{ fontSize: 10 }}
             domain={[0, 'dataMax + 2']}
           />
           <Tooltip 
@@ -425,8 +485,8 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
             dataKey="points" 
             stroke="#3b82f6" 
             strokeWidth={2}
-            dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+            dot={{ fill: '#3b82f6', strokeWidth: 2, r: 3 }}
+            activeDot={{ r: 5, stroke: '#3b82f6', strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>
