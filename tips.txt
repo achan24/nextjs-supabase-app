@@ -597,3 +597,96 @@ When creating hover popups in React/Tailwind, they often appear translucent or w
 
 ### Remember
 If a popup looks translucent or washed out, it's almost always because the background color is too light. Use inline styles with dark colors (`#111`, `#000`) for completely solid popups.
+
+# CSS REFRESH ISSUES - USE INLINE STYLES ONLY
+
+## The Problem: Elements Become Translucent After Refresh
+
+### Root Cause
+After page refresh, CSS classes can be overridden, applied in wrong order, or conflict with other styles, causing elements to become translucent or washed out even when they were solid before.
+
+### Solution: Use ONLY Inline Styles for Critical Elements
+
+**For Timeline Segments:**
+```jsx
+// ✅ CORRECT - Inline styles only, no Tailwind classes
+const colors = [
+  '#3B82F6', // blue
+  '#10B981', // green
+  '#F59E0B', // yellow
+  '#EC4899', // pink
+  '#8B5CF6', // purple
+  '#14B8A6', // teal
+]
+const color = colors[idx % colors.length]
+
+<div
+  className="group absolute top-0 h-full rounded cursor-pointer"
+  style={{ 
+    left: `${left}%`, 
+    width: `${width}%`,
+    backgroundColor: color  // Inline style - will NEVER be overridden
+  }}
+>
+
+// ❌ WRONG - Tailwind classes can be overridden after refresh
+<div className={`group absolute top-0 h-full ${color} rounded cursor-pointer`}>
+```
+
+**For Note Dots:**
+```jsx
+// ✅ CORRECT - Inline styles for colors and opacity
+<div
+  className="group absolute top-0 w-3 h-3 rounded-full border-2 border-white shadow-sm cursor-pointer transition-all"
+  style={{ 
+    left: `${notePosition}%`,
+    transform: 'translateX(-50%) translateY(-5px)',
+    backgroundColor: note.instanceVersion === 0 ? '#F59E0B' : '#8B5CF6',
+    opacity: isVisible ? 1 : 0.5  // Inline opacity
+  }}
+>
+
+// ❌ WRONG - Tailwind classes can conflict
+<div className={`group absolute top-0 w-3 h-3 rounded-full border-2 border-white shadow-sm cursor-pointer transition-all ${
+  note.instanceVersion === 0 ? 'bg-yellow-400' : 'bg-purple-400'
+} ${isVisible ? 'opacity-100' : 'opacity-50'}`}>
+```
+
+**For All Interactive Elements:**
+```jsx
+// ✅ CORRECT - Inline styles for everything
+<div
+  className="absolute top-0 w-2 h-2 rounded-full border-2 border-white shadow-sm"
+  style={{
+    left: `${getCurrentTimelinePosition()}%`,
+    transform: 'translateX(-50%) translateY(-3px)',
+    backgroundColor: '#3B82F6'  // Inline style
+  }}
+/>
+
+<div
+  className="absolute -top-6 text-white text-xs px-2 py-0.5 rounded font-mono font-semibold z-30"
+  style={{
+    left: `${getCurrentTimelinePosition()}%`,
+    transform: 'translateX(-50%)',
+    backgroundColor: '#3B82F6'  // Inline style
+  }}
+>
+```
+
+### Key Points
+1. **Use inline styles for ALL colors** - `backgroundColor`, `color`, `borderColor`
+2. **Use inline styles for ALL opacity** - `opacity: 1` instead of `opacity-100`
+3. **Remove ALL Tailwind color classes** - `bg-blue-400`, `text-white`, etc.
+4. **Keep positioning classes** - `absolute`, `top-0`, `left-1/2`, etc. are fine
+5. **Use hex colors** - `#3B82F6` instead of `bg-blue-400`
+
+### When to Use This Pattern
+- Timeline segments that must stay solid
+- Hover popups that must stay solid
+- Interactive elements that must maintain appearance
+- Any element that becomes translucent after refresh
+- Critical UI elements that users interact with
+
+### Remember
+Inline styles have the highest CSS specificity and will NEVER be overridden by external CSS. If something needs to stay solid after refresh, use inline styles for ALL color and opacity properties.

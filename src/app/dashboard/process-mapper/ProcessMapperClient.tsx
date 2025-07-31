@@ -67,6 +67,8 @@ export default function ProcessMapperClient() {
   const [currentReplayInstance, setCurrentReplayInstance] = useState<number>(1)
   const [replayNoteInputs, setReplayNoteInputs] = useState<Record<string, string>>({})
   const [timelineWidth, setTimelineWidth] = useState<number>(800)
+  const [autoShownNotes, setAutoShownNotes] = useState<Set<string>>(new Set())
+  const [showDetailedNotes, setShowDetailedNotes] = useState<boolean>(false)
   const supabase = createClient()
 
   // Load sessions from localStorage
@@ -142,6 +144,36 @@ export default function ProcessMapperClient() {
       Object.values(intervals).forEach(interval => clearInterval(interval))
     }
   }, [session?.steps, session?.status])
+
+  // Auto-show note popups when time dot passes over them
+  useEffect(() => {
+    if (!isReplaying || !replaySession) return
+
+    const allNotes = replaySession.steps.flatMap(step => getAllStepNotes(step.id))
+    const currentTimePosition = getCurrentTimelinePosition()
+    
+    allNotes.forEach(note => {
+      const notePosition = getTimelinePosition(note.timestamp, replaySession.startTime)
+      const noteTime = Math.floor((note.timestamp.getTime() - replaySession.startTime.getTime()) / 1000)
+      
+      // Check if time dot is within 2% of the note position and the note time has been reached
+      const isNearNote = Math.abs(currentTimePosition - notePosition) < 2 && replayTime >= noteTime
+      
+      if (isNearNote && !autoShownNotes.has(note.id)) {
+        // Add note to auto-shown set
+        setAutoShownNotes(prev => new Set(Array.from(prev).concat(note.id)))
+        
+        // Remove note from auto-shown set after 7 seconds
+        setTimeout(() => {
+          setAutoShownNotes(prev => {
+            const newSet = new Set(Array.from(prev))
+            newSet.delete(note.id)
+            return newSet
+          })
+        }, 7000)
+      }
+    })
+  }, [replayTime, isReplaying, replaySession, autoShownNotes])
 
   const startNewSession = () => {
     if (!sessionName.trim()) {
@@ -628,7 +660,7 @@ export default function ProcessMapperClient() {
           <CardContent>
             <div className="relative mb-6">
               {/* Timeline axis */}
-              <div className="w-full h-2 bg-gray-300 border-t border-dashed border-gray-400 relative">
+              <div className="w-full h-2 bg-gray-300 relative rounded-full">
                 {replaySession.steps.map((step, idx) => {
                   const sessionDuration = getSessionDuration(replaySession)
                   const stepStart = Math.floor((step.startTime.getTime() - replaySession.startTime.getTime()) / 1000)
@@ -636,19 +668,23 @@ export default function ProcessMapperClient() {
                   const left = (stepStart / sessionDuration) * 100
                   const width = ((stepEnd - stepStart) / sessionDuration) * 100
                   const colors = [
-                    'bg-blue-400',
-                    'bg-green-400',
-                    'bg-yellow-400',
-                    'bg-pink-400',
-                    'bg-purple-400',
-                    'bg-teal-400',
+                    '#3B82F6', // blue
+                    '#10B981', // green
+                    '#F59E0B', // yellow
+                    '#EC4899', // pink
+                    '#8B5CF6', // purple
+                    '#14B8A6', // teal
                   ]
                   const color = colors[idx % colors.length]
                   return (
                     <div
                       key={step.id}
-                      className={`group absolute top-0 h-full ${color} rounded cursor-pointer`}
-                      style={{ left: `${left}%`, width: `${width}%` }}
+                      className="group absolute top-0 h-full rounded cursor-pointer"
+                      style={{ 
+                        left: `${left}%`, 
+                        width: `${width}%`,
+                        backgroundColor: color
+                      }}
                     >
                       {/* Step hover popup */}
                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
@@ -664,18 +700,20 @@ export default function ProcessMapperClient() {
                   <>
                     {/* Blue dot */}
                     <div
-                      className="absolute top-0 w-2 h-2 bg-blue-500 rounded-full border-2 border-white shadow-sm"
+                      className="absolute top-0 w-2 h-2 rounded-full border-2 border-white shadow-sm"
                       style={{
                         left: `${getCurrentTimelinePosition()}%`,
-                        transform: 'translateX(-50%) translateY(-3px)'
+                        transform: 'translateX(-50%) translateY(-3px)',
+                        backgroundColor: '#3B82F6'
                       }}
                     />
                     {/* Time label above the blue dot */}
                     <div
-                      className="absolute -top-6 bg-blue-500 text-white text-xs px-2 py-0.5 rounded font-mono font-semibold z-30"
+                      className="absolute -top-6 text-white text-xs px-2 py-0.5 rounded font-mono font-semibold z-30"
                       style={{
                         left: `${getCurrentTimelinePosition()}%`,
-                        transform: 'translateX(-50%)'
+                        transform: 'translateX(-50%)',
+                        backgroundColor: '#3B82F6'
                       }}
                     >
                       {replayTime < 60 ? `${replayTime}s` : formatDuration(replayTime)}
@@ -694,24 +732,32 @@ export default function ProcessMapperClient() {
                     return (
                       <div
                         key={note.id}
-                        className={`group absolute top-0 w-3 h-3 rounded-full border-2 border-white shadow-sm cursor-pointer transition-all ${
-                          note.instanceVersion === 0 ? 'bg-yellow-400' : 'bg-purple-400'
-                        } ${isVisible ? 'opacity-100' : 'opacity-50'}`}
+                        className="group absolute top-0 w-3 h-3 rounded-full border-2 border-white shadow-sm cursor-pointer transition-all"
                         style={{ 
                           left: `${notePosition}%`,
-                          transform: 'translateX(-50%) translateY(-5px)'
+                          transform: 'translateX(-50%) translateY(-5px)',
+                          backgroundColor: note.instanceVersion === 0 ? '#F59E0B' : '#8B5CF6',
+                          opacity: isVisible ? 1 : 0.5
                         }}
                       >
                         {/* Hover popup */}
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
+                        <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 text-white text-sm rounded-lg transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg ${
+                          autoShownNotes.has(note.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:opacity-100'
+                        }`}
                              style={{ backgroundColor: '#111' }}>
-                          <div className="font-medium mb-1">
-                            Step {stepIndex + 1}: {step.title}
-                          </div>
-                          <div className="text-gray-200">{note.note}</div>
-                          <div className="text-gray-400 text-xs mt-1">
-                            {formatDuration(noteTime)} • {note.instanceVersion === 0 ? 'Original' : `Instance ${note.instanceVersion}`}
-                          </div>
+                          {showDetailedNotes ? (
+                            <>
+                              <div className="font-medium mb-1">
+                                Step {stepIndex + 1}: {step.title}
+                              </div>
+                              <div className="text-gray-200">{note.note}</div>
+                              <div className="text-gray-400 text-xs mt-1">
+                                {formatDuration(noteTime)} • {note.instanceVersion === 0 ? 'Original' : `Instance ${note.instanceVersion}`}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-gray-200">{note.note}</div>
+                          )}
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent" style={{ borderTopColor: '#111' }}></div>
                         </div>
                       </div>
@@ -723,7 +769,59 @@ export default function ProcessMapperClient() {
               {/* Time markers */}
               <div className="flex justify-between text-xs text-gray-500 mt-2">
                 <span>0s</span>
-                <span>{formatDuration(getSessionDuration(replaySession))}</span>
+                {(() => {
+                  const sessionDuration = getSessionDuration(replaySession)
+                  const minutes = Math.floor(sessionDuration / 60)
+                  const timePoints = []
+                  
+                  // Add minute markers
+                  for (let i = 1; i <= minutes; i++) {
+                    const minutePosition = (i * 60 / sessionDuration) * 100
+                    timePoints.push(
+                      <span key={`minute-${i}`} style={{ position: 'absolute', left: `${minutePosition}%`, transform: 'translateX(-50%)' }}>
+                        {i}m
+                      </span>
+                    )
+                  }
+                  
+                  // Add 30-second interval markers for sessions less than 2 minutes
+                  if (sessionDuration < 120) {
+                    const thirtySecondIntervals = Math.floor(sessionDuration / 30)
+                    for (let i = 1; i <= thirtySecondIntervals; i++) {
+                      const thirtySecondPosition = (i * 30 / sessionDuration) * 100
+                      // Skip if this position is too close to a minute marker (within 5% of timeline)
+                      const isNearMinuteMarker = minutes > 0 && Math.abs(thirtySecondPosition - (Math.floor(i * 30 / 60) * 60 / sessionDuration) * 100) < 5
+                      if (!isNearMinuteMarker) {
+                        timePoints.push(
+                          <span key={`thirtysec-${i}`} style={{ position: 'absolute', left: `${thirtySecondPosition}%`, transform: 'translateX(-50%)' }}>
+                            {i * 30 >= 60 ? `${Math.floor((i * 30) / 60)}m ${(i * 30) % 60}s` : `${i * 30}s`}
+                          </span>
+                        )
+                      }
+                    }
+                  }
+                  
+                  return (
+                    <div className="relative w-full">
+                      {timePoints}
+                      <span className="absolute right-0">{formatDuration(sessionDuration)}</span>
+                    </div>
+                  )
+                })()}
+              </div>
+              
+              {/* Note display options */}
+              <div className="mt-4 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="detailed-notes"
+                  checked={showDetailedNotes}
+                  onChange={(e) => setShowDetailedNotes(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="detailed-notes" className="text-sm text-gray-700">
+                  Detailed notes
+                </label>
               </div>
             </div>
           </CardContent>
@@ -778,13 +876,17 @@ export default function ProcessMapperClient() {
                         }))}
                         className="flex-1"
                       />
-                      <Button 
-                        size="sm" 
+                      <button 
+                        className="px-3 py-1.5 text-sm font-medium rounded border-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ 
+                          backgroundColor: '#000000',
+                          color: '#FFFFFF'
+                        }}
                         onClick={() => addReplayNote(step.id)}
                         disabled={!replayNoteInputs[step.id]?.trim()}
                       >
                         Add Note
-                      </Button>
+                      </button>
                     </div>
 
                     {/* All Notes List */}
@@ -1004,13 +1106,17 @@ export default function ProcessMapperClient() {
                           }
                         }}
                       />
-                      <Button
-                        size="sm"
+                      <button
+                        className="px-3 py-1.5 text-sm font-medium rounded border-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ 
+                          backgroundColor: '#000000',
+                          color: '#FFFFFF'
+                        }}
                         onClick={() => addStepNote(step.id)}
                         disabled={!stepNoteInputs[step.id]?.trim()}
                       >
                         Add
-                      </Button>
+                      </button>
                     </div>
                   )}
                 </div>
