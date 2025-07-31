@@ -430,9 +430,24 @@ export default function ProcessMapperClient() {
       stepStartTime + (step.duration ? Math.floor(step.duration / 1000) : 0)
     
     if (removeGaps) {
-      // When gaps are removed, convert step times to compressed timeline
-      const compressedStepStart = convertToCompressedTime(stepStartTime, session)
-      const compressedStepEnd = convertToCompressedTime(stepEndTime, session)
+      // When gaps are removed, calculate cumulative compressed time up to this step
+      let compressedStepStart = 0
+      let compressedStepEnd = 0
+      
+      for (const s of session.steps) {
+        const sStart = Math.floor((s.startTime.getTime() - session.startTime.getTime()) / 1000)
+        const sEnd = s.endTime ? Math.floor((s.endTime.getTime() - session.startTime.getTime()) / 1000) : sStart + (s.duration ? Math.floor(s.duration / 1000) : 0)
+        const sDuration = sEnd - sStart
+        
+        if (s.id === step.id) {
+          // This is our target step
+          compressedStepEnd = compressedStepStart + sDuration
+          break
+        } else {
+          // Add this step's duration to cumulative time
+          compressedStepStart += sDuration
+        }
+      }
       
       return {
         startTime: compressedStepStart,
