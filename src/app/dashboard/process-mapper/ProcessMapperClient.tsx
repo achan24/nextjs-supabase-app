@@ -69,6 +69,7 @@ export default function ProcessMapperClient() {
   const [timelineWidth, setTimelineWidth] = useState<number>(800)
   const [autoShownNotes, setAutoShownNotes] = useState<Set<string>>(new Set())
   const [showDetailedNotes, setShowDetailedNotes] = useState<boolean>(false)
+  const [removeGaps, setRemoveGaps] = useState<boolean>(false)
   const supabase = createClient()
 
   // Load sessions from localStorage
@@ -155,9 +156,11 @@ export default function ProcessMapperClient() {
     allNotes.forEach(note => {
       const notePosition = getTimelinePosition(note.timestamp, replaySession.startTime)
       const noteTime = Math.floor((note.timestamp.getTime() - replaySession.startTime.getTime()) / 1000)
+      // Convert note time to compressed time for comparison when gaps are removed
+      const effectiveNoteTime = removeGaps ? convertToCompressedTime(noteTime, replaySession) : noteTime
       
       // Check if time dot is within 2% of the note position and the note time has been reached
-      const isNearNote = Math.abs(currentTimePosition - notePosition) < 2 && replayTime >= noteTime
+      const isNearNote = Math.abs(currentTimePosition - notePosition) < 2 && replayTime >= effectiveNoteTime
       
       if (isNearNote && !autoShownNotes.has(note.id)) {
         // Add note to auto-shown set
@@ -173,7 +176,7 @@ export default function ProcessMapperClient() {
         }, 7000)
       }
     })
-  }, [replayTime, isReplaying, replaySession, autoShownNotes])
+  }, [replayTime, isReplaying, replaySession, autoShownNotes, removeGaps])
 
   const startNewSession = () => {
     if (!sessionName.trim()) {
@@ -325,7 +328,7 @@ export default function ProcessMapperClient() {
   const startReplay = (sessionToReplay: ProcessMapperSession) => {
     setReplaySession(sessionToReplay)
     setReplayTime(0)
-    setIsReplaying(true)
+    setIsReplaying(false)
     setCurrentReplayInstance(1)
     setReplayNoteInputs({})
     setView('replay')
@@ -346,7 +349,8 @@ export default function ProcessMapperClient() {
         setReplayTime(prev => {
           const newTime = prev + 1
           // Stop replay when we reach the end
-          if (newTime >= getSessionDuration(replaySession)) {
+          const maxTime = removeGaps ? getCompressedSessionDuration(replaySession) : getSessionDuration(replaySession)
+          if (newTime >= maxTime) {
             setIsReplaying(false)
             return prev
           }
@@ -358,11 +362,65 @@ export default function ProcessMapperClient() {
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [isReplaying, replaySession])
+  }, [isReplaying, replaySession, removeGaps])
+
+  // Convert compressed time back to original time for step progress calculations
+  const convertFromCompressedTime = (compressedTime: number, session: ProcessMapperSession) => {
+    if (!removeGaps) return compressedTime
+    
+    let remainingTime = compressedTime
+    let originalTime = 0
+    
+    for (const step of session.steps) {
+      const stepStart = Math.floor((step.startTime.getTime() - session.startTime.getTime()) / 1000)
+      const stepEnd = step.endTime ? Math.floor((step.endTime.getTime() - session.startTime.getTime()) / 1000) : stepStart + (step.duration ? Math.floor(step.duration / 1000) : 0)
+      const stepDuration = stepEnd - stepStart
+      
+      if (remainingTime <= stepDuration) {
+        // Time is within this step
+        return stepStart + remainingTime
+      } else {
+        // Time is beyond this step
+        remainingTime -= stepDuration
+        originalTime = stepEnd
+      }
+    }
+    
+    return originalTime
+  }
 
   const getSessionDuration = (session: ProcessMapperSession) => {
     const endTime = session.endTime || new Date()
     return Math.floor((endTime.getTime() - session.startTime.getTime()) / 1000)
+  }
+
+  const getCompressedSessionDuration = (session: ProcessMapperSession) => {
+    return session.steps.reduce((total, step) => {
+      const stepStart = Math.floor((step.startTime.getTime() - session.startTime.getTime()) / 1000)
+      const stepEnd = step.endTime ? Math.floor((step.endTime.getTime() - session.startTime.getTime()) / 1000) : stepStart + (step.duration ? Math.floor(step.duration / 1000) : 0)
+      return total + (stepEnd - stepStart)
+    }, 0)
+  }
+
+  const convertToCompressedTime = (originalTime: number, session: ProcessMapperSession) => {
+    let compressedTime = 0
+    
+    for (const step of session.steps) {
+      const stepStart = Math.floor((step.startTime.getTime() - session.startTime.getTime()) / 1000)
+      const stepEnd = step.endTime ? Math.floor((step.endTime.getTime() - session.startTime.getTime()) / 1000) : stepStart + (step.duration ? Math.floor(step.duration / 1000) : 0)
+      const stepDuration = stepEnd - stepStart
+      
+      if (originalTime >= stepStart && originalTime <= stepEnd) {
+        // Time is within this step
+        const timeInStep = originalTime - stepStart
+        return compressedTime + timeInStep
+      } else if (originalTime > stepEnd) {
+        // Time is after this step, add full step duration
+        compressedTime += stepDuration
+      }
+    }
+    
+    return compressedTime
   }
 
   const getStepProgress = (step: ProcessMapperStep, session: ProcessMapperSession) => {
@@ -371,11 +429,25 @@ export default function ProcessMapperClient() {
       Math.floor((step.endTime.getTime() - session.startTime.getTime()) / 1000) :
       stepStartTime + (step.duration ? Math.floor(step.duration / 1000) : 0)
     
-    return {
-      startTime: stepStartTime,
-      endTime: stepEndTime,
-      isActive: replayTime >= stepStartTime && replayTime <= stepEndTime,
-      isCompleted: replayTime > stepEndTime
+    if (removeGaps) {
+      // When gaps are removed, convert step times to compressed timeline
+      const compressedStepStart = convertToCompressedTime(stepStartTime, session)
+      const compressedStepEnd = convertToCompressedTime(stepEndTime, session)
+      
+      return {
+        startTime: compressedStepStart,
+        endTime: compressedStepEnd,
+        isActive: replayTime >= compressedStepStart && replayTime <= compressedStepEnd,
+        isCompleted: replayTime > compressedStepEnd
+      }
+    } else {
+      // When gaps are not removed, replay time directly corresponds to original timeline
+      return {
+        startTime: stepStartTime,
+        endTime: stepEndTime,
+        isActive: replayTime >= stepStartTime && replayTime <= stepEndTime,
+        isCompleted: replayTime > stepEndTime
+      }
     }
   }
 
@@ -383,7 +455,14 @@ export default function ProcessMapperClient() {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     const secs = seconds % 60
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    } else if (minutes >= 10) {
+      return `${minutes}:${secs.toString().padStart(2, '0')}`
+    } else {
+      return `${minutes}:${secs.toString().padStart(2, '0')}`
+    }
   }
 
   // Start a new replay instance
@@ -481,15 +560,30 @@ export default function ProcessMapperClient() {
   // Calculate timeline position
   const getTimelinePosition = (timestamp: Date, sessionStartTime: Date) => {
     const timeDiff = timestamp.getTime() - sessionStartTime.getTime()
-    const sessionDuration = getSessionDuration(replaySession!)
-    return (timeDiff / 1000 / sessionDuration) * 100
+    const originalTime = timeDiff / 1000
+    
+    if (removeGaps) {
+      const compressedTime = convertToCompressedTime(originalTime, replaySession!)
+      const compressedDuration = getCompressedSessionDuration(replaySession!)
+      return (compressedTime / compressedDuration) * 100
+    } else {
+      const sessionDuration = getSessionDuration(replaySession!)
+      return (originalTime / sessionDuration) * 100
+    }
   }
 
   // Get current timeline position
   const getCurrentTimelinePosition = () => {
     if (!replaySession) return 0
-    const sessionDuration = getSessionDuration(replaySession)
-    return (replayTime / sessionDuration) * 100
+    
+    if (removeGaps) {
+      // When gaps are removed, replay time directly corresponds to compressed timeline
+      const compressedDuration = getCompressedSessionDuration(replaySession)
+      return (replayTime / compressedDuration) * 100
+    } else {
+      const sessionDuration = getSessionDuration(replaySession)
+      return (replayTime / sessionDuration) * 100
+    }
   }
 
   if (view === 'home') {
@@ -624,10 +718,10 @@ export default function ProcessMapperClient() {
                   </span>
                   <span className="text-gray-400">/</span>
                   <span className="font-mono">
-                    {formatDuration(getSessionDuration(replaySession))}
+                    {formatDuration(removeGaps ? getCompressedSessionDuration(replaySession) : getSessionDuration(replaySession))}
                   </span>
                   <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                    {Math.round((replayTime / getSessionDuration(replaySession)) * 100)}%
+                    {Math.round((replayTime / (removeGaps ? getCompressedSessionDuration(replaySession) : getSessionDuration(replaySession))) * 100)}%
                   </span>
                 </div>
                 <div className="flex gap-2">
@@ -665,8 +759,30 @@ export default function ProcessMapperClient() {
                   const sessionDuration = getSessionDuration(replaySession)
                   const stepStart = Math.floor((step.startTime.getTime() - replaySession.startTime.getTime()) / 1000)
                   const stepEnd = step.endTime ? Math.floor((step.endTime.getTime() - replaySession.startTime.getTime()) / 1000) : stepStart + (step.duration ? Math.floor(step.duration / 1000) : 0)
-                  const left = (stepStart / sessionDuration) * 100
-                  const width = ((stepEnd - stepStart) / sessionDuration) * 100
+                  const stepDuration = stepEnd - stepStart
+                  
+                  let left, width
+                  if (removeGaps) {
+                    // Calculate total step duration for compression
+                    const totalStepDuration = replaySession.steps.reduce((total, s) => {
+                      const sStart = Math.floor((s.startTime.getTime() - replaySession.startTime.getTime()) / 1000)
+                      const sEnd = s.endTime ? Math.floor((s.endTime.getTime() - replaySession.startTime.getTime()) / 1000) : sStart + (s.duration ? Math.floor(s.duration / 1000) : 0)
+                      return total + (sEnd - sStart)
+                    }, 0)
+                    
+                    // Calculate cumulative position of previous steps
+                    const previousStepsDuration = replaySession.steps.slice(0, idx).reduce((total, s) => {
+                      const sStart = Math.floor((s.startTime.getTime() - replaySession.startTime.getTime()) / 1000)
+                      const sEnd = s.endTime ? Math.floor((s.endTime.getTime() - replaySession.startTime.getTime()) / 1000) : sStart + (s.duration ? Math.floor(s.duration / 1000) : 0)
+                      return total + (sEnd - sStart)
+                    }, 0)
+                    
+                    left = (previousStepsDuration / totalStepDuration) * 100
+                    width = (stepDuration / totalStepDuration) * 100
+                  } else {
+                    left = (stepStart / sessionDuration) * 100
+                    width = (stepDuration / sessionDuration) * 100
+                  }
                   const colors = [
                     '#3B82F6', // blue
                     '#10B981', // green
@@ -727,7 +843,9 @@ export default function ProcessMapperClient() {
                   return allNotes.map((note, noteIndex) => {
                     const notePosition = getTimelinePosition(note.timestamp, replaySession.startTime)
                     const noteTime = Math.floor((note.timestamp.getTime() - replaySession.startTime.getTime()) / 1000)
-                    const isVisible = replayTime >= noteTime
+                    // Convert note time to compressed time for visibility check when gaps are removed
+                    const effectiveNoteTime = removeGaps ? convertToCompressedTime(noteTime, replaySession) : noteTime
+                    const isVisible = replayTime >= effectiveNoteTime
                     
                     return (
                       <div
@@ -752,7 +870,7 @@ export default function ProcessMapperClient() {
                               </div>
                               <div className="text-gray-200">{note.note}</div>
                               <div className="text-gray-400 text-xs mt-1">
-                                {formatDuration(noteTime)} • {note.instanceVersion === 0 ? 'Original' : `Instance ${note.instanceVersion}`}
+                                {formatDuration(effectiveNoteTime)} • {note.instanceVersion === 0 ? 'Original' : `Instance ${note.instanceVersion}`}
                               </div>
                             </>
                           ) : (
@@ -804,24 +922,38 @@ export default function ProcessMapperClient() {
                   return (
                     <div className="relative w-full">
                       {timePoints}
-                      <span className="absolute right-0">{formatDuration(sessionDuration)}</span>
+                      <span className="absolute right-0">{formatDuration(removeGaps ? getCompressedSessionDuration(replaySession) : sessionDuration)}</span>
                     </div>
                   )
                 })()}
               </div>
               
               {/* Note display options */}
-              <div className="mt-4 flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="detailed-notes"
-                  checked={showDetailedNotes}
-                  onChange={(e) => setShowDetailedNotes(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label htmlFor="detailed-notes" className="text-sm text-gray-700">
-                  Detailed notes
-                </label>
+              <div className="mt-4 flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="detailed-notes"
+                    checked={showDetailedNotes}
+                    onChange={(e) => setShowDetailedNotes(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="detailed-notes" className="text-sm text-gray-700">
+                    Detailed notes
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="remove-gaps"
+                    checked={removeGaps}
+                    onChange={(e) => setRemoveGaps(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="remove-gaps" className="text-sm text-gray-700">
+                    Remove gaps
+                  </label>
+                </div>
               </div>
             </div>
           </CardContent>
