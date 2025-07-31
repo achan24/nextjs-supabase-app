@@ -540,3 +540,60 @@ This error occurs when trying to query nested relationships that don't exist in 
 
 ### Remember
 The database schema is the source of truth. Always verify relationships exist before trying to query them. If you get a "relationship not found" error, check the actual table definitions and foreign key structure.
+
+# CSS HOVER POPUP TRANSLUCENCY ISSUES
+
+## The Problem: Popups Appearing Translucent/Washed Out
+
+### Root Cause
+When creating hover popups in React/Tailwind, they often appear translucent or washed out due to:
+1. Light background colors (e.g., `bg-blue-400`, `bg-gray-400`) being inherently light
+2. CSS conflicts between Tailwind classes and inline styles
+3. Opacity classes not being applied correctly
+4. Background colors being overridden by other styles
+
+### Solution: Use Inline Styles for Solid Popups
+
+**For Step Popups:**
+```jsx
+// ✅ CORRECT - Solid dark popup
+<div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
+     style={{ backgroundColor: '#111' }}>
+  <div className="font-medium">{step.title}</div>
+  <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent" 
+       style={{ borderBottomColor: '#111' }}></div>
+</div>
+
+// ❌ WRONG - Light colors cause translucency
+<div className={`absolute top-full ... ${color} text-black ...`}>
+```
+
+**For Note Popups:**
+```jsx
+// ✅ CORRECT - Solid dark popup
+<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
+     style={{ backgroundColor: '#111' }}>
+  <div className="font-medium mb-1">Step {stepIndex + 1}: {step.title}</div>
+  <div className="text-gray-200">{note.note}</div>
+  <div className="text-gray-400 text-xs mt-1">{formatDuration(noteTime)} • {note.instanceVersion === 0 ? 'Original' : `Instance ${note.instanceVersion}`}</div>
+  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent" 
+       style={{ borderTopColor: '#111' }}></div>
+</div>
+```
+
+### Key Points
+1. **Use inline styles** for background colors to avoid CSS conflicts
+2. **Use very dark colors** (`#111`, `#000`) for solid appearance
+3. **Use white text** (`text-white`) on dark backgrounds
+4. **Match triangle pointers** with the same inline style color
+5. **Only use opacity-0/opacity-100** for hover effects, no other opacity classes
+6. **Remove any conflicting background classes** from the className
+
+### Common Mistakes
+- Using light Tailwind colors (`bg-blue-400`, `bg-gray-400`) for popup backgrounds
+- Mixing Tailwind background classes with inline styles
+- Using `currentColor` for triangle pointers when background is inline style
+- Forgetting to match triangle pointer color with background color
+
+### Remember
+If a popup looks translucent or washed out, it's almost always because the background color is too light. Use inline styles with dark colors (`#111`, `#000`) for completely solid popups.

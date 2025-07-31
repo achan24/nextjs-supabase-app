@@ -647,9 +647,16 @@ export default function ProcessMapperClient() {
                   return (
                     <div
                       key={step.id}
-                      className={`absolute top-0 h-full ${color} opacity-40 rounded`}
+                      className={`group absolute top-0 h-full ${color} rounded cursor-pointer`}
                       style={{ left: `${left}%`, width: `${width}%` }}
-                    />
+                    >
+                      {/* Step hover popup */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
+                           style={{ backgroundColor: '#111' }}>
+                        <div className="font-medium">{step.title}</div>
+                        <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent" style={{ borderBottomColor: '#111' }}></div>
+                      </div>
+                    </div>
                   )
                 })}
                 {/* Current time indicator */}
@@ -696,7 +703,7 @@ export default function ProcessMapperClient() {
                         }}
                       >
                         {/* Hover popup */}
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 bg-black text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
                              style={{ backgroundColor: '#111' }}>
                           <div className="font-medium mb-1">
                             Step {stepIndex + 1}: {step.title}
@@ -705,7 +712,7 @@ export default function ProcessMapperClient() {
                           <div className="text-gray-400 text-xs mt-1">
                             {formatDuration(noteTime)} • {note.instanceVersion === 0 ? 'Original' : `Instance ${note.instanceVersion}`}
                           </div>
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent" style={{ borderTopColor: '#111' }}></div>
                         </div>
                       </div>
                     )
