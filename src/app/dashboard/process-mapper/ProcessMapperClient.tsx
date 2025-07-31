@@ -629,20 +629,43 @@ export default function ProcessMapperClient() {
             <div className="relative mb-6">
               {/* Timeline axis */}
               <div className="w-full h-2 bg-gray-300 border-t border-dashed border-gray-400 relative">
+                {replaySession.steps.map((step, idx) => {
+                  const sessionDuration = getSessionDuration(replaySession)
+                  const stepStart = Math.floor((step.startTime.getTime() - replaySession.startTime.getTime()) / 1000)
+                  const stepEnd = step.endTime ? Math.floor((step.endTime.getTime() - replaySession.startTime.getTime()) / 1000) : stepStart + (step.duration ? Math.floor(step.duration / 1000) : 0)
+                  const left = (stepStart / sessionDuration) * 100
+                  const width = ((stepEnd - stepStart) / sessionDuration) * 100
+                  const colors = [
+                    'bg-blue-400',
+                    'bg-green-400',
+                    'bg-yellow-400',
+                    'bg-pink-400',
+                    'bg-purple-400',
+                    'bg-teal-400',
+                  ]
+                  const color = colors[idx % colors.length]
+                  return (
+                    <div
+                      key={step.id}
+                      className={`absolute top-0 h-full ${color} opacity-40 rounded`}
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                    />
+                  )
+                })}
                 {/* Current time indicator */}
                 {isReplaying && (
                   <>
-                    {/* Red dot */}
+                    {/* Blue dot */}
                     <div
-                      className="absolute top-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white shadow-sm"
+                      className="absolute top-0 w-2 h-2 bg-blue-500 rounded-full border-2 border-white shadow-sm"
                       style={{
                         left: `${getCurrentTimelinePosition()}%`,
                         transform: 'translateX(-50%) translateY(-3px)'
                       }}
                     />
-                    {/* Time label above the red dot */}
+                    {/* Time label above the blue dot */}
                     <div
-                      className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-2 py-0.5 rounded font-mono font-semibold z-30"
+                      className="absolute -top-6 bg-blue-500 text-white text-xs px-2 py-0.5 rounded font-mono font-semibold z-30"
                       style={{
                         left: `${getCurrentTimelinePosition()}%`,
                         transform: 'translateX(-50%)'
@@ -673,7 +696,8 @@ export default function ProcessMapperClient() {
                         }}
                       >
                         {/* Hover popup */}
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity whitespace-nowrap z-30">
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 bg-black text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-gray-800 shadow-lg"
+                             style={{ backgroundColor: '#111' }}>
                           <div className="font-medium mb-1">
                             Step {stepIndex + 1}: {step.title}
                           </div>
