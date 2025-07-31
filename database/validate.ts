@@ -35,6 +35,10 @@ import { CrmPersonTracks } from './models/crm-person-tracks.model';
 import { CrmActions } from './models/crm-actions.model';
 import { CrmActionFeedback } from './models/crm-action-feedback.model';
 import { CrmStageActionModel, CrmPersonStageActionModel } from './models/crm-stage-actions.model';
+import { ProcessMapperSession } from './models/process-mapper-session.model';
+import { ProcessMapperStep } from './models/process-mapper-step.model';
+import { ProcessMapperTimelineNote } from './models/process-mapper-timeline-note.model';
+import { ProcessMapperReplayInstance } from './models/process-mapper-replay-instance.model';
 
 // Load environment variables from root .env.local
 dotenv.config({ path: join(__dirname, '..', '.env.local') });
@@ -85,6 +89,10 @@ async function validateDatabase() {
     CrmActionFeedback,
     CrmStageActionModel,
     CrmPersonStageActionModel,
+    ProcessMapperSession,
+    ProcessMapperStep,
+    ProcessMapperTimelineNote,
+    ProcessMapperReplayInstance,
   ];
 
   for (const [modelName, model] of Object.entries(models)) {

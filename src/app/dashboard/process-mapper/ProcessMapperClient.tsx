@@ -72,41 +72,168 @@ export default function ProcessMapperClient() {
   const [removeGaps, setRemoveGaps] = useState<boolean>(false)
   const supabase = createClient()
 
-  // Load sessions from localStorage
+  // Load sessions from database
   useEffect(() => {
-    const savedSessions = localStorage.getItem('processMapperSessions')
-    if (savedSessions) {
-      const parsedSessions = JSON.parse(savedSessions).map((s: any) => ({
-        ...s,
-        startTime: new Date(s.startTime),
-        endTime: s.endTime ? new Date(s.endTime) : undefined,
-        steps: s.steps.map((step: any) => ({
-          ...step,
-          startTime: new Date(step.startTime),
-          endTime: step.endTime ? new Date(step.endTime) : undefined,
-          timelineNotes: step.timelineNotes?.map((note: any) => ({
-            ...note,
-            timestamp: new Date(note.timestamp)
+    const loadSessions = async () => {
+      try {
+        const { data: sessionsData, error } = await supabase
+          .from('process_mapper_sessions')
+          .select(`
+            *,
+            process_mapper_steps (
+              *,
+              process_mapper_timeline_notes (*)
+            ),
+            process_mapper_replay_instances (*)
+          `)
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('Error loading sessions:', error)
+          toast.error('Failed to load sessions')
+          return
+        }
+
+        const parsedSessions = sessionsData.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          startTime: new Date(s.start_time),
+          endTime: s.end_time ? new Date(s.end_time) : undefined,
+          status: s.status,
+          steps: s.process_mapper_steps?.map((step: any) => ({
+            id: step.id,
+            title: step.title,
+            description: step.description,
+            startTime: new Date(step.start_time),
+            endTime: step.end_time ? new Date(step.end_time) : undefined,
+            duration: step.duration,
+            orderIndex: step.order_index,
+            notes: step.notes,
+            timelineNotes: step.process_mapper_timeline_notes?.map((note: any) => ({
+              id: note.id,
+              timestamp: new Date(note.timestamp),
+              note: note.note,
+              instanceVersion: note.instance_version
+            })) || []
+          })) || [],
+          replayInstances: s.process_mapper_replay_instances?.map((instance: any) => ({
+            id: instance.id,
+            instanceNumber: instance.instance_number,
+            startTime: new Date(instance.start_time),
+            endTime: instance.end_time ? new Date(instance.end_time) : undefined,
+            notes: instance.notes || []
           })) || []
-        })),
-        replayInstances: s.replayInstances?.map((instance: any) => ({
-          ...instance,
-          startTime: new Date(instance.startTime),
-          endTime: instance.endTime ? new Date(instance.endTime) : undefined,
-          notes: instance.notes?.map((note: any) => ({
-            ...note,
-            timestamp: new Date(note.timestamp)
-          })) || []
-        })) || []
-      }))
-      setSessions(parsedSessions)
+        }))
+
+        setSessions(parsedSessions)
+      } catch (error) {
+        console.error('Error loading sessions:', error)
+        toast.error('Failed to load sessions')
+      }
     }
+
+    loadSessions()
   }, [])
 
-  // Save sessions to localStorage
-  const saveSessions = (newSessions: ProcessMapperSession[]) => {
-    localStorage.setItem('processMapperSessions', JSON.stringify(newSessions))
-    setSessions(newSessions)
+  // Save session to database
+  const saveSession = async (session: ProcessMapperSession) => {
+    try {
+      // Get current user session
+      const { data: authData, error: authError } = await supabase.auth.getSession()
+      if (authError) {
+        console.error('Error getting session:', authError)
+        toast.error('Authentication error')
+        return
+      }
+      if (!authData.session?.user?.id) {
+        toast.error('No authenticated user')
+        return
+      }
+
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('process_mapper_sessions')
+        .insert({
+          id: session.id,
+          name: session.name,
+          description: session.description,
+          start_time: session.startTime.toISOString(),
+          end_time: session.endTime?.toISOString(),
+          status: session.status,
+          total_duration: session.endTime ? Math.floor((session.endTime.getTime() - session.startTime.getTime()) / 1000) : null,
+          user_id: authData.session.user.id
+        })
+        .select()
+        .single()
+
+      if (sessionError) {
+        console.error('Error saving session:', sessionError)
+        toast.error('Failed to save session')
+        return
+      }
+
+      // Save steps
+      for (const step of session.steps) {
+        const { error: stepError } = await supabase
+          .from('process_mapper_steps')
+          .insert({
+            id: step.id,
+            session_id: session.id,
+            title: step.title,
+            description: step.description,
+            start_time: step.startTime.toISOString(),
+            end_time: step.endTime?.toISOString(),
+            duration: step.duration,
+            order_index: step.orderIndex,
+            notes: step.notes
+          })
+
+        if (stepError) {
+          console.error('Error saving step:', stepError)
+          continue
+        }
+
+        // Save timeline notes for this step
+        for (const note of step.timelineNotes || []) {
+          const { error: noteError } = await supabase
+            .from('process_mapper_timeline_notes')
+            .insert({
+              step_id: step.id,
+              session_id: session.id,
+              timestamp: note.timestamp.toISOString(),
+              note: note.note,
+              instance_version: note.instanceVersion || 0
+            })
+
+          if (noteError) {
+            console.error('Error saving timeline note:', noteError)
+          }
+        }
+      }
+
+      // Save replay instances
+      for (const instance of session.replayInstances || []) {
+        const { error: instanceError } = await supabase
+          .from('process_mapper_replay_instances')
+          .insert({
+            id: instance.id,
+            session_id: session.id,
+            instance_number: instance.instanceNumber,
+            start_time: instance.startTime.toISOString(),
+            end_time: instance.endTime?.toISOString(),
+            notes: instance.notes
+          })
+
+        if (instanceError) {
+          console.error('Error saving replay instance:', instanceError)
+        }
+      }
+
+      toast.success('Session saved successfully!')
+    } catch (error) {
+      console.error('Error saving session:', error)
+      toast.error('Failed to save session')
+    }
   }
 
   // Session timer effect
@@ -178,31 +305,66 @@ export default function ProcessMapperClient() {
     })
   }, [replayTime, isReplaying, replaySession, autoShownNotes, removeGaps])
 
-  const startNewSession = () => {
+  const startNewSession = async () => {
     if (!sessionName.trim()) {
       toast.error('Please enter a session name')
       return
     }
 
-    const newSession: ProcessMapperSession = {
-      id: `temp-${Date.now()}`,
-      name: sessionName,
-      description: sessionDescription,
-      startTime: new Date(),
-      status: 'active',
-      steps: []
-    }
+    try {
+      // Get current user session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) {
+        console.error('Error getting session:', sessionError)
+        toast.error('Authentication error')
+        return
+      }
+      if (!sessionData.session?.user?.id) {
+        toast.error('No authenticated user')
+        return
+      }
 
-    setSession(newSession)
-    setSessionTimer(0)
-    setStepTimers({})
-    setSessionName('')
-    setSessionDescription('')
-    setView('active')
-    toast.success('Session started!')
+      // Create session in database first
+      const { data: newSessionData, error: createError } = await supabase
+        .from('process_mapper_sessions')
+        .insert({
+          name: sessionName,
+          description: sessionDescription,
+          status: 'active',
+          user_id: sessionData.session.user.id
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('Error creating session:', createError)
+        toast.error('Failed to start session')
+        return
+      }
+
+      const newSession: ProcessMapperSession = {
+        id: newSessionData.id,
+        name: newSessionData.name,
+        description: newSessionData.description,
+        startTime: new Date(newSessionData.start_time),
+        status: newSessionData.status,
+        steps: []
+      }
+
+      setSession(newSession)
+      setSessionTimer(0)
+      setStepTimers({})
+      setSessionName('')
+      setSessionDescription('')
+      setView('active')
+      toast.success('Session started!')
+    } catch (error) {
+      console.error('Error starting session:', error)
+      toast.error('Failed to start session')
+    }
   }
 
-  const addStep = () => {
+  const addStep = async () => {
     if (!currentStep.trim()) {
       toast.error('Please enter a step title')
       return
@@ -213,26 +375,57 @@ export default function ProcessMapperClient() {
       return
     }
 
-    const newStep: ProcessMapperStep = {
-      id: `step-${Date.now()}`,
-      title: currentStep,
-      description: currentStepNotes,
-      startTime: new Date(),
-      orderIndex: session.steps.length,
-      notes: currentStepNotes,
-      isActive: true
+    // Check if there's an active step that needs to be completed first
+    const activeStep = session.steps.find(step => step.isActive)
+    if (activeStep) {
+      toast.error(`Please complete the current step "${activeStep.title}" before adding a new step`)
+      return
     }
 
-    const updatedSession = {
-      ...session,
-      steps: [...session.steps, newStep]
-    }
+    try {
+      // Create step in database
+      const { data: stepData, error: stepError } = await supabase
+        .from('process_mapper_steps')
+        .insert({
+          session_id: session.id,
+          title: currentStep,
+          description: currentStepNotes,
+          order_index: session.steps.length,
+          notes: currentStepNotes
+        })
+        .select()
+        .single()
 
-    setSession(updatedSession)
-    setStepTimers(prev => ({ ...prev, [newStep.id]: 0 }))
-    setCurrentStep('')
-    setCurrentStepNotes('')
-    toast.success('Step added!')
+      if (stepError) {
+        console.error('Error creating step:', stepError)
+        toast.error('Failed to add step')
+        return
+      }
+
+      const newStep: ProcessMapperStep = {
+        id: stepData.id,
+        title: stepData.title,
+        description: stepData.description,
+        startTime: new Date(stepData.start_time),
+        orderIndex: stepData.order_index,
+        notes: stepData.notes,
+        isActive: true
+      }
+
+      const updatedSession = {
+        ...session,
+        steps: [...session.steps, newStep]
+      }
+
+      setSession(updatedSession)
+      setStepTimers(prev => ({ ...prev, [newStep.id]: 0 }))
+      setCurrentStep('')
+      setCurrentStepNotes('')
+      toast.success('Step added!')
+    } catch (error) {
+      console.error('Error adding step:', error)
+      toast.error('Failed to add step')
+    }
   }
 
   const startStepTimer = (stepId: string) => {
@@ -251,25 +444,54 @@ export default function ProcessMapperClient() {
     setStepTimers(prev => ({ ...prev, [stepId]: 0 }))
   }
 
-  const stopStepTimer = (stepId: string) => {
+  const stopStepTimer = async (stepId: string) => {
     if (!session) return
 
-    const updatedSteps = session.steps.map(step => {
-      if (step.id === stepId && step.isActive) {
-        return {
-          ...step,
-          isActive: false,
-          endTime: new Date(),
-          duration: stepTimers[stepId] * 1000 // Convert seconds to milliseconds
-        }
-      }
-      return step
-    })
+    const step = session.steps.find(s => s.id === stepId)
+    if (!step || !step.isActive) return
 
-    setSession({
-      ...session,
-      steps: updatedSteps
-    })
+    const duration = stepTimers[stepId] * 1000 // Convert seconds to milliseconds
+    const endTime = new Date()
+
+    try {
+      // Update step in database with duration and end time
+      const { error: updateError } = await supabase
+        .from('process_mapper_steps')
+        .update({
+          end_time: endTime.toISOString(),
+          duration: duration
+        })
+        .eq('id', stepId)
+
+      if (updateError) {
+        console.error('Error updating step:', updateError)
+        toast.error('Failed to save step duration')
+        return
+      }
+
+      // Update local state
+      const updatedSteps = session.steps.map(s => {
+        if (s.id === stepId && s.isActive) {
+          return {
+            ...s,
+            isActive: false,
+            endTime: endTime,
+            duration: duration
+          }
+        }
+        return s
+      })
+
+      setSession({
+        ...session,
+        steps: updatedSteps
+      })
+
+      toast.success('Step completed!')
+    } catch (error) {
+      console.error('Error stopping step timer:', error)
+      toast.error('Failed to complete step')
+    }
   }
 
   const pauseSession = () => {
@@ -284,45 +506,101 @@ export default function ProcessMapperClient() {
     toast.info('Session resumed')
   }
 
-  const addStepNote = (stepId: string) => {
+  const addStepNote = async (stepId: string) => {
     const noteText = stepNoteInputs[stepId]
     if (!noteText?.trim() || !session) return
 
-    const updatedSteps = session.steps.map(step => {
-      if (step.id === stepId) {
-        const newNote = {
-          id: `note-${Date.now()}`,
-          timestamp: new Date(),
-          note: noteText.trim()
-        }
-        return {
-          ...step,
-          timelineNotes: [...(step.timelineNotes || []), newNote]
-        }
+    try {
+      // Create note in database
+      const { data: noteData, error: noteError } = await supabase
+        .from('process_mapper_timeline_notes')
+        .insert({
+          step_id: stepId,
+          session_id: session.id,
+          note: noteText.trim(),
+          instance_version: 0
+        })
+        .select()
+        .single()
+
+      if (noteError) {
+        console.error('Error creating note:', noteError)
+        toast.error('Failed to add note')
+        return
       }
-      return step
-    })
 
-    setSession({
-      ...session,
-      steps: updatedSteps
-    })
+      const newNote = {
+        id: noteData.id,
+        timestamp: new Date(noteData.timestamp),
+        note: noteData.note,
+        instanceVersion: noteData.instance_version
+      }
 
-    // Clear the input
-    setStepNoteInputs(prev => ({ ...prev, [stepId]: '' }))
-    toast.success('Note added!')
+      const updatedSteps = session.steps.map(step => {
+        if (step.id === stepId) {
+          return {
+            ...step,
+            timelineNotes: [...(step.timelineNotes || []), newNote]
+          }
+        }
+        return step
+      })
+
+      setSession({
+        ...session,
+        steps: updatedSteps
+      })
+
+      // Clear the input
+      setStepNoteInputs(prev => ({ ...prev, [stepId]: '' }))
+      toast.success('Note added!')
+    } catch (error) {
+      console.error('Error adding note:', error)
+      toast.error('Failed to add note')
+    }
   }
 
-  const endSession = () => {
+  const endSession = async () => {
     if (!session) return
     const completedSession: ProcessMapperSession = { ...session, status: 'completed', endTime: new Date() }
     setSession(completedSession)
     
-    // Save to localStorage
-    const updatedSessions = [...sessions, completedSession]
-    saveSessions(updatedSessions)
+    // Save to database
+    await saveSession(completedSession)
+    
+    // Update local state
+    setSessions(prev => [...prev, completedSession])
     
     toast.success('Session completed and saved!')
+  }
+
+  const deleteSession = async (sessionId: string) => {
+    try {
+      // Delete from database (cascade will handle related records)
+      const { error } = await supabase
+        .from('process_mapper_sessions')
+        .delete()
+        .eq('id', sessionId)
+
+      if (error) {
+        console.error('Error deleting session:', error)
+        toast.error('Failed to delete session')
+        return
+      }
+
+      // Remove from local state
+      setSessions(prev => prev.filter(s => s.id !== sessionId))
+      
+      // If this was the current session, clear it
+      if (session?.id === sessionId) {
+        setSession(null)
+      }
+
+      toast.success('Session deleted successfully')
+    } catch (error) {
+      console.error('Error deleting session:', error)
+      toast.error('Failed to delete session')
+    }
   }
 
   const startReplay = (sessionToReplay: ProcessMapperSession) => {
@@ -481,66 +759,120 @@ export default function ProcessMapperClient() {
   }
 
   // Start a new replay instance
-  const startNewReplayInstance = () => {
+  const startNewReplayInstance = async () => {
     if (!replaySession) return
 
-    const newInstanceNumber = (replaySession.replayInstances?.length || 0) + 1
-    const newInstance = {
-      id: `instance-${Date.now()}`,
-      instanceNumber: newInstanceNumber,
-      startTime: new Date(),
-      notes: []
+    try {
+      const newInstanceNumber = (replaySession.replayInstances?.length || 0) + 1
+      
+      // Create replay instance in database
+      const { data: instanceData, error: instanceError } = await supabase
+        .from('process_mapper_replay_instances')
+        .insert({
+          session_id: replaySession.id,
+          instance_number: newInstanceNumber
+        })
+        .select()
+        .single()
+
+      if (instanceError) {
+        console.error('Error creating replay instance:', instanceError)
+        toast.error('Failed to create replay instance')
+        return
+      }
+
+      const newInstance = {
+        id: instanceData.id,
+        instanceNumber: instanceData.instance_number,
+        startTime: new Date(instanceData.start_time),
+        notes: []
+      }
+
+      const updatedSession = {
+        ...replaySession,
+        replayInstances: [...(replaySession.replayInstances || []), newInstance]
+      }
+
+      setReplaySession(updatedSession)
+      setCurrentReplayInstance(newInstanceNumber)
+      setReplayTime(0)
+      setIsReplaying(true)
+
+      // Update sessions list
+      setSessions(prev => prev.map(s => 
+        s.id === replaySession.id ? updatedSession : s
+      ))
+    } catch (error) {
+      console.error('Error creating replay instance:', error)
+      toast.error('Failed to create replay instance')
     }
-
-    const updatedSession = {
-      ...replaySession,
-      replayInstances: [...(replaySession.replayInstances || []), newInstance]
-    }
-
-    setReplaySession(updatedSession)
-    setCurrentReplayInstance(newInstanceNumber)
-    setReplayTime(0)
-    setIsReplaying(true)
-
-    // Update sessions list
-    const updatedSessions = sessions.map(s => 
-      s.id === replaySession.id ? updatedSession : s
-    )
-    saveSessions(updatedSessions)
   }
 
   // Add note during replay
-  const addReplayNote = (stepId: string) => {
+  const addReplayNote = async (stepId: string) => {
     const noteText = replayNoteInputs[stepId]
     if (!noteText?.trim() || !replaySession) return
 
-    const newNote = {
-      id: `note-${Date.now()}`,
-      stepId,
-      timestamp: new Date(),
-      note: noteText.trim(),
-      instanceVersion: currentReplayInstance
+    try {
+      // Find the current replay instance
+      const currentInstance = replaySession.replayInstances?.find(
+        instance => instance.instanceNumber === currentReplayInstance
+      )
+
+      if (!currentInstance) {
+        toast.error('No active replay instance')
+        return
+      }
+
+      // Create note in database
+      const { data: noteData, error: noteError } = await supabase
+        .from('process_mapper_timeline_notes')
+        .insert({
+          step_id: stepId,
+          session_id: replaySession.id,
+          replay_instance_id: currentInstance.id,
+          note: noteText.trim(),
+          instance_version: currentReplayInstance
+        })
+        .select()
+        .single()
+
+      if (noteError) {
+        console.error('Error creating replay note:', noteError)
+        toast.error('Failed to add note')
+        return
+      }
+
+      const newNote = {
+        id: noteData.id,
+        stepId,
+        timestamp: new Date(noteData.timestamp),
+        note: noteData.note,
+        instanceVersion: noteData.instance_version
+      }
+
+      const updatedSession = {
+        ...replaySession,
+        replayInstances: replaySession.replayInstances?.map(instance =>
+          instance.instanceNumber === currentReplayInstance
+            ? { ...instance, notes: [...instance.notes, newNote] }
+            : instance
+        ) || []
+      }
+
+      setReplaySession(updatedSession)
+      setReplayNoteInputs(prev => ({ ...prev, [stepId]: '' }))
+
+      // Update sessions list
+      setSessions(prev => prev.map(s => 
+        s.id === replaySession.id ? updatedSession : s
+      ))
+
+      toast.success('Note added to replay instance!')
+    } catch (error) {
+      console.error('Error adding replay note:', error)
+      toast.error('Failed to add note')
     }
-
-    const updatedSession = {
-      ...replaySession,
-      replayInstances: replaySession.replayInstances?.map(instance =>
-        instance.instanceNumber === currentReplayInstance
-          ? { ...instance, notes: [...instance.notes, newNote] }
-          : instance
-      ) || []
-    }
-
-    setReplaySession(updatedSession)
-    setReplayNoteInputs(prev => ({ ...prev, [stepId]: '' }))
-
-    // Update sessions list
-    const updatedSessions = sessions.map(s => 
-      s.id === replaySession.id ? updatedSession : s
-    )
-    saveSessions(updatedSessions)
-
-    toast.success('Note added to replay instance!')
   }
 
   // Get all notes for a step across all instances
@@ -678,7 +1010,7 @@ export default function ProcessMapperClient() {
                 rows={3}
               />
             </div>
-            <Button onClick={startNewSession} className="w-full">
+            <Button onClick={() => startNewSession()} className="w-full">
               <Play className="h-4 w-4 mr-2" />
               Start Session
             </Button>
@@ -718,7 +1050,7 @@ export default function ProcessMapperClient() {
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={startNewReplayInstance}
+                    onClick={() => startNewReplayInstance()}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     New Instance
@@ -1006,7 +1338,7 @@ export default function ProcessMapperClient() {
                         <h4 className="font-medium">{step.title}</h4>
                         <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
                           <span>Start: {formatDuration(progress.startTime)}</span>
-                          <span>Duration: {formatDuration(progress.endTime - progress.startTime)}</span>
+                          <span>Duration: {formatDuration(step.duration ? Math.floor(step.duration / 1000) : 0)}</span>
                           <span>{allNotes.length} total notes</span>
                         </div>
                       </div>
@@ -1122,41 +1454,63 @@ export default function ProcessMapperClient() {
         </CardContent>
       </Card>
 
-      {/* Add Step */}
-      {session.status !== 'completed' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Add Step</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Step Title *
-              </label>
-              <Input
-                placeholder="e.g., Check urgent emails, Review code changes"
-                value={currentStep}
-                onChange={(e) => setCurrentStep(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Notes (Optional)
-              </label>
-              <Textarea
-                placeholder="Add any notes or context for this step..."
-                value={currentStepNotes}
-                onChange={(e) => setCurrentStepNotes(e.target.value)}
-                rows={2}
-              />
-            </div>
-            <Button onClick={addStep} className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Step
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+              {/* Add Step */}
+        {session.status !== 'completed' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Add Step</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(() => {
+                const activeStep = session.steps.find(step => step.isActive)
+                if (activeStep) {
+                  return (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-600" />
+                        <span className="text-sm font-medium text-yellow-800">
+                          Complete Current Step First
+                        </span>
+                      </div>
+                      <p className="text-sm text-yellow-700">
+                        Please complete the current step "{activeStep.title}" before adding a new step.
+                      </p>
+                    </div>
+                  )
+                }
+                return (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Step Title *
+                      </label>
+                      <Input
+                        placeholder="e.g., Check urgent emails, Review code changes"
+                        value={currentStep}
+                        onChange={(e) => setCurrentStep(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Notes (Optional)
+                      </label>
+                      <Textarea
+                        placeholder="Add any notes or context for this step..."
+                        value={currentStepNotes}
+                        onChange={(e) => setCurrentStepNotes(e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                    <Button onClick={() => addStep()} className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Step
+                    </Button>
+                  </>
+                )
+              })()}
+            </CardContent>
+          </Card>
+        )}
 
       {/* Steps List */}
       <Card>
