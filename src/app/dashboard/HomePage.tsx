@@ -222,24 +222,36 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Overview Card */}
-          <Link href="/dashboard/overview" className="group">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <BarChart3 className="h-6 w-6 text-purple-600" />
-                  </div>
-                  Overview
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  Track and manage all your targets and their progress in one place. Get a comprehensive view of your goals and achievements.
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+          {/* Skills Explorer Card */}
+          <Card className="p-4 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/dashboard/skills')}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Skills Explorer</h3>
+              <span className="text-2xl">⚔️</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Active Skills</span>
+                <span className="font-medium">3</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">In Progress</span>
+                <span className="font-medium">2</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Mastered</span>
+                <span className="font-medium">1</span>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t">
+              <div className="text-sm text-gray-600">Recent Activity</div>
+              <div className="mt-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-500">●</span>
+                  <span>"Talk out loud" practiced</span>
+                </div>
+              </div>
+            </div>
+          </Card>
 
           {/* GOAL System Card */}
           <Link href="/dashboard/goal" className="group">
@@ -270,20 +282,34 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Projects Card */}
-          <Link href="/dashboard/projects" className="group">
+          {/* Process Mapper Card */}
+          <Link href="/dashboard/process-mapper" className="group">
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <FolderKanban className="h-6 w-6 text-blue-600" />
+                  <div className="p-2 bg-teal-100 rounded-lg">
+                    <svg 
+                      className="h-6 w-6 text-teal-600"
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2"
+                    >
+                      <path d="M9 12l2 2 4-4" />
+                      <path d="M21 12c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
+                      <path d="M3 12c1 0 2-1 2-2s-1-2-2-2-2 1-2 2 1 2 2 2z" />
+                      <path d="M12 3c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z" />
+                      <path d="M12 21c0-1 1-2 2-2s2 1 2 2-1 2-2 2-2-1-2-2z" />
+                      <path d="M12 9c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
+                      <path d="M12 15c1 0 2 1 2 2s-1 2-2 2-2-1-2-2 1-2 2-2z" />
+                    </svg>
                   </div>
-                  Projects
+                  Process Mapper
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Organize and manage your projects effectively. Break down complex goals into manageable tasks and track progress systematically.
+                  Create sequences on the fly as you work. Capture real-time process steps, decision points, and timing data to build optimized workflows.
                 </p>
               </CardContent>
             </Card>
@@ -346,6 +372,25 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
+          {/* Relationship CRM Card */}
+          <Link href="/dashboard/crm" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-red-100 rounded-lg">
+                    <Users className="h-6 w-6 text-red-600" />
+                  </div>
+                  Relationship CRM
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Track and nurture your personal and professional relationships. Manage contacts, track interactions, and grow meaningful connections.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
           {/* Calendar Card */}
           <Link href="/dashboard/calendar" className="group">
             <Card className="hover:shadow-md transition-shadow">
@@ -403,20 +448,20 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Relationship CRM Card */}
-          <Link href="/dashboard/crm" className="group">
+          {/* Projects Card */}
+          <Link href="/dashboard/projects" className="group">
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <Users className="h-6 w-6 text-red-600" />
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FolderKanban className="h-6 w-6 text-blue-600" />
                   </div>
-                  Relationship CRM
+                  Projects
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Track and nurture your personal and professional relationships. Manage contacts, track interactions, and grow meaningful connections.
+                  Organize and manage your projects effectively. Break down complex goals into manageable tasks and track progress systematically.
                 </p>
               </CardContent>
             </Card>
@@ -460,36 +505,24 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Skills Explorer Card */}
-          <Card className="p-4 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/dashboard/skills')}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Skills Explorer</h3>
-              <span className="text-2xl">⚔️</span>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Active Skills</span>
-                <span className="font-medium">3</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">In Progress</span>
-                <span className="font-medium">2</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Mastered</span>
-                <span className="font-medium">1</span>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t">
-              <div className="text-sm text-gray-600">Recent Activity</div>
-              <div className="mt-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-green-500">●</span>
-                  <span>"Talk out loud" practiced</span>
-                </div>
-              </div>
-            </div>
-          </Card>
+          {/* Overview Card */}
+          <Link href="/dashboard/overview" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <BarChart3 className="h-6 w-6 text-purple-600" />
+                  </div>
+                  Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Track and manage all your targets and their progress in one place. Get a comprehensive view of your goals and achievements.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
     </div>
