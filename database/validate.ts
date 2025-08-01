@@ -39,6 +39,9 @@ import { ProcessMapperSession } from './models/process-mapper-session.model';
 import { ProcessMapperStep } from './models/process-mapper-step.model';
 import { ProcessMapperTimelineNote } from './models/process-mapper-timeline-note.model';
 import { ProcessMapperReplayInstance } from './models/process-mapper-replay-instance.model';
+import { NoteFolder } from './models/note-folder.model';
+import { EnhancedNote } from './models/enhanced-note.model';
+import { NoteLink } from './models/note-link.model';
 
 // Load environment variables from root .env.local
 dotenv.config({ path: join(__dirname, '..', '.env.local') });
@@ -93,6 +96,9 @@ async function validateDatabase() {
     ProcessMapperStep,
     ProcessMapperTimelineNote,
     ProcessMapperReplayInstance,
+    NoteFolder,
+    EnhancedNote,
+    NoteLink,
   ];
 
   for (const [modelName, model] of Object.entries(models)) {

@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Markdown Editor Styles */
+@import '@uiw/react-md-editor/markdown-editor.css';
+
 html, body {
   margin: 0 !important;
   padding: 0 !important;

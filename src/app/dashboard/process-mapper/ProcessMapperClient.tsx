@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Play, Pause, Square, Plus, Clock, CheckCircle, AlertCircle, Timer, List, Eye, ArrowLeft } from 'lucide-react'
+import { Play, Pause, Square, Plus, Clock, CheckCircle, AlertCircle, Timer, List, Eye, ArrowLeft, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
@@ -58,6 +58,7 @@ export default function ProcessMapperClient() {
   const [sessionDescription, setSessionDescription] = useState<string>('')
   const [sessionTimer, setSessionTimer] = useState<number>(0)
   const [stepTimers, setStepTimers] = useState<Record<string, number>>({})
+  const [timerStartTimes, setTimerStartTimes] = useState<Record<string, number>>({})
   const [stepNoteInputs, setStepNoteInputs] = useState<Record<string, string>>({})
   const [sessions, setSessions] = useState<ProcessMapperSession[]>([])
   const [view, setView] = useState<'home' | 'active' | 'replay'>('home')
@@ -127,6 +128,27 @@ export default function ProcessMapperClient() {
         }))
 
         setSessions(parsedSessions)
+        
+        // Initialize step timers for any active steps
+        const activeSteps = parsedSessions.flatMap(s => 
+          s.steps.filter((step: ProcessMapperStep) => step.isActive)
+        )
+        
+        if (activeSteps.length > 0) {
+          const initialTimers: Record<string, number> = {}
+          const initialStartTimes: Record<string, number> = {}
+          
+          activeSteps.forEach((step: ProcessMapperStep) => {
+            // Store the start time for persistent timing
+            initialStartTimes[step.id] = step.startTime.getTime()
+            // Calculate elapsed time for active steps
+            const elapsed = Math.floor((new Date().getTime() - step.startTime.getTime()) / 1000)
+            initialTimers[step.id] = elapsed
+          })
+          
+          setTimerStartTimes(prev => ({ ...prev, ...initialStartTimes }))
+          setStepTimers(prev => ({ ...prev, ...initialTimers }))
+        }
       } catch (error) {
         console.error('Error loading sessions:', error)
         toast.error('Failed to load sessions')
@@ -259,10 +281,23 @@ export default function ProcessMapperClient() {
       session.steps.forEach(step => {
         if (step.isActive && session.status === 'active') {
           intervals[step.id] = setInterval(() => {
-            setStepTimers(prev => ({
-              ...prev,
-              [step.id]: (prev[step.id] || 0) + 1
-            }))
+            setStepTimers(prev => {
+              const startTime = timerStartTimes[step.id]
+              if (startTime) {
+                // Calculate elapsed time from the persistent start time
+                const elapsed = Math.floor((new Date().getTime() - startTime) / 1000)
+                return {
+                  ...prev,
+                  [step.id]: elapsed
+                }
+              } else {
+                // Fallback to incrementing if no start time (shouldn't happen)
+                return {
+                  ...prev,
+                  [step.id]: (prev[step.id] || 0) + 1
+                }
+              }
+            })
           }, 1000)
         }
       })
@@ -271,7 +306,7 @@ export default function ProcessMapperClient() {
     return () => {
       Object.values(intervals).forEach(interval => clearInterval(interval))
     }
-  }, [session?.steps, session?.status])
+  }, [session?.steps, session?.status, timerStartTimes])
 
   // Auto-show note popups when time dot passes over them
   useEffect(() => {
@@ -441,6 +476,8 @@ export default function ProcessMapperClient() {
       steps: updatedSteps
     })
 
+    const startTime = new Date().getTime()
+    setTimerStartTimes(prev => ({ ...prev, [stepId]: startTime }))
     setStepTimers(prev => ({ ...prev, [stepId]: 0 }))
   }
 
@@ -450,7 +487,14 @@ export default function ProcessMapperClient() {
     const step = session.steps.find(s => s.id === stepId)
     if (!step || !step.isActive) return
 
-    const duration = stepTimers[stepId] * 1000 // Convert seconds to milliseconds
+    // Calculate duration from persistent start time for accuracy
+    const startTime = timerStartTimes[stepId]
+    let duration: number
+    if (startTime) {
+      duration = new Date().getTime() - startTime // Duration in milliseconds
+    } else {
+      duration = (stepTimers[stepId] || 0) * 1000 // Fallback to timer value
+    }
     const endTime = new Date()
 
     try {
@@ -575,6 +619,27 @@ export default function ProcessMapperClient() {
   }
 
   const deleteSession = async (sessionId: string) => {
+    // Find the session to get its name for confirmation
+    const sessionToDelete = sessions.find(s => s.id === sessionId)
+    if (!sessionToDelete) return
+
+    // First confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${sessionToDelete.name}"? This action cannot be undone and will delete all associated steps, notes, and replay instances.`
+    )
+
+    if (!confirmed) return
+
+    // Second confirmation - type "delete" to confirm
+    const typedConfirmation = window.prompt(
+      `To confirm deletion of "${sessionToDelete.name}", please type "delete":`
+    )
+
+    if (typedConfirmation !== 'delete') {
+      toast.error('Deletion cancelled - you must type "delete" to confirm')
+      return
+    }
+
     try {
       // Delete from database (cascade will handle related records)
       const { error } = await supabase
@@ -968,14 +1033,24 @@ export default function ProcessMapperClient() {
                         )}
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => startReplay(savedSession)}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Replay
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startReplay(savedSession)}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Replay
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => deleteSession(savedSession.id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
