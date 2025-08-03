@@ -21,6 +21,7 @@ export default function ObsidianClient({ user }: { user: User }) {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editorState, setEditorState] = useState<EditorState>({
     mode: 'edit',
     isFullScreen: false,
@@ -144,10 +145,21 @@ export default function ObsidianClient({ user }: { user: User }) {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-gray-900">Obsidian Clone</h1>
-          <div className="relative">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex items-center gap-2 md:gap-4">
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="md:hidden p-2 rounded-md hover:bg-gray-100"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          
+          <h1 className="text-lg md:text-xl font-semibold text-gray-900">Obsidian Clone</h1>
+          
+          <div className="relative hidden md:block">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <input
               type="text"
@@ -159,17 +171,30 @@ export default function ObsidianClient({ user }: { user: User }) {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        {/* Mobile search bar */}
+        <div className="relative md:hidden">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <input
+            type="text"
+            placeholder="Search notes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+        </div>
+        
+        <div className="flex items-center gap-1 md:gap-2">
           <Button
             onClick={() => setIsQuickSwitcherOpen(true)}
             variant="outline"
             size="sm"
+            className="hidden md:flex"
           >
             Quick Switcher
           </Button>
           <Button onClick={createNewNote} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            New Note
+            <Plus className="h-4 w-4 md:mr-2" />
+            <span className="hidden md:inline">New Note</span>
           </Button>
           <Button variant="outline" size="sm">
             <Settings className="h-4 w-4" />
@@ -178,20 +203,43 @@ export default function ObsidianClient({ user }: { user: User }) {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Mobile Sidebar Overlay */}
+        {isSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+        
         {/* Sidebar */}
-        <Sidebar
-          notes={filteredNotes}
-          folders={folders}
-          currentNote={currentNote}
-          selectedFolder={selectedFolder}
-          onNoteSelect={setCurrentNote}
-          onFolderSelect={setSelectedFolder}
-          onCreateFolder={() => {/* TODO */}}
-        />
+        <div className={`
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:translate-x-0
+          fixed md:relative
+          left-0 top-0
+          w-80 md:w-64
+          h-full
+          bg-white border-r border-gray-200
+          z-50 md:z-auto
+          transition-transform duration-300 ease-in-out
+        `}>
+          <Sidebar
+            notes={filteredNotes}
+            folders={folders}
+            currentNote={currentNote}
+            selectedFolder={selectedFolder}
+            onNoteSelect={(note) => {
+              setCurrentNote(note);
+              setIsSidebarOpen(false); // Close sidebar on mobile when note is selected
+            }}
+            onFolderSelect={setSelectedFolder}
+            onCreateFolder={() => {/* TODO */}}
+          />
+        </div>
 
         {/* Editor Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           {currentNote ? (
             <MarkdownEditor
               note={currentNote}
@@ -202,22 +250,24 @@ export default function ObsidianClient({ user }: { user: User }) {
               onNoteSelect={setCurrentNote}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
               <div className="text-center">
-                <div className="text-6xl mb-4">📝</div>
-                <h2 className="text-xl font-medium mb-2">No note selected</h2>
+                <div className="text-4xl md:text-6xl mb-4">📝</div>
+                <h2 className="text-lg md:text-xl font-medium mb-2">No note selected</h2>
                 <p className="text-sm">Select a note from the sidebar or create a new one</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Panel */}
-        <RightPanel
-          currentNote={currentNote}
-          notes={notes}
-          onNoteSelect={setCurrentNote}
-        />
+        {/* Right Panel - Hidden on mobile */}
+        <div className="hidden lg:block">
+          <RightPanel
+            currentNote={currentNote}
+            notes={notes}
+            onNoteSelect={setCurrentNote}
+          />
+        </div>
       </div>
 
       {/* Quick Switcher Modal */}

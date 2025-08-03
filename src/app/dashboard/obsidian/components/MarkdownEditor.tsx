@@ -249,18 +249,20 @@ export default function MarkdownEditor({
       {/* Video Embedding Help */}
       {editorState.mode === 'edit' && (
         <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-xs text-blue-700">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
             <span className="font-medium">Video Embedding:</span>
-            <span>YouTube: [Video Title](https://youtube.com/watch?v=VIDEO_ID)</span>
-            <span>Short: [Video Title](https://youtu.be/VIDEO_ID)</span>
-            <span>Shorts: [Video Title](https://youtube.com/shorts/VIDEO_ID)</span>
+            <div className="flex flex-wrap gap-1 md:gap-2">
+              <span>YouTube: [Video Title](https://youtube.com/watch?v=VIDEO_ID)</span>
+              <span>Short: [Video Title](https://youtu.be/VIDEO_ID)</span>
+              <span>Shorts: [Video Title](https://youtube.com/shorts/VIDEO_ID)</span>
+            </div>
           </div>
         </div>
       )}
 
       {/* Status Bar */}
-      <div className="bg-gray-50 border-b border-gray-200 px-4 py-1 text-xs text-gray-500 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="bg-gray-50 border-b border-gray-200 px-4 py-1 text-xs text-gray-500 flex flex-col md:flex-row md:items-center md:justify-between gap-1">
+        <div className="flex items-center gap-2 md:gap-4">
           <span>Words: {content.split(/\s+/).filter(word => word.length > 0).length}</span>
           <span className={`px-2 py-1 rounded text-xs font-medium ${
             editorState.mode === 'edit' 
@@ -270,7 +272,7 @@ export default function MarkdownEditor({
             {editorState.mode === 'edit' ? 'Edit Mode' : 'Preview Mode'}
           </span>
           {editorState.lastSaved && (
-            <span>Last saved: {new Date(editorState.lastSaved || '').toLocaleTimeString()}</span>
+            <span className="hidden md:inline">Last saved: {new Date(editorState.lastSaved || '').toLocaleTimeString()}</span>
           )}
         </div>
         <div>
