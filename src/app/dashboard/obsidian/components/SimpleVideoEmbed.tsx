@@ -39,9 +39,6 @@ export default function SimpleVideoEmbed({ content }: SimpleVideoEmbedProps) {
   return (
     <ReactMarkdown
       rehypePlugins={[rehypeRaw]}
-      onError={(error) => {
-        console.error('[SimpleVideoEmbed] ReactMarkdown Error:', error);
-      }}
     >
       {processedContent}
     </ReactMarkdown>
