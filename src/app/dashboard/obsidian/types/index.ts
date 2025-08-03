@@ -53,7 +53,7 @@ export interface NoteVersion {
 }
 
 export interface EditorState {
-  mode: 'edit' | 'preview';
+  mode: 'edit' | 'preview' | 'hybrid';
   isFullScreen: boolean;
   autoSave: boolean;
   wordCount: number;

@@ -10,6 +10,7 @@ import { Eye, EyeOff, Maximize, Minimize, Save, Star, StarOff, Tag, X } from 'lu
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import CustomMarkdownPreview from './CustomMarkdownPreview';
+import HybridEditor from './HybridEditor';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
 
 interface MarkdownEditorProps {
@@ -37,6 +38,7 @@ export default function MarkdownEditor({
   const [lastSaved, setLastSaved] = useState<string | null>(null);
 
   const saveNote = useCallback(() => {
+    console.log('[Obsidian Auto-Save] Saving note:', note.id, 'Title:', title);
     const tagArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
     onUpdate(note.id, {
       title,
@@ -44,11 +46,13 @@ export default function MarkdownEditor({
       tags: tagArray,
       last_accessed_at: new Date().toISOString()
     });
-    setLastSaved(new Date().toISOString());
+    const saveTime = new Date().toISOString();
+    setLastSaved(saveTime);
     onEditorStateChange({
       ...editorState,
-      lastSaved: new Date().toISOString()
+      lastSaved: saveTime
     });
+    console.log('[Obsidian Auto-Save] Note saved at:', saveTime);
   }, [title, content, tags, note.id, onUpdate, editorState, onEditorStateChange]);
 
   useEffect(() => {
@@ -59,18 +63,22 @@ export default function MarkdownEditor({
 
   // Auto-save effect
   useEffect(() => {
+    console.log('[Obsidian Auto-Save] Auto-save effect triggered. Auto-save enabled:', editorState.autoSave);
     if (editorState.autoSave) {
       // Clear existing timeout
       if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
+        console.log('[Obsidian Auto-Save] Cleared existing timeout');
       }
 
       // Set new timeout for auto-save
       const timeout = setTimeout(() => {
+        console.log('[Obsidian Auto-Save] Auto-save timeout triggered');
         saveNote();
       }, 2000); // Auto-save after 2 seconds of inactivity
 
       setAutoSaveTimeout(timeout);
+      console.log('[Obsidian Auto-Save] Set new timeout for auto-save');
 
       // Cleanup timeout on unmount
       return () => {
@@ -149,8 +157,12 @@ export default function MarkdownEditor({
   };
 
   const toggleMode = () => {
-    // Toggle between edit and preview only
-    const newMode = editorState.mode === 'edit' ? 'preview' : 'edit';
+    // Cycle through edit -> preview -> hybrid -> edit
+    const modeCycle = ['edit', 'preview', 'hybrid'] as const;
+    const currentIndex = modeCycle.indexOf(editorState.mode);
+    const nextIndex = (currentIndex + 1) % modeCycle.length;
+    const newMode = modeCycle[nextIndex];
+    
     onEditorStateChange({
       ...editorState,
       mode: newMode
@@ -233,9 +245,15 @@ export default function MarkdownEditor({
             variant="outline" 
             size="sm" 
             onClick={toggleMode}
-            title={editorState.mode === 'edit' ? 'Switch to Preview' : 'Switch to Edit'}
+            title={
+              editorState.mode === 'edit' ? 'Switch to Preview' : 
+              editorState.mode === 'preview' ? 'Switch to Hybrid' : 
+              'Switch to Edit'
+            }
           >
-            {editorState.mode === 'edit' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            {editorState.mode === 'edit' ? <Eye className="h-4 w-4" /> : 
+             editorState.mode === 'preview' ? <EyeOff className="h-4 w-4" /> : 
+             <Eye className="h-4 w-4" />}
           </Button>
           <Button variant="outline" size="sm" onClick={toggleFullScreen}>
             {editorState.isFullScreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
@@ -247,7 +265,7 @@ export default function MarkdownEditor({
       </div>
 
       {/* Video Embedding Help */}
-      {editorState.mode === 'edit' && (
+      {(editorState.mode === 'edit' || editorState.mode === 'hybrid') && (
         <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-xs text-blue-700">
           <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
             <span className="font-medium">Video Embedding:</span>
@@ -267,18 +285,22 @@ export default function MarkdownEditor({
           <span className={`px-2 py-1 rounded text-xs font-medium ${
             editorState.mode === 'edit' 
               ? 'bg-blue-100 text-blue-700' 
-              : 'bg-green-100 text-green-700'
+              : editorState.mode === 'preview'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-purple-100 text-purple-700'
           }`}>
-            {editorState.mode === 'edit' ? 'Edit Mode' : 'Preview Mode'}
+            {editorState.mode === 'edit' ? 'Edit Mode' : 
+             editorState.mode === 'preview' ? 'Preview Mode' : 
+             'Hybrid Mode'}
           </span>
           {editorState.lastSaved && (
-            <span className="hidden md:inline">Last saved: {new Date(editorState.lastSaved || '').toLocaleTimeString()}</span>
+            <span>Last saved: {new Date(editorState.lastSaved).toLocaleTimeString()}</span>
           )}
         </div>
         <div>
           {editorState.autoSave && (
             <span className="text-green-600">
-              {lastSaved ? 'Auto-saved' : 'Auto-save enabled'}
+              {lastSaved ? `Auto-saved at ${new Date(lastSaved).toLocaleTimeString()}` : 'Auto-save enabled'}
             </span>
           )}
         </div>
@@ -294,6 +316,13 @@ export default function MarkdownEditor({
               onNoteSelect={onNoteSelect || (() => {})}
             />
           </div>
+        ) : editorState.mode === 'hybrid' ? (
+          <HybridEditor
+            content={content}
+            onChange={(value) => setContent(value || '')}
+            allNotes={allNotes}
+            onNoteSelect={onNoteSelect || (() => {})}
+          />
         ) : (
           <MDEditor
             value={content}

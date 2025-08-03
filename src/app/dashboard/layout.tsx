@@ -25,10 +25,11 @@ export default function DashboardLayout({
     reminderService.startCheckingReminders();
 
     // Initialize auto-save for character progress
+    // DISABLED: Auto-save for character daily progress is turned off
     let cleanup: (() => void) | undefined;
-    if (user?.id) {
-      cleanup = initializeAutoSave(user.id);
-    }
+    // if (user?.id) {
+    //   cleanup = initializeAutoSave(user.id);
+    // }
 
     return () => {
       reminderService.stopCheckingReminders();
