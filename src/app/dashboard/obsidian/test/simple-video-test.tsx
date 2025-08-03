@@ -37,9 +37,6 @@ This is a simple test of YouTube video embedding.
             <ReactMarkdown
               remarkPlugins={[remarkYoutubeEmbed]}
               rehypePlugins={[rehypeRaw]}
-              onError={(error) => {
-                console.error('[Simple Test] ReactMarkdown Error:', error);
-              }}
             >
               {testMarkdown}
             </ReactMarkdown>
