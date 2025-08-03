@@ -82,4 +82,47 @@ html, body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Video Embedding Styles */
+.video-embed {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin: 1rem 0;
+}
+
+.video-embed iframe,
+.video-embed video {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.video-embed iframe {
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 315px;
+}
+
+.video-embed video {
+  max-height: 500px;
+}
+
+/* Responsive video containers */
+@media (max-width: 768px) {
+  .video-embed iframe {
+    min-height: 200px;
+  }
+  
+  .video-embed video {
+    max-height: 300px;
+  }
+}
+
+/* Dark mode adjustments for videos */
+.dark .video-embed iframe,
+.dark .video-embed video {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
 } 

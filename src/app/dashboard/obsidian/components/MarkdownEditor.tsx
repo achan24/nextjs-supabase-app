@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Eye, EyeOff, Maximize, Minimize, Save, Star, StarOff, Tag, X } from 'lucide-react';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import CustomMarkdownPreview from './CustomMarkdownPreview';
+import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
 
 interface MarkdownEditorProps {
   note: Note;
@@ -244,6 +246,18 @@ export default function MarkdownEditor({
         </div>
       </div>
 
+      {/* Video Embedding Help */}
+      {editorState.mode === 'edit' && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-xs text-blue-700">
+          <div className="flex items-center gap-2">
+            <span className="font-medium">Video Embedding:</span>
+            <span>YouTube: [Video Title](https://youtube.com/watch?v=VIDEO_ID)</span>
+            <span>Short: [Video Title](https://youtu.be/VIDEO_ID)</span>
+            <span>Shorts: [Video Title](https://youtube.com/shorts/VIDEO_ID)</span>
+          </div>
+        </div>
+      )}
+
       {/* Status Bar */}
       <div className="bg-gray-50 border-b border-gray-200 px-4 py-1 text-xs text-gray-500 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -256,7 +270,7 @@ export default function MarkdownEditor({
             {editorState.mode === 'edit' ? 'Edit Mode' : 'Preview Mode'}
           </span>
           {editorState.lastSaved && (
-            <span>Last saved: {new Date(editorState.lastSaved).toLocaleTimeString()}</span>
+            <span>Last saved: {new Date(editorState.lastSaved || '').toLocaleTimeString()}</span>
           )}
         </div>
         <div>
@@ -285,6 +299,10 @@ export default function MarkdownEditor({
             preview="edit"
             height="100%"
             className="border-none"
+            previewOptions={{
+              remarkPlugins: [remarkGfm, remarkYoutubeEmbed],
+              rehypePlugins: [rehypeRaw],
+            }}
             textareaProps={{
               placeholder: 'Start writing your note...\n\nUse [[Note Title]] to link to other notes.',
               style: {

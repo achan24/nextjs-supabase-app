@@ -1,13 +1,18 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import { Note } from '../types';
+import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
 
 interface CustomMarkdownPreviewProps {
   content: string;
   allNotes: Note[];
   onNoteSelect: (note: Note) => void;
 }
+
+
 
 export default function CustomMarkdownPreview({ 
   content, 
@@ -16,59 +21,27 @@ export default function CustomMarkdownPreview({
 }: CustomMarkdownPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+  // Process double bracket links before passing to react-markdown
+  const processedContent = content.replace(/\[\[([^\]]+)\]\]/g, (match, noteTitle) => {
+    const targetNote = allNotes.find(n => 
+      n.title.toLowerCase() === noteTitle.toLowerCase()
+    );
+    
+    if (targetNote) {
+      return `[${noteTitle}](#note-${targetNote.id})`;
+    } else {
+      return `*${noteTitle}*`;
+    }
+  });
 
-    // Process double bracket links
-    const processedContent = content.replace(/\[\[([^\]]+)\]\]/g, (match, noteTitle) => {
-      const targetNote = allNotes.find(n => 
-        n.title.toLowerCase() === noteTitle.toLowerCase()
-      );
-      
-      if (targetNote) {
-        return `<a href="#" data-note-id="${targetNote.id}" class="text-purple-600 hover:text-purple-800 underline cursor-pointer">${noteTitle}</a>`;
-      } else {
-        return `<span class="text-gray-500 italic">${noteTitle}</span>`;
-      }
-    });
+  console.log('[CustomMarkdownPreview] Processed content:', processedContent);
 
-    // Convert markdown to HTML (basic conversion)
-    const htmlContent = processedContent
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-      .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-      .replace(/\*(.*)\*/gim, '<em>$1</em>')
-      // Only process image links that look like valid URLs
-      .replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/gim, '<img alt="$1" src="$2" class="max-w-full h-auto rounded" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'block\';" /><div style="display:none; padding: 10px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; color: #666;">Image failed to load: $2</div>')
-      // Only process regular links that look like valid URLs
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gim, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">$1</a>')
-      .replace(/\n/gim, '<br />');
-
-    containerRef.current.innerHTML = htmlContent;
-
-    // Add click handlers for note links
-    const noteLinks = containerRef.current.querySelectorAll('[data-note-id]');
-    noteLinks.forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const noteId = (e.target as HTMLElement).getAttribute('data-note-id');
-        if (noteId) {
-          const targetNote = allNotes.find(n => n.id === noteId);
-          if (targetNote) {
-            onNoteSelect(targetNote);
-          }
-        }
-      });
-    });
-
-    return () => {
-      // Cleanup event listeners
-      noteLinks.forEach(link => {
-        link.removeEventListener('click', () => {});
-      });
-    };
-  }, [content, allNotes, onNoteSelect]);
+  const handleNoteClick = (noteId: string) => {
+    const targetNote = allNotes.find(n => n.id === noteId);
+    if (targetNote) {
+      onNoteSelect(targetNote);
+    }
+  };
 
   return (
     <div 
@@ -78,6 +51,73 @@ export default function CustomMarkdownPreview({
         fontSize: '14px',
         lineHeight: '1.6'
       }}
-    />
+    >
+      <ReactMarkdown
+        remarkPlugins={[remarkYoutubeEmbed]}
+        onError={(error) => {
+          console.error('[ReactMarkdown] Error:', error);
+        }}
+        components={{
+          a: ({ href, children, ...props }) => {
+            // Handle note links
+            if (href?.startsWith('#note-')) {
+              const noteId = href.replace('#note-', '');
+              return (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleNoteClick(noteId);
+                  }}
+                  className="text-purple-600 hover:text-purple-800 underline cursor-pointer"
+                  {...props}
+                >
+                  {children}
+                </a>
+              );
+            }
+            // Regular links
+            return (
+              <a
+                href={href}
+                className="text-blue-600 hover:text-blue-800 underline"
+                target="_blank"
+                rel="noopener noreferrer"
+                {...props}
+              >
+                {children}
+              </a>
+            );
+          },
+          img: ({ src, alt, ...props }) => (
+            <div>
+              <img
+                src={src}
+                alt={alt}
+                className="max-w-full h-auto rounded"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const errorDiv = target.nextElementSibling as HTMLDivElement;
+                  if (errorDiv) {
+                    errorDiv.style.display = 'block';
+                  }
+                }}
+                {...props}
+              />
+              <div
+                style={{ display: 'none' }}
+                className="p-2 bg-gray-100 border border-gray-300 rounded text-gray-600 text-sm"
+              >
+                Image failed to load: {src}
+              </div>
+            </div>
+          ),
+        }}
+        rehypePlugins={[rehypeRaw]}
+      >
+        {processedContent}
+      </ReactMarkdown>
+    </div>
   );
 } 
