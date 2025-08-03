@@ -54,9 +54,6 @@ export default function CustomMarkdownPreview({
     >
       <ReactMarkdown
         remarkPlugins={[remarkYoutubeEmbed]}
-        onError={(error) => {
-          console.error('[ReactMarkdown] Error:', error);
-        }}
         components={{
           a: ({ href, children, ...props }) => {
             // Handle note links
