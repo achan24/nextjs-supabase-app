@@ -20,14 +20,10 @@ export function usePointsHistory(): UsePointsHistoryReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchHistory = useCallback(async (id: string, type: 'area' | 'subarea' | 'goal', days: number = 30) => {
+  const fetchHistory = useCallback(async (id: string, type: 'area' | 'subarea' | 'goal', days?: number) => {
     setLoading(true);
     setError(null);
     try {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-      const formattedStartDate = startDate.toISOString().split('T')[0];
-
       let table: string;
       let idColumn: string;
 
@@ -46,27 +42,35 @@ export function usePointsHistory(): UsePointsHistoryReturn {
           break;
       }
 
+      // Fetch ALL history, not just last 30 days
       const { data, error: fetchError } = await supabase
         .from(table)
         .select('date, points, target')
         .eq(idColumn, id)
-        .gte('date', formattedStartDate)
         .order('date', { ascending: false });
 
       if (fetchError) throw fetchError;
 
-      // Fill in missing dates with 0 points
+      if (!data || data.length === 0) {
+        setHistory([]);
+        return;
+      }
+
+      // Get the date range from first to last entry
+      const firstDate = new Date(data[data.length - 1].date);
+      const lastDate = new Date(data[0].date);
+      const today = new Date();
+      
+      // Create a complete history with all days from first entry to today
       const filledHistory: PointsHistoryEntry[] = [];
-      const currentDate = new Date();
-      const existingDates = new Set(data?.map(entry => entry.date) || []);
-
-      for (let i = 0; i < days; i++) {
-        const date = new Date(currentDate);
-        date.setDate(date.getDate() - i);
-        const formattedDate = date.toISOString().split('T')[0];
-
+      const existingDates = new Set(data.map(entry => entry.date));
+      const currentDate = new Date(firstDate);
+      
+      while (currentDate <= today) {
+        const formattedDate = currentDate.toISOString().split('T')[0];
+        
         if (existingDates.has(formattedDate)) {
-          const entry = data!.find(d => d.date === formattedDate)!;
+          const entry = data.find(d => d.date === formattedDate)!;
           filledHistory.push(entry);
         } else {
           filledHistory.push({
@@ -75,6 +79,8 @@ export function usePointsHistory(): UsePointsHistoryReturn {
             target: 0
           });
         }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
       }
 
       setHistory(filledHistory);

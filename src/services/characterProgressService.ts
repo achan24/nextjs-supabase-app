@@ -142,6 +142,8 @@ export async function savePointsToDate(date?: string) {
             date: dateStr,
             points: area.daily_points,
             target: area.target_points
+          }, {
+            onConflict: 'area_id,date'
           });
 
         if (historyError) {
@@ -192,6 +194,8 @@ export async function savePointsToDate(date?: string) {
             date: dateStr,
             points: subarea.daily_points,
             target: subarea.target_points
+          }, {
+            onConflict: 'subarea_id,date'
           });
 
         if (historyError) {
@@ -251,6 +255,8 @@ export async function savePointsToDate(date?: string) {
             date: dateStr,
             points: goal.daily_points,
             target: goal.target_points
+          }, {
+            onConflict: 'goal_id,date'
           });
 
         if (historyError) {
@@ -290,89 +296,48 @@ export async function resetDailyProgress() {
 }
 
 export function initializeAutoSave(userId: string) {
-  // Reset progress at midnight
-  const now = new Date()
-  const night = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1, // next day
-    0, // midnight
-    0,
-    0
-  )
-  const msToMidnight = night.getTime() - now.getTime()
-
-  // Set up the midnight reset
-  setTimeout(async () => {
+  console.log('[AUTO-SAVE] Initializing auto-save for user:', userId);
+  
+  // Calculate time until next midnight
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  
+  const timeUntilMidnight = tomorrow.getTime() - now.getTime();
+  
+  console.log(`[AUTO-SAVE] Next reset at midnight (${tomorrow.toISOString()}) in ${Math.round(timeUntilMidnight / 1000 / 60)} minutes`);
+  
+  // Set timeout for midnight reset
+  const midnightTimeout = setTimeout(async () => {
+    console.log('[AUTO-SAVE] Midnight reached, saving points and resetting...');
     try {
-      // Get yesterday's date
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-
-      // Save current points to yesterday before resetting
-      await savePointsToDate(yesterdayStr);
-
-      // Reset points for the new day
-      await resetAllDailyPoints(userId);
-
-      // Send notification
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error } = await supabase.from('reminders').insert({
-          user_id: user.id,
-          title: 'Daily Points Reset',
-          message: `Your points from ${format(yesterday, 'MMMM d')} have been saved and a new day has begun!`,
-          type: 'info',
-          scheduled_for: new Date().toISOString(),
-          sent_at: new Date().toISOString()
-        });
-
-        if (error) {
-          console.error('Error sending notification:', error);
-        }
-      }
-
-      // Reschedule for next midnight
+      await savePointsToDate();
+      console.log('[AUTO-SAVE] Successfully saved points at midnight');
+    } catch (error) {
+      console.error('[AUTO-SAVE] Error saving points at midnight:', error);
+    }
+    
+    // Schedule next midnight reset
+    const nextMidnightTimeout = setTimeout(() => {
       initializeAutoSave(userId);
-    } catch (error) {
-      console.error('Error in midnight reset:', error);
-      
-      // Send error notification
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error: notifError } = await supabase.from('reminders').insert({
-          user_id: user.id,
-          title: 'Points Save Error',
-          message: 'There was an error saving your points. Please save them manually using the "Save as Yesterday\'s Points" button.',
-          type: 'error',
-          scheduled_for: new Date().toISOString(),
-          sent_at: new Date().toISOString()
-        });
-
-        if (notifError) {
-          console.error('Error sending error notification:', notifError);
-        }
-      }
-    }
-  }, msToMidnight);
-
-  // Set up auto-save interval (every minute)
-  const interval = setInterval(async () => {
-    try {
-      // Check if user is still logged in
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || user.id !== userId) {
-        clearInterval(interval);
-        return;
-      }
-    } catch (error) {
-      console.error('Error in auto-save:', error);
-    }
-  }, 60000); // every minute
-
+    }, 24 * 60 * 60 * 1000); // 24 hours
+    
+    // Store the timeout ID for cleanup
+    (globalThis as any).nextMidnightTimeout = nextMidnightTimeout;
+  }, timeUntilMidnight);
+  
+  // Store the timeout ID for cleanup
+  (globalThis as any).midnightTimeout = midnightTimeout;
+  
   // Return cleanup function
   return () => {
-    clearInterval(interval);
+    console.log('[AUTO-SAVE] Cleaning up auto-save timers');
+    if ((globalThis as any).midnightTimeout) {
+      clearTimeout((globalThis as any).midnightTimeout);
+    }
+    if ((globalThis as any).nextMidnightTimeout) {
+      clearTimeout((globalThis as any).nextMidnightTimeout);
+    }
   };
 } 

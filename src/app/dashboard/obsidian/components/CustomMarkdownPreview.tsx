@@ -39,8 +39,10 @@ export default function CustomMarkdownPreview({
       .replace(/^# (.*$)/gim, '<h1>$1</h1>')
       .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
       .replace(/\*(.*)\*/gim, '<em>$1</em>')
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, '<img alt="$1" src="$2" class="max-w-full h-auto rounded" />')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline">$1</a>')
+      // Only process image links that look like valid URLs
+      .replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/gim, '<img alt="$1" src="$2" class="max-w-full h-auto rounded" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'block\';" /><div style="display:none; padding: 10px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; color: #666;">Image failed to load: $2</div>')
+      // Only process regular links that look like valid URLs
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gim, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">$1</a>')
       .replace(/\n/gim, '<br />');
 
     containerRef.current.innerHTML = htmlContent;
@@ -71,7 +73,7 @@ export default function CustomMarkdownPreview({
   return (
     <div 
       ref={containerRef}
-      className="prose prose-sm max-w-none p-4"
+      className="prose prose-sm max-w-none p-4 overflow-y-auto h-full"
       style={{
         fontSize: '14px',
         lineHeight: '1.6'

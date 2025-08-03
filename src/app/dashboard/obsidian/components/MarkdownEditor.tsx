@@ -271,11 +271,13 @@ export default function MarkdownEditor({
       {/* Editor */}
       <div className="flex-1 overflow-hidden">
         {editorState.mode === 'preview' ? (
-          <CustomMarkdownPreview
-            content={content}
-            allNotes={allNotes}
-            onNoteSelect={onNoteSelect || (() => {})}
-          />
+          <div className="h-full overflow-y-auto">
+            <CustomMarkdownPreview
+              content={content}
+              allNotes={allNotes}
+              onNoteSelect={onNoteSelect || (() => {})}
+            />
+          </div>
         ) : (
           <MDEditor
             value={content}

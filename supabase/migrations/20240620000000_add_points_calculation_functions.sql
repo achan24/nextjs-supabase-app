@@ -39,9 +39,23 @@ CREATE OR REPLACE FUNCTION get_user_total_points(p_user_id uuid)
 RETURNS numeric AS $$
 BEGIN
   RETURN COALESCE((
-    SELECT SUM(points)
-    FROM goal_points_history
-    WHERE user_id = p_user_id
+    SELECT COALESCE(SUM(points), 0)
+    FROM (
+      SELECT points FROM area_points_history aph
+      JOIN life_goal_areas lga ON aph.area_id = lga.id
+      WHERE lga.user_id = p_user_id
+      UNION ALL
+      SELECT points FROM subarea_points_history sph
+      JOIN life_goal_subareas lgs ON sph.subarea_id = lgs.id
+      JOIN life_goal_areas lga ON lgs.area_id = lga.id
+      WHERE lga.user_id = p_user_id
+      UNION ALL
+      SELECT points FROM goal_points_history gph
+      JOIN life_goals lg ON gph.goal_id = lg.id
+      JOIN life_goal_subareas lgs ON lg.subarea_id = lgs.id
+      JOIN life_goal_areas lga ON lgs.area_id = lga.id
+      WHERE lga.user_id = p_user_id
+    ) all_points
   ), 0);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

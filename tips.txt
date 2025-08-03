@@ -690,3 +690,168 @@ const color = colors[idx % colors.length]
 
 ### Remember
 Inline styles have the highest CSS specificity and will NEVER be overridden by external CSS. If something needs to stay solid after refresh, use inline styles for ALL color and opacity properties.
+
+# DATABASE UPSERT ISSUES - ALWAYS CHECK UNIQUE CONSTRAINTS
+
+## The Problem: Duplicate Entries from Upsert Operations
+
+### Root Cause
+When using Supabase's `.upsert()` method, if you don't specify the `onConflict` parameter, it defaults to using the primary key for conflict detection. This can cause duplicate entries when the unique constraint is on different columns.
+
+### Real Example: Points History Tables
+**Issue Encountered:**
+- Multiple entries for the same area/subarea/goal on the same date
+- Auto-save creating duplicate history records
+- Inflated daily point totals
+
+**Database Schema (from models):**
+```typescript
+// area_points_history
+{
+  name: 'area_points_history_unique_day',
+  columns: ['area_id', 'date'],
+  unique: true
+}
+
+// subarea_points_history  
+{
+  name: 'subarea_points_history_unique_day',
+  columns: ['subarea_id', 'date'],
+  unique: true
+}
+
+// goal_points_history
+{
+  name: 'goal_points_history_unique_day', 
+  columns: ['goal_id', 'date'],
+  unique: true
+}
+```
+
+**Correct Upsert Implementation:**
+```typescript
+// ✅ CORRECT - Specify onConflict parameter
+const { error: historyError } = await supabase
+  .from('area_points_history')
+  .upsert({
+    user_id: user.id,
+    area_id: area.id,
+    date: dateStr,
+    points: area.daily_points,
+    target: area.target_points
+  }, {
+    onConflict: 'area_id,date'  // Match the unique constraint
+  });
+
+// ✅ CORRECT - For subareas
+const { error: historyError } = await supabase
+  .from('subarea_points_history')
+  .upsert({
+    user_id: user.id,
+    area_id: subarea.area_id,
+    subarea_id: subarea.id,
+    date: dateStr,
+    points: subarea.daily_points,
+    target: subarea.target_points
+  }, {
+    onConflict: 'subarea_id,date'  // Match the unique constraint
+  });
+
+// ✅ CORRECT - For goals
+const { error: historyError } = await supabase
+  .from('goal_points_history')
+  .upsert({
+    user_id: user.id,
+    area_id: goal.life_goal_subareas.area_id,
+    subarea_id: goal.subarea_id,
+    goal_id: goal.id,
+    date: dateStr,
+    points: goal.daily_points,
+    target: goal.target_points
+  }, {
+    onConflict: 'goal_id,date'  // Match the unique constraint
+  });
+```
+
+### Prevention Strategies
+
+1. **Always Check Database Models First**
+   - Look at the `indexes` array in the model definition
+   - Find the unique constraint (usually named `*_unique_day`)
+   - Use those exact columns in the `onConflict` parameter
+   - Don't assume the primary key is the conflict target
+
+2. **Common Unique Constraint Patterns**
+   - Daily records: `(entity_id, date)`
+   - User-specific records: `(user_id, entity_id)`
+   - Time-based records: `(entity_id, timestamp)`
+   - Composite keys: `(parent_id, child_id, date)`
+
+3. **Debugging Upsert Issues**
+   - Check for duplicate entries in the database
+   - Verify the unique constraint exists and is correct
+   - Ensure `onConflict` parameter matches the constraint
+   - Test upsert with existing data to verify behavior
+
+### Best Practices
+
+1. **Always Specify onConflict**
+   ```typescript
+   // ✅ Always include onConflict
+   .upsert(data, { onConflict: 'column1,column2' })
+   
+   // ❌ Don't rely on default behavior
+   .upsert(data)
+   ```
+
+2. **Match Database Constraints**
+   - Use the exact column names from the unique constraint
+   - Order matters: `'area_id,date'` not `'date,area_id'`
+   - Include all columns in the constraint
+
+3. **Test Upsert Behavior**
+   - Test with existing records
+   - Verify updates work correctly
+   - Check that duplicates are prevented
+   - Monitor database for unexpected entries
+
+### Remember
+- Always check the database model's unique constraints before using upsert
+- The `onConflict` parameter must match the actual unique constraint
+- Don't assume the primary key is the conflict target
+- Test upsert operations with existing data to verify behavior
+
+# CHARACTER XP CALCULATION - ON-THE-FLY VS STORED
+
+## The Problem: Inflated Character Levels
+
+### Root Cause
+Character XP and levels are calculated **on-the-fly** from goal points history, not stored in a separate table. When duplicate entries exist in history tables, the XP calculation becomes inflated.
+
+### How Character XP Works
+1. **No stored character data**: The `characters` table doesn't exist in the current database
+2. **On-the-fly calculation**: `getCharacterProgress()` calculates XP from goal points history every time
+3. **Formula**: Total XP = Sum of goal points × 10
+4. **Level calculation**: Uses the XP progression formula to determine level
+
+### Real Example: Inflated Level Issue
+**Problem**: Character showing level 7 when it should be level 4
+**Cause**: Duplicate entries in `goal_points_history` table were inflating the total points
+**Solution**: Clean up duplicate entries in history tables
+**Result**: Refresh the page → correct level displays immediately
+
+### Key Points
+- **Character data is NOT stored** - it's calculated fresh each time
+- **History tables are the source of truth** for XP calculation
+- **Duplicate entries in history** = inflated XP = wrong character level
+- **Page refresh** will show correct values after fixing history data
+- **No need for character table migrations** - the calculation is real-time
+
+### Debugging Character Level Issues
+1. Check for duplicate entries in history tables
+2. Verify `get_user_total_points` function is working correctly
+3. Ensure goal points are being counted properly
+4. Refresh the page to see updated calculations
+
+### Remember
+Character levels are calculated from goal points history, not stored in a separate table. If character levels seem wrong, check the history tables for duplicate entries or incorrect data.

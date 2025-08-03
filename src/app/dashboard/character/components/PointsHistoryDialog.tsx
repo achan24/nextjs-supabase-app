@@ -17,10 +17,12 @@ interface QuickStats {
   average: number;
   best: number;
   streak: number;
+  likelihood: number;
+  daysSinceLastCompletion: number;
 }
 
-function calculateStats(history: { points: number; target: number }[]): QuickStats {
-  if (!history.length) return { average: 0, best: 0, streak: 0 };
+function calculateStats(history: { points: number; target: number; date: string }[]): QuickStats {
+  if (!history.length) return { average: 0, best: 0, streak: 0, likelihood: 0, daysSinceLastCompletion: -1 };
 
   const points = history.map(h => h.points);
   const average = points.reduce((a, b) => a + b, 0) / history.length;
@@ -38,10 +40,51 @@ function calculateStats(history: { points: number; target: number }[]): QuickSta
     }
   }
 
+  // Calculate completion likelihood using the same algorithm as the main component
+  const recentWeight = 0.5;
+  const consistencyWeight = 0.5;
+  
+  // Recent completion rate (last 7 days)
+  const recentDays = history.slice(-7);
+  const recentRate = recentDays.length > 0 ? 
+    recentDays.filter(h => h.points > 0).length / recentDays.length : 0;
+  
+  // Overall completion rate
+  const overallRate = history.filter(h => h.points > 0).length / history.length;
+  
+  // Current streak bonus
+  let currentStreakForBonus = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].points > 0) {
+      currentStreakForBonus++;
+    } else {
+      break;
+    }
+  }
+  const streakBonus = Math.min(currentStreakForBonus / 10, 0.1);
+  
+  // Calculate likelihood
+  const likelihood = (recentRate * recentWeight + overallRate * consistencyWeight) * 100 + streakBonus * 100;
+  const finalLikelihood = Math.min(Math.max(likelihood, 0), 98);
+
+  // Calculate days since last completion
+  let daysSinceLastCompletion = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].points > 0) {
+      const lastCompletionDate = new Date(history[i].date);
+      const today = new Date();
+      const diffTime = Math.abs(today.getTime() - lastCompletionDate.getTime());
+      daysSinceLastCompletion = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      break;
+    }
+  }
+
   return {
     average: Number(average.toFixed(1)),
     best,
-    streak
+    streak,
+    likelihood: Number(finalLikelihood.toFixed(1)),
+    daysSinceLastCompletion
   };
 }
 
@@ -145,7 +188,7 @@ export function PointsHistoryDialog({ open, onOpenChange, id, type, title }: Poi
               {/* Quick Stats */}
               <Card className="p-3">
                 <div className="text-xs font-medium mb-1">Quick Stats</div>
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-5 gap-2 text-center">
                   <div>
                     <div className="text-lg font-bold">{stats.average}</div>
                     <div className="text-xs text-muted-foreground">Avg/day</div>
@@ -157,6 +200,16 @@ export function PointsHistoryDialog({ open, onOpenChange, id, type, title }: Poi
                   <div>
                     <div className="text-lg font-bold">{stats.streak}</div>
                     <div className="text-xs text-muted-foreground">Day Streak</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-blue-600">{stats.likelihood}%</div>
+                    <div className="text-xs text-muted-foreground">Likelihood</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold">
+                      {stats.daysSinceLastCompletion === -1 ? 'Never' : stats.daysSinceLastCompletion}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Days Since</div>
                   </div>
                 </div>
               </Card>

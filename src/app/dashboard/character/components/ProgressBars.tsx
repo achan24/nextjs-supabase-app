@@ -153,6 +153,7 @@ interface ProgressItemProps {
   icon?: string;
   isExpanded: boolean;
   hasChildren: boolean;
+  completionLikelihood?: number;
   onToggle: () => void;
   onIncrement: () => void;
   onDecrement: () => void;
@@ -169,6 +170,7 @@ function ProgressItem({
   icon,
   isExpanded,
   hasChildren,
+  completionLikelihood,
   onToggle,
   onIncrement,
   onDecrement,
@@ -243,9 +245,17 @@ function ProgressItem({
           >
             <Minus className={`${level === 'area' ? 'h-5 w-5' : 'h-4 w-4'}`} />
           </Button>
-          <span className={`text-sm w-12 text-center ${level === 'goal' ? 'text-gray-600' : ''}`}>
-            {currentValue} / {targetValue}
-          </span>
+          <div className="flex flex-col items-center">
+            <span className={`text-sm w-12 text-center ${level === 'goal' ? 'text-gray-600' : ''}`}>
+              {currentValue} / {targetValue}
+            </span>
+            {completionLikelihood !== undefined && (
+              <span className="text-xs text-blue-600 font-medium">
+                {completionLikelihood < 0.5 ? '0' : completionLikelihood.toFixed(0)}%
+                {title === 'Dancing' && ` (${completionLikelihood}%)`}
+              </span>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -317,6 +327,52 @@ const isVisible = (showCompleted: boolean) =>
   };
 
 // Custom Tick Component for two-line date display
+// Add completion likelihood calculation function
+function calculateCompletionLikelihood(history: Array<{date: string, completed: boolean}>): number {
+  console.log(`[CALCULATION DEBUG] Input history:`, history);
+  
+  if (history.length === 0) {
+    console.log(`[CALCULATION DEBUG] No history data, returning 0%`);
+    return 0; // No data = never completed = 0% chance
+  }
+  
+  const recentWeight = 0.5; // 50% weight to recent days
+  const consistencyWeight = 0.5; // 50% weight to overall consistency
+  
+  // Recent completion rate (last 7 days)
+  const recentDays = history.slice(-7);
+  const recentRate = recentDays.length > 0 ? 
+    recentDays.filter(h => h.completed).length / recentDays.length : 0;
+  
+  // Overall completion rate
+  const overallRate = history.filter(h => h.completed).length / history.length;
+  
+  // Current streak bonus
+  let currentStreak = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].completed) {
+      currentStreak++;
+    } else {
+      break;
+    }
+  }
+  const streakBonus = Math.min(currentStreak / 10, 0.1); // Max 10% bonus for 10+ day streak
+  
+  console.log(`[CALCULATION DEBUG] Recent days: ${recentDays.length}, Recent rate: ${recentRate}`);
+  console.log(`[CALCULATION DEBUG] Overall rate: ${overallRate}, Current streak: ${currentStreak}, Streak bonus: ${streakBonus}`);
+  
+  // Calculate likelihood
+  const likelihood = (recentRate * recentWeight + overallRate * consistencyWeight) * 100 + streakBonus * 100;
+  
+  console.log(`[CALCULATION DEBUG] Calculation breakdown:`);
+  console.log(`  - Recent contribution: ${recentRate * recentWeight * 100}%`);
+  console.log(`  - Overall contribution: ${overallRate * consistencyWeight * 100}%`);
+  console.log(`  - Streak bonus: ${streakBonus * 100}%`);
+  console.log(`  - Final likelihood: ${likelihood}%`);
+  
+  return Math.min(Math.max(likelihood, 0), 98);
+}
+
 const CustomTick = ({ x, y, payload }: any) => {
   if (!payload || !payload.value) return null;
   
@@ -337,7 +393,9 @@ const CustomTick = ({ x, y, payload }: any) => {
 // Progress Graph Component
 function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
   const [historyData, setHistoryData] = useState<any[]>([]);
+  const [dailyBreakdowns, setDailyBreakdowns] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const supabase = createClient();
 
   // Calculate current total score and target
@@ -346,6 +404,9 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
 
   // Get areas with points for today's breakdown
   const areasWithPoints = areas.filter(area => (area.daily_points || 0) > 0);
+
+  // Create a map for quick lookup of area order
+  const areaOrderMap = new Map(areas.map((area, index) => [area.id, index]));
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -376,6 +437,7 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
 
         // Create array with exactly 10 days (9 historical + today)
         const chartData = [];
+        
         for (let i = 9; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
@@ -387,14 +449,16 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
             // Today - use current score
             chartData.push({
               date: `${dateLabel}\n${dayLabel}`,
-              points: currentScore
+              points: currentScore,
+              dateStr: dateStr
             });
           } else {
             // Historical days - use data from database or 0
             const historicalPoints = groupedData?.[dateStr]?.totalPoints || 0;
             chartData.push({
               date: `${dateLabel}\n${dayLabel}`,
-              points: historicalPoints
+              points: historicalPoints,
+              dateStr: dateStr
             });
           }
         }
@@ -404,16 +468,21 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
         console.error('Error fetching history:', error);
         // Create fallback data with exactly 10 days
         const fallbackData = [];
+        
         for (let i = 9; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
           const dateLabel = format(date, 'MMM d');
           const dayLabel = format(date, 'EEE');
+          
           fallbackData.push({
             date: `${dateLabel}\n${dayLabel}`,
-            points: i === 0 ? currentScore : 0 // Today gets current score, others get 0
+            points: i === 0 ? currentScore : 0,
+            dateStr: dateStr
           });
         }
+        
         setHistoryData(fallbackData);
       } finally {
         setLoading(false);
@@ -422,6 +491,65 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
 
     fetchHistory();
   }, [areas, currentScore]);
+
+  // Function to fetch breakdown data for a specific date
+  const fetchBreakdownForDate = async (dateStr: string) => {
+    if (dailyBreakdowns[dateStr]) {
+      return; // Already loaded
+    }
+
+    try {
+      // Check if it's today
+      const today = new Date().toISOString().split('T')[0];
+      if (dateStr === today) {
+        // Today's breakdown from current areas
+        const todayBreakdown = areasWithPoints.map(area => ({
+          name: area.name,
+          points: area.daily_points || 0,
+          target: area.target_points || 0
+        }));
+        // Sort today's breakdown to match areas order
+        todayBreakdown.sort((a, b) => {
+          const orderA = areaOrderMap.get(areas.find(area => area.name === a.name)?.id || '');
+          const orderB = areaOrderMap.get(areas.find(area => area.name === b.name)?.id || '');
+          return (orderA !== undefined ? orderA : Infinity) - (orderB !== undefined ? orderB : Infinity);
+        });
+        setDailyBreakdowns(prev => ({ ...prev, [dateStr]: todayBreakdown }));
+        return;
+      }
+
+      // Historical breakdown from database
+      const { data, error } = await supabase
+        .from('area_points_history')
+        .select(`
+          area_id,
+          points,
+          target,
+          life_goal_areas!inner(name)
+        `)
+        .eq('date', dateStr);
+
+      if (error) throw error;
+
+      const breakdown = data?.map((record: any) => ({
+        name: record.life_goal_areas.name,
+        points: record.points || 0,
+        target: record.target || 0
+      })) || [];
+
+      // Sort historical breakdown to match areas order
+      breakdown.sort((a, b) => {
+        const orderA = areaOrderMap.get(areas.find(area => area.name === a.name)?.id || '');
+        const orderB = areaOrderMap.get(areas.find(area => area.name === b.name)?.id || '');
+        return (orderA !== undefined ? orderA : Infinity) - (orderB !== undefined ? orderB : Infinity);
+      });
+
+      setDailyBreakdowns(prev => ({ ...prev, [dateStr]: breakdown }));
+    } catch (error) {
+      console.error('Error fetching breakdown for date:', dateStr, error);
+      setDailyBreakdowns(prev => ({ ...prev, [dateStr]: [] }));
+    }
+  };
 
   if (loading) {
     return (
@@ -498,8 +626,43 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
             domain={[0, 'dataMax + 2']}
           />
           <Tooltip 
-            formatter={(value: any) => [`${value} points`, 'Total Points']}
-            labelFormatter={(label) => `Date: ${label}`}
+            content={({ active, payload, label }: any) => {
+              if (active && payload && payload.length) {
+                const dataPoint = payload[0].payload;
+                const dateStr = dataPoint.dateStr;
+                const totalPoints = dataPoint.points;
+                
+                // Fetch breakdown data when hovering
+                if (!dailyBreakdowns[dateStr]) {
+                  fetchBreakdownForDate(dateStr);
+                }
+                
+                const breakdown = dailyBreakdowns[dateStr] || [];
+                
+                return (
+                  <div className="bg-gray-900 text-white p-3 rounded-lg shadow-lg border border-gray-800">
+                    <div className="font-medium mb-2">Date: {label}</div>
+                    <div className="font-medium mb-2">Total Points: {totalPoints} points</div>
+                    {breakdown.length > 0 ? (
+                      <div className="space-y-1">
+                        <div className="text-xs text-gray-300 mb-1">Breakdown:</div>
+                        {breakdown.map((area: any, index: number) => (
+                          <div key={index} className="flex justify-between gap-2 text-xs">
+                            <span>{area.name}:</span>
+                            <span className="font-medium">{area.points} pts</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-300">
+                        {dailyBreakdowns[dateStr] ? 'No points earned' : 'Loading...'}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            }}
           />
           <Line 
             type="monotone" 
@@ -525,6 +688,7 @@ export default function ProgressBars() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [saveYesterdayDialogOpen, setSaveYesterdayDialogOpen] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [completionLikelihoods, setCompletionLikelihoods] = useState<Record<string, number>>({});
 
   // Add check for all targets complete
   const allTargetsComplete = React.useMemo(() => {
@@ -545,6 +709,119 @@ export default function ProgressBars() {
         }))
       };
     });
+  }, [areas]);
+
+  // Function to fetch history and calculate likelihood for an item
+  const fetchItemLikelihood = async (id: string, type: 'area' | 'subarea' | 'goal') => {
+    try {
+      let tableName: string;
+      let idColumn: string;
+      
+      switch (type) {
+        case 'area':
+          tableName = 'area_points_history';
+          idColumn = 'area_id';
+          break;
+        case 'subarea':
+          tableName = 'subarea_points_history';
+          idColumn = 'subarea_id';
+          break;
+        case 'goal':
+          tableName = 'goal_points_history';
+          idColumn = 'goal_id';
+          break;
+        default:
+          return;
+      }
+      
+      console.log(`[LIKELIHOOD DEBUG] Fetching ${type} ${id} from ${tableName}`);
+      
+      // Get ALL history from the first entry, not just last 30 days
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('date, points')
+        .eq(idColumn, id)
+        .order('date', { ascending: true });
+
+      if (error) throw error;
+
+      console.log(`[LIKELIHOOD DEBUG] Raw data for ${type} ${id}:`, data);
+
+      if (!data || data.length === 0) {
+        console.log(`[LIKELIHOOD DEBUG] No data found for ${type} ${id}`);
+        setCompletionLikelihoods(prev => ({
+          ...prev,
+          [id]: 0
+        }));
+        return;
+      }
+
+      // Get the date range from first to last entry
+      const firstDate = new Date(data[0].date);
+      const lastDate = new Date(data[data.length - 1].date);
+      const today = new Date();
+      
+      // Create a complete history with all days from first entry to today
+      const completionHistory = [];
+      const currentDate = new Date(firstDate);
+      
+      while (currentDate <= today) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const record = data.find(d => d.date === dateStr);
+        
+        completionHistory.push({
+          date: dateStr,
+          completed: record ? record.points > 0 : false // false for missing days
+        });
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      console.log(`[LIKELIHOOD DEBUG] Complete history for ${type} ${id}:`, completionHistory);
+      
+      // Debug for Dancing specifically
+      if (type === 'subarea' && id === '2f865010-1cd9-4d2f-8384-aa248f60b692') {
+        console.log(`[DANCING DEBUG] Raw data:`, data);
+        console.log(`[DANCING DEBUG] Completion history:`, completionHistory);
+        console.log(`[DANCING DEBUG] Completed days:`, completionHistory.filter(h => h.completed));
+        console.log(`[DANCING DEBUG] Total days:`, completionHistory.length);
+      }
+
+      // Calculate likelihood
+      const likelihood = calculateCompletionLikelihood(completionHistory);
+      
+      console.log(`[LIKELIHOOD DEBUG] Calculated likelihood for ${type} ${id}: ${likelihood}%`);
+      
+      setCompletionLikelihoods(prev => ({
+        ...prev,
+        [id]: likelihood
+      }));
+    } catch (error) {
+      console.error(`Error fetching likelihood for ${type} ${id}:`, error);
+      // Set default likelihood if error
+      setCompletionLikelihoods(prev => ({
+        ...prev,
+        [id]: 0
+      }));
+    }
+  };
+
+  // Fetch likelihoods when areas change
+  useEffect(() => {
+    if (areas.length > 0) {
+      // Fetch likelihoods for all areas, subareas, and goals
+      areas.forEach(area => {
+        fetchItemLikelihood(area.id, 'area');
+        area.subareas.forEach(subarea => {
+          fetchItemLikelihood(subarea.id, 'subarea');
+          subarea.goals.forEach(goal => {
+            if (goal.status === 'active') {
+              fetchItemLikelihood(goal.id, 'goal');
+            }
+          });
+        });
+      });
+    }
   }, [areas]);
 
   const handleUpdateTarget = async (id: string, newTarget: number, type: 'area' | 'subarea' | 'goal' = 'area') => {
@@ -811,6 +1088,7 @@ export default function ProgressBars() {
               icon={areaIcons[area.name]}
               isExpanded={expandedAreas[area.id]}
               hasChildren={area.subareas.length > 0}
+              completionLikelihood={completionLikelihoods[area.id]}
               onToggle={() => toggleArea(area.id)}
               onIncrement={() => handleIncrement(area.id, 'area')}
               onDecrement={() => handleDecrement(area.id, 'area')}
@@ -828,6 +1106,7 @@ export default function ProgressBars() {
                       level="subarea"
                       isExpanded={expandedSubareas[subarea.id]}
                       hasChildren={subarea.goals.length > 0}
+                      completionLikelihood={completionLikelihoods[subarea.id]}
                       onToggle={() => toggleSubarea(subarea.id)}
                       onIncrement={() => handleIncrement(subarea.id, 'subarea')}
                       onDecrement={() => handleDecrement(subarea.id, 'subarea')}
@@ -845,6 +1124,7 @@ export default function ProgressBars() {
                             level="goal"
                             isExpanded={false}
                             hasChildren={false}
+                            completionLikelihood={completionLikelihoods[goal.id]}
                             onToggle={() => {}}
                             onIncrement={() => handleIncrement(goal.id, 'goal')}
                             onDecrement={() => handleDecrement(goal.id, 'goal')}
