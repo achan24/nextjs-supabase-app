@@ -150,12 +150,13 @@ function TreeNode({
           display: 'flex', 
           alignItems: 'center', 
           cursor: 'pointer',
-          padding: '6px 8px',
-          fontSize: '14px',
+          padding: '4px 6px',
+          fontSize: '13px',
           borderRadius: '4px',
           transition: 'background-color 0.2s',
           userSelect: 'none',
-          backgroundColor: selectedNode?.id === node.id ? '#e0f2fe' : 'transparent'
+          backgroundColor: selectedNode?.id === node.id ? '#e0f2fe' : 'transparent',
+          minHeight: '32px'
         }} 
         onClick={() => {
           if (node.type === 'flow') {
@@ -395,16 +396,16 @@ export default function SkillsExplorerClient() {
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Skills Explorer</h1>
+    <div className="p-4 md:p-6">
+      <h1 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">Skills Explorer</h1>
       
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
         {/* Skills Tree */}
-        <div className="w-1/3">
-        <Card className="p-4">
-            <h2 className="text-lg font-semibold mb-4">Skills & Targets</h2>
-          {loading ? (
-            <div>Loading skills...</div>
+        <div className="w-full lg:w-1/3">
+          <Card className="p-3 md:p-4">
+            <h2 className="text-base md:text-lg font-semibold mb-3 md:mb-4">Skills & Targets</h2>
+            {loading ? (
+              <div>Loading skills...</div>
             ) : skillTree.length === 0 ? (
               <div className="text-gray-500">No skills or targets found</div>
             ) : (
@@ -422,21 +423,21 @@ export default function SkillsExplorerClient() {
                     selectedNode={selectedNode}
                   />
                 ))}
-            </div>
-          )}
-        </Card>
-      </div>
+              </div>
+            )}
+          </Card>
+        </div>
 
         {/* Skill Details */}
-        <div className="w-2/3">
-        <Card className="p-4">
-          <h2 className="text-lg font-semibold mb-4">Skill Details</h2>
+        <div className="w-full lg:w-2/3">
+          <Card className="p-3 md:p-4">
+            <h2 className="text-base md:text-lg font-semibold mb-3 md:mb-4">Skill Details</h2>
             {selectedNode ? (
-              <div className="space-y-6">
+              <div className="space-y-4 md:space-y-6">
                 {/* Header */}
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900">{selectedNode.label}</h3>
-                  <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                  <h3 className="text-base md:text-lg font-medium text-gray-900">{selectedNode.label}</h3>
+                  <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full mt-1 ${
                     selectedNode.type === 'skill' ? 'bg-blue-100 text-blue-800' :
                     selectedNode.type === 'target' ? 'bg-gray-100 text-gray-800' :
                     'bg-yellow-100 text-yellow-800'
@@ -460,18 +461,18 @@ export default function SkillsExplorerClient() {
                     {selectedNode.data?.practiceHistory && (
                       <div>
                         <h4 className="font-medium text-gray-900 mb-2">📊 Practice Stats</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-blue-50 p-3 rounded-lg">
-                            <div className="text-2xl font-bold text-blue-600">
+                        <div className="grid grid-cols-2 gap-3 md:gap-4">
+                          <div className="bg-blue-50 p-2 md:p-3 rounded-lg">
+                            <div className="text-xl md:text-2xl font-bold text-blue-600">
                               {selectedNode.data.practiceHistory.length || 0}
                             </div>
-                            <div className="text-sm text-gray-600">Total Sessions</div>
+                            <div className="text-xs md:text-sm text-gray-600">Total Sessions</div>
                           </div>
-                          <div className="bg-green-50 p-3 rounded-lg">
-                            <div className="text-2xl font-bold text-green-600">
+                          <div className="bg-green-50 p-2 md:p-3 rounded-lg">
+                            <div className="text-xl md:text-2xl font-bold text-green-600">
                               {selectedNode.data.practiceHistory?.filter((p: any) => p.completed)?.length || 0}
                             </div>
-                            <div className="text-sm text-gray-600">Completed</div>
+                            <div className="text-xs md:text-sm text-gray-600">Completed</div>
                           </div>
                         </div>
                       </div>
@@ -481,8 +482,8 @@ export default function SkillsExplorerClient() {
                     {selectedNode.data?.description && (
                       <div>
                         <h4 className="font-medium text-gray-900 mb-2">📝 Description</h4>
-                        <div className="bg-gray-50 p-3 rounded-lg">
-                          <p className="text-sm text-gray-700">{selectedNode.data.description}</p>
+                        <div className="bg-gray-50 p-2 md:p-3 rounded-lg">
+                          <p className="text-xs md:text-sm text-gray-700">{selectedNode.data.description}</p>
                         </div>
                       </div>
                     )}
@@ -490,8 +491,8 @@ export default function SkillsExplorerClient() {
                     {/* Raw data for debugging */}
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">🔧 Raw Data</h4>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <pre className="text-xs text-gray-700 overflow-auto">
+                      <div className="bg-gray-50 p-2 md:p-3 rounded-lg">
+                        <pre className="text-xs text-gray-700 overflow-auto max-h-32 md:max-h-48">
                           {JSON.stringify(selectedNode.data, null, 2)}
                         </pre>
                       </div>
@@ -505,13 +506,13 @@ export default function SkillsExplorerClient() {
                     {/* Target value from actual data */}
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">🎯 Target</h4>
-                      <div className="bg-gray-50 p-3 rounded-lg">
+                      <div className="bg-gray-50 p-2 md:p-3 rounded-lg">
                         <div className="flex items-center space-x-2">
-                          <span className="text-2xl font-bold text-gray-900">
+                          <span className="text-xl md:text-2xl font-bold text-gray-900">
                             {selectedNode.data?.target || selectedNode.data?.value || 'N/A'}
                           </span>
                           {selectedNode.data?.unit && (
-                            <span className="text-gray-600">{selectedNode.data.unit}</span>
+                            <span className="text-sm md:text-base text-gray-600">{selectedNode.data.unit}</span>
                           )}
                         </div>
                       </div>
@@ -544,17 +545,17 @@ export default function SkillsExplorerClient() {
                     {selectedNode.data?.description && (
                       <div>
                         <h4 className="font-medium text-gray-900 mb-2">📝 Description</h4>
-                        <div className="bg-gray-50 p-3 rounded-lg">
-                          <p className="text-sm text-gray-700">{selectedNode.data.description}</p>
+                        <div className="bg-gray-50 p-2 md:p-3 rounded-lg">
+                          <p className="text-xs md:text-sm text-gray-700">{selectedNode.data.description}</p>
                         </div>
                       </div>
                     )}
 
                     {/* Raw data for debugging */}
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-2">🔧 Raw Data</h4>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <pre className="text-xs text-gray-700 overflow-auto">
+                      <h4 className="font-medium text-gray-700 mb-2">🔧 Raw Data</h4>
+                      <div className="bg-gray-50 p-2 md:p-3 rounded-lg">
+                        <pre className="text-xs text-gray-700 overflow-auto max-h-32 md:max-h-48">
                           {JSON.stringify(selectedNode.data, null, 2)}
                         </pre>
                       </div>
@@ -568,7 +569,7 @@ export default function SkillsExplorerClient() {
                     <h4 className="font-medium text-gray-900 mb-2">🔗 Connected Items</h4>
                     <div className="space-y-1">
                       {selectedNode.children.map((child: any) => (
-                        <div key={child.id} className="flex items-center space-x-2 text-sm p-2 bg-gray-50 rounded">
+                        <div key={child.id} className="flex items-center space-x-2 text-xs md:text-sm p-2 bg-gray-50 rounded">
                           <span>{child.type === 'skill' ? '⚔️' : '🎯'}</span>
                           <span className="font-medium">{child.label}</span>
                           <span className="text-xs text-gray-500">({child.type})</span>
@@ -586,7 +587,7 @@ export default function SkillsExplorerClient() {
       </div>
 
       {/* Debug Info */}
-      <div style={{ background: '#222', color: '#fff', border: '2px solid #f00', padding: '1rem', borderRadius: '8px', marginTop: '2rem', fontSize: '12px' }}>
+      <div className="hidden md:block" style={{ background: '#222', color: '#fff', border: '2px solid #f00', padding: '1rem', borderRadius: '8px', marginTop: '2rem', fontSize: '12px' }}>
         <strong>DEBUG: Total nodes loaded: {debugTotalNodes}</strong>
         {debugTotalNodes === -1 && <div style={{ color: '#ff6b6b' }}>❌ ERROR: {JSON.stringify(debugTypeCounts)}</div>}
         <br />
@@ -601,7 +602,7 @@ export default function SkillsExplorerClient() {
       </div>
 
       {/* Skills & Targets Debug Section */}
-      <div style={{ background: '#1a1a1a', color: '#00ff00', border: '2px solid #00ff00', padding: '1rem', borderRadius: '8px', marginTop: '1rem', fontSize: '12px' }}>
+      <div className="hidden md:block" style={{ background: '#1a1a1a', color: '#00ff00', border: '2px solid #00ff00', padding: '1rem', borderRadius: '8px', marginTop: '1rem', fontSize: '12px' }}>
         <strong>🎯 SKILLS & TARGETS DEBUG:</strong>
         <br />
         <strong>Skills found:</strong>

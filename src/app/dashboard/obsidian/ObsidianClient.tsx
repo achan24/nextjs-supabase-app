@@ -25,7 +25,7 @@ export default function ObsidianClient({ user }: { user: User }) {
   const [editorState, setEditorState] = useState<EditorState>({
     mode: 'edit',
     isFullScreen: false,
-    autoSave: true,
+    autoSave: false,
     wordCount: 0,
     lastSaved: null
   });
