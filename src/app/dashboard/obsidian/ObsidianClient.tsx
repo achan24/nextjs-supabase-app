@@ -24,7 +24,7 @@ export default function ObsidianClient({ user }: { user: User }) {
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editorState, setEditorState] = useState<EditorState>({
-    mode: 'edit',
+    mode: 'edit' as const,
     isFullScreen: false,
     autoSave: true,
     wordCount: 0,
