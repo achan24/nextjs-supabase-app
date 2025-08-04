@@ -74,60 +74,55 @@ export default function MarkdownEditor({
     setTags(note.tags.join(', '));
   }, [note]);
 
-  // Track if content has actually changed from the original note
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // Track if note has been loaded and user has made changes
+  const [noteLoaded, setNoteLoaded] = useState(false);
+  const [hasUserChanges, setHasUserChanges] = useState(false);
 
-  // Check for actual changes when title, content, or tags change
+  // Mark note as loaded when note changes
   useEffect(() => {
+    setTitle(note.title);
+    setContent(note.content);
+    setTags(note.tags.join(', '));
+    setNoteLoaded(true);
+    setHasUserChanges(false);
+    console.log('[Obsidian Auto-Save] Note loaded:', note.title);
+  }, [note]);
+
+  // Track user changes (not initial load)
+  useEffect(() => {
+    if (!noteLoaded) return; // Don't track changes during initial load
+    
     const titleChanged = title !== note.title;
     const contentChanged = content !== note.content;
     const tagsChanged = tags !== note.tags.join(', ');
     
     const hasChanges = titleChanged || contentChanged || tagsChanged;
-    setHasUnsavedChanges(hasChanges);
+    setHasUserChanges(hasChanges);
     
-    console.log('[Obsidian Auto-Save] Change detection:', {
+    console.log('[Obsidian Auto-Save] User changes detected:', {
       titleChanged,
       contentChanged,
       tagsChanged,
       hasChanges
     });
-  }, [title, content, tags, note.title, note.content, note.tags]);
+  }, [title, content, tags, note.title, note.content, note.tags, noteLoaded]);
 
-  // Auto-save effect - only trigger when there are actual unsaved changes
+  // Debounced auto-save effect - only trigger when user makes changes
   useEffect(() => {
-    console.log('[Obsidian Auto-Save] Auto-save effect triggered. Auto-save enabled:', editorState.autoSave, 'Has unsaved changes:', hasUnsavedChanges);
+    if (!editorState.autoSave || !noteLoaded || !hasUserChanges) return;
+
+    console.log('[Obsidian Auto-Save] Debounced auto-save triggered');
     
-    if (editorState.autoSave && hasUnsavedChanges) {
-      // Clear existing timeout
-      if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout);
-        console.log('[Obsidian Auto-Save] Cleared existing timeout');
-      }
+    const handler = setTimeout(() => {
+      console.log('[Obsidian Auto-Save] Auto-save timeout triggered - user stopped editing');
+      saveNote();
+      setHasUserChanges(false); // Reset after saving
+    }, 2000); // 2 seconds after last change
 
-      // Set new timeout for auto-save
-      const timeout = setTimeout(() => {
-        console.log('[Obsidian Auto-Save] Auto-save timeout triggered');
-        saveNote();
-        setHasUnsavedChanges(false); // Reset after saving
-      }, 2000); // Auto-save after 2 seconds of inactivity
-
-      setAutoSaveTimeout(timeout);
-      console.log('[Obsidian Auto-Save] Set new timeout for auto-save');
-
-      // Cleanup timeout on unmount
-      return () => {
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-      };
-    } else if (!hasUnsavedChanges && autoSaveTimeout) {
-      // Clear timeout if there are no unsaved changes
-      clearTimeout(autoSaveTimeout);
-      setAutoSaveTimeout(null);
-      console.log('[Obsidian Auto-Save] Cleared timeout - no unsaved changes');
-    }
-  }, [hasUnsavedChanges, editorState.autoSave, saveNote, autoSaveTimeout]);
+    return () => {
+      clearTimeout(handler); // Cancel previous timeout on change
+    };
+  }, [hasUserChanges, editorState.autoSave, saveNote, noteLoaded]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -393,6 +388,7 @@ Just paste a YouTube URL and it will be automatically embedded!`;
           <Button variant="outline" size="sm" onClick={saveNote}>
             <Save className="h-4 w-4" />
           </Button>
+
         </div>
       </div>
 
@@ -417,12 +413,13 @@ Just paste a YouTube URL and it will be automatically embedded!`;
             <span>Last saved: {new Date(editorState.lastSaved).toLocaleTimeString()}</span>
           )}
         </div>
-        <div>
+        <div className="flex items-center gap-2">
           {editorState.autoSave && (
             <span className="text-green-600">
               {lastSaved ? `Auto-saved at ${new Date(lastSaved).toLocaleTimeString()}` : 'Auto-save enabled'}
             </span>
           )}
+
         </div>
       </div>
 
