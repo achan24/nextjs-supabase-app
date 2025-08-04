@@ -44,13 +44,15 @@ export const remarkYoutubeEmbed: Plugin = () => (tree) => {
       type: 'html',
       value: `<div class="video-container my-4" style="max-width: ${width}px;">
         <iframe
-          src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&showinfo=0"
+          src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&playsinline=1&modestbranding=1&rel=0&showinfo=0"
           width="${width}"
           height="${height}"
           frameborder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
           allowfullscreen
           style="max-width: 100%; border-radius: 8px; ${isShorts ? 'aspect-ratio: 9/16;' : 'aspect-ratio: 16/9;'}"
+          id="yt-${videoId}"
+          data-yt-player
         ></iframe>
       </div>`,
     };

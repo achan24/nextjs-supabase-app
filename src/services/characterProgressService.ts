@@ -133,18 +133,29 @@ export async function savePointsToDate(date?: string) {
       if (area.daily_points > 0) {
         console.log(`[SAVE POINTS] Saving area ${area.id}: ${area.daily_points} points`);
         
-        // Save to history
-        const { error: historyError } = await supabase
+        // Save to history - try insert first, then update if it fails
+        let { error: historyError } = await supabase
           .from('area_points_history')
-          .upsert({
-            user_id: user.id,
+          .insert({
             area_id: area.id,
             date: dateStr,
             points: area.daily_points,
             target: area.target_points
-          }, {
-            onConflict: 'area_id,date'
           });
+
+        // If insert fails due to duplicate, try update instead
+        if (historyError && historyError.code === '23505') { // unique_violation
+          const { error: updateError } = await supabase
+            .from('area_points_history')
+            .update({
+              points: area.daily_points,
+              target: area.target_points
+            })
+            .eq('area_id', area.id)
+            .eq('date', dateStr);
+          
+          historyError = updateError;
+        }
 
         if (historyError) {
           console.error(`[SAVE POINTS] Error saving area history for ${area.id}:`, historyError);
@@ -184,19 +195,29 @@ export async function savePointsToDate(date?: string) {
       if (subarea.daily_points > 0) {
         console.log(`[SAVE POINTS] Saving subarea ${subarea.id}: ${subarea.daily_points} points`);
         
-        // Save to history
-        const { error: historyError } = await supabase
+        // Save to history - try insert first, then update if it fails
+        let { error: historyError } = await supabase
           .from('subarea_points_history')
-          .upsert({
-            user_id: user.id,
-            area_id: subarea.area_id,
+          .insert({
             subarea_id: subarea.id,
             date: dateStr,
             points: subarea.daily_points,
             target: subarea.target_points
-          }, {
-            onConflict: 'subarea_id,date'
           });
+
+        // If insert fails due to duplicate, try update instead
+        if (historyError && historyError.code === '23505') { // unique_violation
+          const { error: updateError } = await supabase
+            .from('subarea_points_history')
+            .update({
+              points: subarea.daily_points,
+              target: subarea.target_points
+            })
+            .eq('subarea_id', subarea.id)
+            .eq('date', dateStr);
+          
+          historyError = updateError;
+        }
 
         if (historyError) {
           console.error(`[SAVE POINTS] Error saving subarea history for ${subarea.id}:`, historyError);
@@ -244,20 +265,29 @@ export async function savePointsToDate(date?: string) {
       if (goal.daily_points > 0) {
         console.log(`[SAVE POINTS] Saving goal ${goal.id}: ${goal.daily_points} points`);
         
-        // Save to history
-        const { error: historyError } = await supabase
+        // Save to history - try insert first, then update if it fails
+        let { error: historyError } = await supabase
           .from('goal_points_history')
-          .upsert({
-            user_id: user.id,
-            area_id: goal.life_goal_subareas.area_id,
-            subarea_id: goal.subarea_id,
+          .insert({
             goal_id: goal.id,
             date: dateStr,
             points: goal.daily_points,
             target: goal.target_points
-          }, {
-            onConflict: 'goal_id,date'
           });
+
+        // If insert fails due to duplicate, try update instead
+        if (historyError && historyError.code === '23505') { // unique_violation
+          const { error: updateError } = await supabase
+            .from('goal_points_history')
+            .update({
+              points: goal.daily_points,
+              target: goal.target_points
+            })
+            .eq('goal_id', goal.id)
+            .eq('date', dateStr);
+          
+          historyError = updateError;
+        }
 
         if (historyError) {
           console.error(`[SAVE POINTS] Error saving goal history for ${goal.id}:`, historyError);

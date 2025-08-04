@@ -821,6 +821,88 @@ const { error: historyError } = await supabase
 - Don't assume the primary key is the conflict target
 - Test upsert operations with existing data to verify behavior
 
+# SUPABASE UPSERT ONCONFLICT SPECIFICATION ERRORS
+
+## The Problem: "there is no unique or exclusion constraint matching the ON CONFLICT specification"
+
+### Root Cause
+When using Supabase's `.upsert()` method with `onConflict` parameter, the specified columns must exactly match an existing unique constraint in the database. If the constraint doesn't exist or the column names don't match, you'll get error code "42P10".
+
+### Real Example: Points History Save Issue
+**Error Encountered:**
+```
+Error code: "42P10"
+Message: "there is no unique or exclusion constraint matching the ON CONFLICT specification"
+```
+
+**Common Causes:**
+1. Database schema mismatch - columns don't exist in the table
+2. Unique constraint was dropped or never created
+3. Column names in `onConflict` don't match actual constraint
+4. Migration not applied to database
+
+### Solution: Use Insert + Update Pattern Instead
+
+**Instead of problematic upsert:**
+```typescript
+// ❌ PROBLEMATIC - May fail with constraint errors
+const { error } = await supabase
+  .from('table_name')
+  .upsert({
+    column1: value1,
+    column2: value2
+  }, {
+    onConflict: 'column1,column2'  // May not match actual constraint
+  });
+```
+
+**Use insert + update pattern:**
+```typescript
+// ✅ RELIABLE - Works regardless of constraint issues
+let { error } = await supabase
+  .from('table_name')
+  .insert({
+    column1: value1,
+    column2: value2
+  });
+
+// If insert fails due to duplicate, try update instead
+if (error && error.code === '23505') { // unique_violation
+  const { error: updateError } = await supabase
+    .from('table_name')
+    .update({
+      // fields to update
+    })
+    .eq('column1', value1)
+    .eq('column2', value2);
+  
+  error = updateError;
+}
+```
+
+### When to Use This Pattern
+
+1. **When you get "42P10" errors** with upsert operations
+2. **When database schema is uncertain** or migrations may not be applied
+3. **When working with tables** that have complex unique constraints
+4. **For critical operations** that must work reliably
+
+### Benefits
+
+1. **More reliable** - doesn't depend on specific constraint names
+2. **Easier to debug** - clear error handling for each step
+3. **Works with any unique constraint** - doesn't need to know exact constraint name
+4. **Graceful fallback** - handles both insert and update cases
+
+### Error Code Reference
+
+- **23505**: Unique constraint violation (expected when record exists)
+- **42P10**: Invalid column reference in ON CONFLICT clause
+- **42710**: Duplicate policy/constraint (when creating constraints)
+
+### Remember
+When upsert operations fail with constraint specification errors, use the insert + update pattern instead. It's more verbose but more reliable and doesn't depend on knowing the exact constraint names.
+
 # CHARACTER XP CALCULATION - ON-THE-FLY VS STORED
 
 ## The Problem: Inflated Character Levels

@@ -10,6 +10,7 @@ import RightPanel from './components/RightPanel';
 import QuickSwitcher from './components/QuickSwitcher';
 import { Button } from '@/components/ui/button';
 import { Search, Plus, Settings } from 'lucide-react';
+import { YouTubeProvider } from './components/useYouTube';
 
 export default function ObsidianClient({ user }: { user: User }) {
   const supabase = createClient();
@@ -143,9 +144,10 @@ export default function ObsidianClient({ user }: { user: User }) {
   });
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <YouTubeProvider>
+      <div className="h-screen flex flex-col bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-2 md:gap-4">
           {/* Mobile menu button */}
           <button
@@ -283,5 +285,6 @@ export default function ObsidianClient({ user }: { user: User }) {
         />
       )}
     </div>
+    </YouTubeProvider>
   );
 } 

@@ -1,22 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Note } from '../types';
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
+import remarkGfm from 'remark-gfm';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
+import { remarkTimestampLinks } from './remarkTimestampLinks';
+import { rehypeTimestampLinks } from './rehypeTimestampLinks';
+import { useYouTube } from './useYouTube';
 
 interface HybridEditorProps {
   content: string;
   onChange: (content: string) => void;
   allNotes?: Note[];
   onNoteSelect?: (note: Note) => void;
+  onGetVideoTime?: () => number | null;
 }
 
-export default function HybridEditor({ content, onChange, allNotes = [], onNoteSelect }: HybridEditorProps) {
+export default function HybridEditor({ content, onChange, allNotes = [], onNoteSelect, onGetVideoTime }: HybridEditorProps) {
   const [hasVideo, setHasVideo] = useState(false);
   const [videoHeight, setVideoHeight] = useState(0);
+  const { register, seekTo } = useYouTube();
 
   // Check if content contains video links
   useEffect(() => {
@@ -66,6 +72,34 @@ export default function HybridEditor({ content, onChange, allNotes = [], onNoteS
 
   const videoContent = extractVideoContent();
 
+  // Register YouTube players when videos are present
+  useEffect(() => {
+    if (hasVideo && videoContent) {
+      // Extract video IDs and register them
+      const videoRegex = /\[.*?\]\((https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/.*?)\)/g;
+      const matches: string[] = [];
+      let match;
+      
+      while ((match = videoRegex.exec(content)) !== null) {
+        const url = match[1];
+        const videoIdMatch = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/))([\w-]{11})/.exec(url);
+        if (videoIdMatch) {
+          const videoId = videoIdMatch[1];
+          const iframeId = `yt-${videoId}`;
+          register(iframeId);
+        }
+      }
+    }
+  }, [hasVideo, videoContent, content, register]);
+
+  // Expose seekTo function globally for onclick handlers
+  useEffect(() => {
+    (window as any).seekToTime = seekTo;
+    return () => {
+      delete (window as any).seekToTime;
+    };
+  }, [seekTo]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Video Section - only shown if video is present */}
@@ -95,6 +129,10 @@ export default function HybridEditor({ content, onChange, allNotes = [], onNoteS
           preview="edit"
           height="100%"
           className="border-none"
+          previewOptions={{
+            remarkPlugins: [remarkGfm, remarkYoutubeEmbed, remarkTimestampLinks],
+            rehypePlugins: [rehypeRaw, rehypeTimestampLinks],
+          }}
           textareaProps={{
             placeholder: 'Start writing your note...\n\nUse [[Note Title]] to link to other notes.\n\nAdd videos: [Video Title](https://youtube.com/watch?v=VIDEO_ID)',
             style: {

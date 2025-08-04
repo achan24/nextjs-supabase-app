@@ -6,12 +6,14 @@ import { Note, EditorState } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Eye, EyeOff, Maximize, Minimize, Save, Star, StarOff, Tag, X } from 'lucide-react';
+import { Eye, EyeOff, Maximize, Minimize, Save, Star, StarOff, Tag, X, Video, Clock } from 'lucide-react';
+import { useYouTube } from './useYouTube';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import CustomMarkdownPreview from './CustomMarkdownPreview';
 import HybridEditor from './HybridEditor';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
+import { remarkTimestampLinks } from './remarkTimestampLinks';
 
 interface MarkdownEditorProps {
   note: Note;
@@ -36,6 +38,13 @@ export default function MarkdownEditor({
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const { getActiveTime, seekTo } = useYouTube();
+
+  // Process content to make timestamps clickable
+  const processedContent = content.replace(/\[(\d{1,2}):(\d{2})\]/g, (match, minutes, seconds) => {
+    // Convert timestamp to clickable link
+    return `[${match}](#timestamp-${minutes}-${seconds})`;
+  });
 
   const saveNote = useCallback(() => {
     console.log('[Obsidian Auto-Save] Saving note:', note.id, 'Title:', title);
@@ -169,6 +178,82 @@ export default function MarkdownEditor({
     });
   };
 
+  const showVideoHelp = () => {
+    const videoHelp = `Video Embedding Examples:
+
+YouTube: [Video Title](https://youtube.com/watch?v=VIDEO_ID)
+Short: [Video Title](https://youtu.be/VIDEO_ID)
+Shorts: [Video Title](https://youtube.com/shorts/VIDEO_ID)
+
+Just paste a YouTube URL and it will be automatically embedded!`;
+    
+    alert(videoHelp);
+  };
+
+  const toMMSS = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const seekToTime = (timestamp: string) => {
+    // Extract MM:SS from [MM:SS] format
+    const timeMatch = timestamp.match(/\[(\d{1,2}):(\d{2})\]/);
+    if (timeMatch) {
+      const minutes = parseInt(timeMatch[1]);
+      const seconds = parseInt(timeMatch[2]);
+      const totalSeconds = minutes * 60 + seconds;
+      
+      // Use the seekTo function from YouTube context
+      seekTo(totalSeconds);
+    }
+  };
+
+  const insertTimestamp = () => {
+    const t = getActiveTime();
+    if (t == null) {
+      // Fallback to manual input if player not ready
+      promptForManualTime();
+      return;
+    }
+    
+    const timestamp = `[${toMMSS(t)}] `;
+    const newContent = content + '\n' + timestamp;
+    setContent(newContent);
+  };
+
+  const promptForManualTime = () => {
+    // Show a more helpful prompt with instructions
+    const manualTime = prompt(
+      'Enter the current video time (MM:SS format):\n\n' +
+      'Tip: You can copy the time from the video player.\n' +
+      'Example: 05:30 for 5 minutes 30 seconds',
+      '00:00'
+    );
+    
+    if (manualTime) {
+      // Validate time format
+      const timeRegex = /^(\d{1,2}):(\d{2})$/;
+      const match = manualTime.match(timeRegex);
+      
+      if (match) {
+        const minutes = parseInt(match[1]);
+        const seconds = parseInt(match[2]);
+        
+        if (seconds < 60) {
+          const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+          const timestamp = `[${formattedTime}] `;
+          const newContent = content + '\n' + timestamp;
+          setContent(newContent);
+        } else {
+          alert('Invalid time format. Use MM:SS (e.g., 05:30)');
+        }
+      } else {
+        alert('Invalid time format. Use MM:SS (e.g., 05:30)');
+      }
+    }
+  };
+
   return (
     <div className={`flex flex-col h-full ${editorState.isFullScreen ? 'fixed inset-0 z-50 bg-white' : ''}`}>
       {/* Toolbar */}
@@ -255,6 +340,22 @@ export default function MarkdownEditor({
              editorState.mode === 'preview' ? <EyeOff className="h-4 w-4" /> : 
              <Eye className="h-4 w-4" />}
           </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={showVideoHelp}
+            title="Video Embedding Help"
+          >
+            <Video className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={insertTimestamp}
+            title="Insert Timestamp"
+          >
+            <Clock className="h-4 w-4" />
+          </Button>
           <Button variant="outline" size="sm" onClick={toggleFullScreen}>
             {editorState.isFullScreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
           </Button>
@@ -264,19 +365,7 @@ export default function MarkdownEditor({
         </div>
       </div>
 
-      {/* Video Embedding Help */}
-      {(editorState.mode === 'edit' || editorState.mode === 'hybrid') && (
-        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-xs text-blue-700">
-          <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
-            <span className="font-medium">Video Embedding:</span>
-            <div className="flex flex-wrap gap-1 md:gap-2">
-              <span>YouTube: [Video Title](https://youtube.com/watch?v=VIDEO_ID)</span>
-              <span>Short: [Video Title](https://youtu.be/VIDEO_ID)</span>
-              <span>Shorts: [Video Title](https://youtube.com/shorts/VIDEO_ID)</span>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Status Bar */}
       <div className="bg-gray-50 border-b border-gray-200 px-4 py-1 text-xs text-gray-500 flex flex-col md:flex-row md:items-center md:justify-between gap-1">
@@ -331,8 +420,48 @@ export default function MarkdownEditor({
             height="100%"
             className="border-none"
             previewOptions={{
-              remarkPlugins: [remarkGfm, remarkYoutubeEmbed],
+              remarkPlugins: [remarkGfm, remarkYoutubeEmbed, remarkTimestampLinks],
               rehypePlugins: [rehypeRaw],
+            }}
+            components={{
+              a: ({ href, children, ...props }) => {
+                // Handle timestamp links
+                if (href?.startsWith('#timestamp-')) {
+                  const timeMatch = href.match(/#timestamp-(\d{1,2})-(\d{2})/);
+                  if (timeMatch) {
+                    const minutes = parseInt(timeMatch[1]);
+                    const seconds = parseInt(timeMatch[2]);
+                    const totalSeconds = minutes * 60 + seconds;
+                    
+                    return (
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          seekTo(totalSeconds);
+                        }}
+                        className="text-green-600 hover:text-green-800 underline cursor-pointer font-mono"
+                        title={`Jump to ${minutes}:${seconds.toString().padStart(2, '0')}`}
+                        {...props}
+                      >
+                        {children}
+                      </a>
+                    );
+                  }
+                }
+                // Regular links
+                return (
+                  <a
+                    href={href}
+                    className="text-blue-600 hover:text-blue-800 underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    {...props}
+                  >
+                    {children}
+                  </a>
+                );
+              },
             }}
             textareaProps={{
               placeholder: 'Start writing your note...\n\nUse [[Note Title]] to link to other notes.',

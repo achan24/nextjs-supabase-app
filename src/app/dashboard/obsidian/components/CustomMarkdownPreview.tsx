@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { Note } from '../types';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
+import { useYouTube } from './useYouTube';
 
 interface CustomMarkdownPreviewProps {
   content: string;
@@ -20,19 +21,25 @@ export default function CustomMarkdownPreview({
   onNoteSelect 
 }: CustomMarkdownPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { seekTo } = useYouTube();
 
-  // Process double bracket links before passing to react-markdown
-  const processedContent = content.replace(/\[\[([^\]]+)\]\]/g, (match, noteTitle) => {
-    const targetNote = allNotes.find(n => 
-      n.title.toLowerCase() === noteTitle.toLowerCase()
-    );
-    
-    if (targetNote) {
-      return `[${noteTitle}](#note-${targetNote.id})`;
-    } else {
-      return `*${noteTitle}*`;
-    }
-  });
+  // Process double bracket links and timestamps before passing to react-markdown
+  const processedContent = content
+    .replace(/\[\[([^\]]+)\]\]/g, (match, noteTitle) => {
+      const targetNote = allNotes.find(n => 
+        n.title.toLowerCase() === noteTitle.toLowerCase()
+      );
+      
+      if (targetNote) {
+        return `[${noteTitle}](#note-${targetNote.id})`;
+      } else {
+        return `*${noteTitle}*`;
+      }
+    })
+    .replace(/\[(\d{1,2}):(\d{2})\]/g, (match, minutes, seconds) => {
+      // Convert timestamp to clickable link
+      return `[${match}](#timestamp-${minutes}-${seconds})`;
+    });
 
   console.log('[CustomMarkdownPreview] Processed content:', processedContent);
 
@@ -72,6 +79,30 @@ export default function CustomMarkdownPreview({
                   {children}
                 </a>
               );
+            }
+            // Handle timestamp links
+            if (href?.startsWith('#timestamp-')) {
+              const timeMatch = href.match(/#timestamp-(\d{1,2})-(\d{2})/);
+              if (timeMatch) {
+                const minutes = parseInt(timeMatch[1]);
+                const seconds = parseInt(timeMatch[2]);
+                const totalSeconds = minutes * 60 + seconds;
+                
+                return (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      seekTo(totalSeconds);
+                    }}
+                    className="text-green-600 hover:text-green-800 underline cursor-pointer font-mono"
+                    title={`Jump to ${minutes}:${seconds.toString().padStart(2, '0')}`}
+                    {...props}
+                  >
+                    {children}
+                  </a>
+                );
+              }
             }
             // Regular links
             return (
