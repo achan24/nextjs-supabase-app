@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Note } from '../types';
+import { Note, EditorState } from '../types';
 import MarkdownEditor from '../components/MarkdownEditor';
 import { FileAttachmentExample } from '../components/FileAttachmentExample';
 
 export default function TestAttachmentsPage() {
-  const [editorState, setEditorState] = useState({
-    mode: 'edit' as const,
+  const [editorState, setEditorState] = useState<EditorState>({
+    mode: 'edit',
     isFullScreen: false,
     autoSave: true,
     wordCount: 0,
