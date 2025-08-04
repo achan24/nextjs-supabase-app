@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 
+/// <reference types="youtube" />
+
 // Add this at the very top of the file
 declare global {
   interface Window {
