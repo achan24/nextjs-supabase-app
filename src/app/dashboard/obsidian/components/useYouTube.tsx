@@ -42,7 +42,7 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
       const player = new window.YT.Player(iframeId, {
         events: {
           onReady: () => {},
-          onStateChange: (e) => {
+          onStateChange: (e: { data: number }) => {
             if (e.data === window.YT.PlayerState.PLAYING) activeRef.current = player;
           },
         },
