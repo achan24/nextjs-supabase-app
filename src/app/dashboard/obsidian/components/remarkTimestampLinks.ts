@@ -1,6 +1,6 @@
 import { visit } from 'unist-util-visit';
 import type { Plugin } from 'unified';
-import type { Text, Link } from 'mdast';
+import type { Text, Link, Parent } from 'mdast';
 
 /**
  * remarkTimestampLinks
@@ -9,6 +9,9 @@ import type { Text, Link } from 'mdast';
 export const remarkTimestampLinks: Plugin = () => (tree) => {
   visit(tree, 'text', (node: Text, index, parent) => {
     if (!parent || index === undefined) return;
+    
+    // Type guard to ensure parent has children
+    if (!('children' in parent)) return;
     
     // Look for timestamp patterns like [MM:SS]
     const timestampRegex = /\[(\d{1,2}):(\d{2})\]/g;
@@ -29,6 +32,6 @@ export const remarkTimestampLinks: Plugin = () => (tree) => {
     };
     
     // Replace the text node with the link node
-    (parent.children as any)[index] = linkNode;
+    (parent as Parent).children[index] = linkNode;
   });
 }; 
