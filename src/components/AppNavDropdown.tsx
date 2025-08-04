@@ -19,7 +19,11 @@ import {
   Repeat,
   Lightbulb,
   Target,
-  User
+  User,
+  BookOpen,
+  Brain,
+  Network,
+  Heart
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { PostgrestResponse } from '@supabase/supabase-js';
@@ -44,6 +48,12 @@ const apps = [
     icon: Target
   },
   { 
+    name: 'Obsidian', 
+    href: '/dashboard/obsidian', 
+    description: 'Note-taking and knowledge management',
+    icon: BookOpen
+  },
+  { 
     name: 'Projects', 
     href: '/dashboard/projects', 
     description: 'Manage your projects and goals',
@@ -62,6 +72,12 @@ const apps = [
     icon: StickyNote
   },
   { 
+    name: 'Skills', 
+    href: '/dashboard/skills', 
+    description: 'Track and develop your skills',
+    icon: Brain
+  },
+  { 
     name: 'Process Flow', 
     href: '/dashboard/process-flow', 
     description: 'Visualize your learning progress',
@@ -72,6 +88,12 @@ const apps = [
     href: '/dashboard/process-flow/timer', 
     description: 'Time and track your process sequences',
     icon: Timer
+  },
+  { 
+    name: 'Process Mapper', 
+    href: '/dashboard/process-mapper', 
+    description: 'Map and analyze your processes',
+    icon: Network
   },
   { 
     name: 'Calendar', 
@@ -87,7 +109,7 @@ const apps = [
   },
   { 
     name: 'Insights', 
-    href: '/dashboard/insights', 
+    href: '/dashboard/insights',
     description: 'Get productivity insights',
     icon: LineChart
   },

@@ -14,6 +14,7 @@ import CustomMarkdownPreview from './CustomMarkdownPreview';
 import HybridEditor from './HybridEditor';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
 import { remarkTimestampLinks } from './remarkTimestampLinks';
+import { rehypeTimestampLinks } from './rehypeTimestampLinks';
 
 interface MarkdownEditorProps {
   note: Note;
@@ -421,47 +422,7 @@ Just paste a YouTube URL and it will be automatically embedded!`;
             className="border-none"
             previewOptions={{
               remarkPlugins: [remarkGfm, remarkYoutubeEmbed, remarkTimestampLinks],
-              rehypePlugins: [rehypeRaw],
-            }}
-            components={{
-              a: ({ href, children, ...props }) => {
-                // Handle timestamp links
-                if (href?.startsWith('#timestamp-')) {
-                  const timeMatch = href.match(/#timestamp-(\d{1,2})-(\d{2})/);
-                  if (timeMatch) {
-                    const minutes = parseInt(timeMatch[1]);
-                    const seconds = parseInt(timeMatch[2]);
-                    const totalSeconds = minutes * 60 + seconds;
-                    
-                    return (
-                      <a
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          seekTo(totalSeconds);
-                        }}
-                        className="text-green-600 hover:text-green-800 underline cursor-pointer font-mono"
-                        title={`Jump to ${minutes}:${seconds.toString().padStart(2, '0')}`}
-                        {...props}
-                      >
-                        {children}
-                      </a>
-                    );
-                  }
-                }
-                // Regular links
-                return (
-                  <a
-                    href={href}
-                    className="text-blue-600 hover:text-blue-800 underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    {...props}
-                  >
-                    {children}
-                  </a>
-                );
-              },
+              rehypePlugins: [rehypeRaw, rehypeTimestampLinks],
             }}
             textareaProps={{
               placeholder: 'Start writing your note...\n\nUse [[Note Title]] to link to other notes.',
