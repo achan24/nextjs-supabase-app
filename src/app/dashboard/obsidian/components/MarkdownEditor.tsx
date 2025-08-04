@@ -39,6 +39,9 @@ export default function MarkdownEditor({
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [lastSavedContent, setLastSavedContent] = useState(note.content);
+  const [lastSavedTitle, setLastSavedTitle] = useState(note.title);
+  const [lastSavedTags, setLastSavedTags] = useState(note.tags.join(', '));
   const { getActiveTime, seekTo } = useYouTube();
 
   // Process content to make timestamps clickable
@@ -71,10 +74,31 @@ export default function MarkdownEditor({
     setTags(note.tags.join(', '));
   }, [note]);
 
-  // Auto-save effect
+  // Track if content has actually changed from the original note
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Check for actual changes when title, content, or tags change
   useEffect(() => {
-    console.log('[Obsidian Auto-Save] Auto-save effect triggered. Auto-save enabled:', editorState.autoSave);
-    if (editorState.autoSave) {
+    const titleChanged = title !== note.title;
+    const contentChanged = content !== note.content;
+    const tagsChanged = tags !== note.tags.join(', ');
+    
+    const hasChanges = titleChanged || contentChanged || tagsChanged;
+    setHasUnsavedChanges(hasChanges);
+    
+    console.log('[Obsidian Auto-Save] Change detection:', {
+      titleChanged,
+      contentChanged,
+      tagsChanged,
+      hasChanges
+    });
+  }, [title, content, tags, note.title, note.content, note.tags]);
+
+  // Auto-save effect - only trigger when there are actual unsaved changes
+  useEffect(() => {
+    console.log('[Obsidian Auto-Save] Auto-save effect triggered. Auto-save enabled:', editorState.autoSave, 'Has unsaved changes:', hasUnsavedChanges);
+    
+    if (editorState.autoSave && hasUnsavedChanges) {
       // Clear existing timeout
       if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
@@ -85,6 +109,7 @@ export default function MarkdownEditor({
       const timeout = setTimeout(() => {
         console.log('[Obsidian Auto-Save] Auto-save timeout triggered');
         saveNote();
+        setHasUnsavedChanges(false); // Reset after saving
       }, 2000); // Auto-save after 2 seconds of inactivity
 
       setAutoSaveTimeout(timeout);
@@ -96,8 +121,13 @@ export default function MarkdownEditor({
           clearTimeout(timeout);
         }
       };
+    } else if (!hasUnsavedChanges && autoSaveTimeout) {
+      // Clear timeout if there are no unsaved changes
+      clearTimeout(autoSaveTimeout);
+      setAutoSaveTimeout(null);
+      console.log('[Obsidian Auto-Save] Cleared timeout - no unsaved changes');
     }
-  }, [title, content, tags, editorState.autoSave, saveNote]);
+  }, [hasUnsavedChanges, editorState.autoSave, saveNote, autoSaveTimeout]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

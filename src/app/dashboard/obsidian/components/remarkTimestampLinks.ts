@@ -12,18 +12,18 @@ export const remarkTimestampLinks: Plugin = () => (tree) => {
     
     // Look for timestamp patterns like [MM:SS]
     const timestampRegex = /\[(\d{1,2}):(\d{2})\]/g;
-    const matches = [...node.value.matchAll(timestampRegex)];
+    const match = timestampRegex.exec(node.value);
     
-    if (matches.length === 0) return;
+    if (!match) return;
     
     // Replace the text node with a link node
     const linkNode: Link = {
       type: 'link',
-      url: `#timestamp-${matches[0][1]}-${matches[0][2]}`,
+      url: `#timestamp-${match[1]}-${match[2]}`,
       children: [
         {
           type: 'text',
-          value: matches[0][0] // The full timestamp like [05:30]
+          value: match[0] // The full timestamp like [05:30]
         }
       ]
     };
