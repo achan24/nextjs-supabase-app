@@ -1,5 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 
+// Add this at the very top of the file
+declare global {
+  interface Window {
+    YT?: any;
+  }
+}
+
 type Ctx = { 
   getActiveTime: () => number | null; 
   register: (iframeId: string) => void; 

@@ -36,12 +36,6 @@ const apps = [
     icon: User
   },
   { 
-    name: 'Overview', 
-    href: '/dashboard/overview', 
-    description: 'Track and manage all your targets and progress',
-    icon: BarChart3
-  },
-  { 
     name: 'GOAL System', 
     href: '/dashboard/goal', 
     description: 'Growth, Objectives, Areas, Life-metrics - Track and achieve your life goals',
@@ -52,12 +46,6 @@ const apps = [
     href: '/dashboard/obsidian', 
     description: 'Note-taking and knowledge management',
     icon: BookOpen
-  },
-  { 
-    name: 'Projects', 
-    href: '/dashboard/projects', 
-    description: 'Manage your projects and goals',
-    icon: FolderKanban
   },
   { 
     name: 'Tasks', 
@@ -102,6 +90,12 @@ const apps = [
     icon: Calendar
   },
   { 
+    name: 'Relationship CRM', 
+    href: '/dashboard/crm', 
+    description: 'Track and grow meaningful relationships',
+    icon: Users
+  },
+  { 
     name: 'Habits', 
     href: '/dashboard/habits', 
     description: 'Build and track your habits',
@@ -120,16 +114,22 @@ const apps = [
     icon: Bot
   },
   { 
-    name: 'Relationship CRM', 
-    href: '/dashboard/crm', 
-    description: 'Track and grow meaningful relationships',
-    icon: Users
-  },
-  { 
     name: 'Recommendations', 
     href: '/dashboard/recommendations', 
     description: 'Get personalized recommendations',
     icon: Lightbulb
+  },
+  { 
+    name: 'Projects', 
+    href: '/dashboard/projects', 
+    description: 'Manage your projects and goals',
+    icon: FolderKanban
+  },
+  { 
+    name: 'Overview', 
+    href: '/dashboard/overview', 
+    description: 'Track and manage all your targets and progress',
+    icon: BarChart3
   }
 ];
 
