@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import React from 'react';
+import EnhancedSkillsUI from './components/EnhancedSkillsUI';
 
 interface SkillNode {
   id: string;
@@ -400,36 +401,23 @@ export default function SkillsExplorerClient() {
       <h1 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">Skills Explorer</h1>
       
       <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
-        {/* Skills Tree */}
-        <div className="w-full lg:w-1/3">
-          <Card className="p-3 md:p-4">
-            <h2 className="text-base md:text-lg font-semibold mb-3 md:mb-4">Skills & Targets</h2>
-            {loading ? (
-              <div>Loading skills...</div>
-            ) : skillTree.length === 0 ? (
-              <div className="text-gray-500">No skills or targets found</div>
-            ) : (
-              <div>
-                {skillTree.map(node => (
-                  <TreeNode 
-                    key={node.id} 
-                    node={node}
-                    editingFlowId={editingFlowId}
-                    editingFlowName={editingFlowName}
-                    setEditingFlowName={setEditingFlowName}
-                    handleFlowRename={handleFlowRename}
-                    startEditingFlow={startEditingFlow}
-                    onNodeClick={handleNodeClick}
-                    selectedNode={selectedNode}
-                  />
-                ))}
-              </div>
-            )}
-          </Card>
+        {/* Skills Organization */}
+        <div className="w-full lg:w-1/2">
+          <EnhancedSkillsUI
+            skillTree={skillTree}
+            loading={loading}
+            editingFlowId={editingFlowId}
+            editingFlowName={editingFlowName}
+            setEditingFlowName={setEditingFlowName}
+            handleFlowRename={handleFlowRename}
+            startEditingFlow={startEditingFlow}
+            onNodeClick={handleNodeClick}
+            selectedNode={selectedNode}
+          />
         </div>
 
         {/* Skill Details */}
-        <div className="w-full lg:w-2/3">
+        <div className="w-full lg:w-1/2">
           <Card className="p-3 md:p-4">
             <h2 className="text-base md:text-lg font-semibold mb-3 md:mb-4">Skill Details</h2>
             {selectedNode ? (

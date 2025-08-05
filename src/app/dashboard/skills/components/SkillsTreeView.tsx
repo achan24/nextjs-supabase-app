@@ -11,9 +11,9 @@ interface SkillNode {
   children?: SkillNode[];
 }
 
-interface TreeNodeProps {
-  node: SkillNode;
-  level?: number;
+interface SkillsTreeViewProps {
+  skillTree: SkillNode[];
+  loading: boolean;
   editingFlowId: string | null;
   editingFlowName: string;
   setEditingFlowName: (name: string) => void;
@@ -23,7 +23,7 @@ interface TreeNodeProps {
   selectedNode: any;
 }
 
-// Simple tree node component with expand/collapse and editing
+// TreeNode component (copied from SkillsExplorerClient)
 function TreeNode({ 
   node, 
   level = 0, 
@@ -34,140 +34,136 @@ function TreeNode({
   startEditingFlow,
   onNodeClick,
   selectedNode
-}: TreeNodeProps) {
-  const [expanded, setExpanded] = React.useState(true);
-  const hasChildren = node.children && node.children.length > 0;
-  const isEditing = editingFlowId === node.id && node.type === 'flow';
-  
-  // Icons for different node types
+}: { 
+  node: SkillNode, 
+  level?: number,
+  editingFlowId: string | null,
+  editingFlowName: string,
+  setEditingFlowName: (name: string) => void,
+  handleFlowRename: (flowId: string, newName: string) => void,
+  startEditingFlow: (flowId: string, currentName: string) => void,
+  onNodeClick: (node: any) => void,
+  selectedNode: any
+}) {
+  const [isExpanded, setIsExpanded] = React.useState(true);
+  const [isEditing, setIsEditing] = React.useState(false);
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'flow':
-        return '🗺️'; // Map icon for process flows
+        return '🌍';
       case 'skill':
-        return '⚔️'; // Sword icon for skills
+        return '⚔️';
       case 'target':
-        return '🎯'; // Bullseye icon for targets
+        return '🎯';
       default:
-        return '📄'; // Default document icon
+        return '📄';
     }
   };
 
-  // Expand/collapse icon
   const getExpandIcon = () => {
-    if (!hasChildren) return '  '; // Empty space for leaf nodes
-    return expanded ? '▼' : '▶';
+    if (node.children && node.children.length > 0) {
+      return isExpanded ? '▼' : '▶';
+    }
+    return '';
   };
-  
+
+  const handleEdit = () => {
+    if (node.type === 'flow') {
+      startEditingFlow(node.flowId || node.id, node.label);
+    }
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    if (node.type === 'flow') {
+      handleFlowRename(node.flowId || node.id, editingFlowName);
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+    }
+  };
+
+  const isSelected = selectedNode && selectedNode.id === node.id;
+
   return (
-    <div style={{ marginLeft: 8 }}>
+    <div className="select-none">
       <div 
-        style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          cursor: 'pointer',
-          padding: '4px 6px',
-          fontSize: '13px',
-          borderRadius: '4px',
-          transition: 'background-color 0.2s',
-          userSelect: 'none',
-          backgroundColor: selectedNode?.id === node.id ? '#e0f2fe' : 'transparent',
-          minHeight: '32px'
-        }} 
-        onClick={() => {
-          if (node.type === 'flow') {
-            hasChildren && setExpanded(!expanded);
-          } else {
-            onNodeClick(node);
-          }
-        }}
-        onDoubleClick={() => node.type === 'flow' && startEditingFlow(node.id, node.label)}
-        onMouseEnter={(e) => {
-          if (selectedNode?.id !== node.id) {
-            e.currentTarget.style.backgroundColor = '#f3f4f6';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (selectedNode?.id !== node.id) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
+        className={`flex items-center space-x-1 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 ${
+          isSelected ? 'bg-blue-100' : ''
+        }`}
+        style={{ paddingLeft: `${level * 16 + 8}px` }}
+        onClick={() => onNodeClick(node)}
       >
-        {/* Expand/collapse arrow */}
-        <span style={{ 
-          marginRight: 8, 
-          fontSize: '10px',
-          color: '#6b7280',
-          width: '12px',
-          textAlign: 'center'
-        }}>
+        {/* Expand/Collapse Icon */}
+        <span 
+          className="w-4 text-center cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (node.children && node.children.length > 0) {
+              setIsExpanded(!isExpanded);
+            }
+          }}
+        >
           {getExpandIcon()}
         </span>
-        
-        {/* Node type icon */}
-        <span style={{ marginRight: 8, fontSize: '16px' }}>
-          {getIcon(node.type)}
+
+        {/* Node Icon */}
+        <span className="text-sm">{getIcon(node.type)}</span>
+
+        {/* Node Label */}
+        <div className="flex-1 min-w-0">
+          {isEditing && node.type === 'flow' ? (
+            <input
+              type="text"
+              value={editingFlowName}
+              onChange={(e) => setEditingFlowName(e.target.value)}
+              onKeyDown={handleKeyPress}
+              onBlur={handleSave}
+              className="w-full px-1 py-0.5 text-sm border rounded"
+              autoFocus
+            />
+          ) : (
+            <span className="text-sm truncate">{node.label}</span>
+          )}
+        </div>
+
+        {/* Type Badge */}
+        <span className={`inline-block px-1.5 py-0.5 text-xs font-medium rounded-full ${
+          node.type === 'skill' ? 'bg-blue-100 text-blue-800' :
+          node.type === 'target' ? 'bg-gray-100 text-gray-800' :
+          'bg-yellow-100 text-yellow-800'
+        }`}>
+          {node.type.toUpperCase()}
         </span>
-        
-        {/* Node label or edit input */}
-        {isEditing ? (
-          <input
-            type="text"
-            value={editingFlowName}
-            onChange={(e) => setEditingFlowName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleFlowRename(node.id, editingFlowName);
-              } else if (e.key === 'Escape') {
-                handleFlowRename(node.id, node.label); // Cancel by reverting to original name
-              }
+
+        {/* Edit Button for Flows */}
+        {node.type === 'flow' && !isEditing && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit();
             }}
-            onBlur={() => handleFlowRename(node.id, editingFlowName)}
-            style={{
-              flex: 1,
-              border: '1px solid #3b82f6',
-              borderRadius: '4px',
-              padding: '2px 6px',
-              fontSize: '14px',
-              outline: 'none'
-            }}
-            autoFocus
-          />
-        ) : (
-          <span style={{ 
-            fontWeight: node.type === 'skill' ? '600' : '400',
-            color: node.type === 'skill' ? '#1f2937' : '#4b5563',
-            flex: 1
-          }}>
-            {node.label}
-          </span>
+            className="ml-2 text-gray-400 hover:text-gray-600"
+          >
+            ✏️
+          </button>
         )}
-        
-        {/* Type badge */}
-        <span style={{ 
-          color: '#6b7280', 
-          fontSize: '10px',
-          backgroundColor: node.type === 'skill' ? '#dbeafe' : node.type === 'flow' ? '#fef3c7' : '#f3f4f6',
-          padding: '2px 6px',
-          borderRadius: '10px',
-          textTransform: 'uppercase',
-          fontWeight: '500'
-        }}>
-          {node.type}
-        </span>
       </div>
-      
+
       {/* Children */}
-      {hasChildren && expanded && (
-        <div style={{ 
-          borderLeft: '1px solid #e5e7eb',
-          marginLeft: '6px',
-          paddingLeft: '8px'
-        }}>
-          {node.children!.map(child => (
-            <TreeNode 
-              key={child.id} 
-              node={child} 
+      {isExpanded && node.children && node.children.length > 0 && (
+        <div>
+          {node.children.map(child => (
+            <TreeNode
+              key={child.id}
+              node={child}
               level={level + 1}
               editingFlowId={editingFlowId}
               editingFlowName={editingFlowName}
@@ -184,18 +180,6 @@ function TreeNode({
   );
 }
 
-interface SkillsTreeViewProps {
-  skillTree: SkillNode[];
-  loading: boolean;
-  editingFlowId: string | null;
-  editingFlowName: string;
-  setEditingFlowName: (name: string) => void;
-  handleFlowRename: (flowId: string, newName: string) => void;
-  startEditingFlow: (flowId: string, currentName: string) => void;
-  onNodeClick: (node: any) => void;
-  selectedNode: any;
-}
-
 export default function SkillsTreeView({
   skillTree,
   loading,
@@ -208,8 +192,8 @@ export default function SkillsTreeView({
   selectedNode
 }: SkillsTreeViewProps) {
   return (
-    <Card className="p-4">
-      <h2 className="text-lg font-semibold mb-4">Process Flow Tree</h2>
+    <Card className="p-3 md:p-4">
+      <h2 className="text-base md:text-lg font-semibold mb-3 md:mb-4">Skills & Targets</h2>
       {loading ? (
         <div>Loading skills...</div>
       ) : skillTree.length === 0 ? (
