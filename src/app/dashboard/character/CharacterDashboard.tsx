@@ -5,6 +5,7 @@ import CharacterCard from './components/CharacterCard'
 import ProgressBars from './components/ProgressBars'
 import SkillsOverview from './components/SkillsOverview'
 import RecentActivity from './components/RecentActivity'
+import TodayTasksSection from './components/TodayTasksSection'
 
 export default function CharacterDashboard() {
   return (
@@ -23,6 +24,9 @@ export default function CharacterDashboard() {
 
       {/* Right Column */}
       <div className="space-y-6">
+        {/* Today's Tasks - NEW SECTION */}
+        <TodayTasksSection />
+
         {/* Skills Overview */}
         <Card className="p-6">
           <h2 className="text-2xl font-semibold mb-4">Skills</h2>

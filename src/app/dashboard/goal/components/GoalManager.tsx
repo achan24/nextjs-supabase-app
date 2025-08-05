@@ -28,6 +28,7 @@ import { NoteLinkButton } from '@/components/ui/note-link-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { ProcessFlowLinkButton } from '@/components/ui/process-flow-link-button';
+import StarButton from '@/components/StarButton';
 
 interface GoalManagerProps {
   selectedSubareaId: string | null;
@@ -53,6 +54,8 @@ interface Task {
   description?: string;
   status: string;
   due_date?: string;
+  is_starred_for_today?: boolean;
+  starred_at?: string | null;
   metric_contributions?: TaskContribution[];
 }
 
@@ -76,6 +79,8 @@ interface SupabaseTaskResponse {
   description: string | null;
   status: string;
   due_date: string | null;
+  is_starred_for_today: boolean | null;
+  starred_at: string | null;
   life_goal_task_contributions: Array<{
     id: string;
     metric_id: string;
@@ -210,6 +215,17 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
       }
     }
   }, [selectedSubareaId, areas]);
+
+  // Listen for task starring events and refresh data
+  useEffect(() => {
+    const handleTaskStarred = () => {
+      console.log('[GoalManager] Task starred event received, refreshing tasks...')
+      fetchTasks()
+    }
+
+    window.addEventListener('task-starred', handleTaskStarred)
+    return () => window.removeEventListener('task-starred', handleTaskStarred)
+  }, [])
 
   // Find the selected goal if any
   const selectedGoal = selectedGoalId ? 
@@ -490,6 +506,8 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
           description,
           status,
           due_date,
+          is_starred_for_today,
+          starred_at,
           life_goal_task_contributions!left (
             id,
             metric_id,
@@ -512,6 +530,8 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
         description: task.description || undefined,
         status: task.status,
         due_date: task.due_date || undefined,
+        is_starred_for_today: task.is_starred_for_today || false,
+        starred_at: task.starred_at || null,
         metric_contributions: task.life_goal_task_contributions?.map(contrib => ({
           id: contrib.id,
           metric_id: contrib.metric_id,
@@ -1221,6 +1241,12 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                             >
                               <CheckCircle2 className="w-4 h-4" />
                             </Button>
+                            <StarButton
+                              taskId={task.id}
+                              isStarred={task.is_starred_for_today || false}
+                              size="sm"
+                              className="h-4 w-4"
+                            />
                             <Button
                               variant="ghost"
                               size="icon"

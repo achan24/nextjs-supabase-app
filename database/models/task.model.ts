@@ -55,6 +55,15 @@ export const Task: TableDefinition = {
       notNull: true,
       defaultValue: 'false'
     },
+    is_starred_for_today: {
+      type: 'boolean',
+      notNull: true,
+      defaultValue: 'false'
+    },
+    starred_at: {
+      type: 'timestamptz',
+      notNull: false
+    },
     created_at: {
       type: 'timestamptz',
       notNull: true,

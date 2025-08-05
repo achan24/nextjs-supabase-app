@@ -465,4 +465,338 @@ The system now supports nuanced trait tracking, correct data flow, and extensibl
 
 ---
 
+---
+
+# NEW FEATURE: Today's Tasks Dashboard (2024-12-19)
+
+## 🎯 OVERVIEW
+Add a "Today's Tasks" section to the Character dashboard that allows users to star/flag tasks they want to focus on today. This feature will appear prominently on the Character dashboard, positioned above the Skills section to emphasize daily action and progress.
+
+## 📋 CORE REQUIREMENTS
+
+### 1. Task Starring/Flagging System
+**Primary Mechanism:** Star/flag tasks to add them to today's list
+**Purpose:** Simple, intuitive way to curate daily focus
+
+**Features:**
+- **Star Button:** Add a star/flag icon to task cards throughout the app
+- **Toggle Functionality:** Click to star/unstar tasks
+- **Visual Feedback:** Clear indication of starred status
+- **Persistent State:** Starred status persists across sessions
+- **Today's Filter:** Only show tasks starred for today
+
+### 2. Today's Tasks Display Component
+**Location:** Character Dashboard, positioned above Skills section
+**Purpose:** Show all starred tasks for today with completion tracking
+
+**Features:**
+- **Task List:** Display all starred tasks with:
+  - Task title and description
+  - Associated goal, subarea, and area hierarchy
+  - Checkbox for completion
+  - Points value for the task
+- **Visual Hierarchy:** Clear organization by area or priority
+- **Empty State:** Encouraging message when no tasks are starred for today
+- **Quick Actions:** Unstar task, view details, edit task
+
+### 3. Task Completion and Point Cascade
+**Purpose:** When a task is completed, trigger the point cascade system
+
+**Features:**
+- **Checkbox Completion:** Click checkbox to mark task complete
+- **Point Increment:** Add task points to the associated goal's daily_points
+- **Cascade Effect:** Trigger the existing point cascade system:
+  - Goal daily_points increase
+  - Subarea daily_points increase (sum of all goals)
+  - Area daily_points increase (sum of all subareas)
+  - Daily progress bars update
+  - Character XP and stats update based on traits
+- **Visual Feedback:** Immediate UI updates showing point increases
+- **Completion Animation:** Smooth transition when marking complete
+
+### 4. Integration with Existing Systems
+**Purpose:** Leverage existing goal and character systems
+
+**Features:**
+- **Goal Association:** Tasks must be associated with a goal to appear in today's list
+- **Point System:** Use existing task points and goal point structures
+- **Character Traits:** Apply existing trait tagging and XP systems
+- **Progress Bars:** Update existing daily progress visualization
+- **Database Consistency:** Maintain referential integrity with existing tables
+
+## 🗄️ DATABASE REQUIREMENTS
+
+### 1. Add Starred Field to Tasks Table
+```sql
+-- Add starred field to existing tasks table
+ALTER TABLE tasks ADD COLUMN is_starred_for_today BOOLEAN DEFAULT FALSE;
+ALTER TABLE tasks ADD COLUMN starred_at TIMESTAMPTZ;
+
+-- Add index for efficient querying of starred tasks
+CREATE INDEX idx_tasks_starred_today ON tasks(user_id, is_starred_for_today) 
+WHERE is_starred_for_today = TRUE;
+```
+
+### 2. Manual Point Cascade (Frontend)
+**Note:** Point cascade is handled manually on the Character progress screen, not through database functions or automatic triggers.
+
+**Current System:**
+- **Manual Point Entry:** Points are posted manually through the Character progress UI
+- **Frontend Calculation:** The Character dashboard handles point cascading
+- **No Automatic Triggers:** Database doesn't automatically cascade points
+
+**Task Completion Flow:**
+1. **Mark Task Complete:** Update task status to 'completed'
+2. **Unstar Task:** Remove star from completed task
+3. **Manual Point Entry:** User manually adds points through Character progress screen
+4. **Frontend Cascade:** Character dashboard handles the point cascade logic
+5. **Update Progress Bars:** UI reflects the manually entered points
+
+**Implementation:**
+```typescript
+// In taskCompletionService.ts
+async function completeTask(taskId: string, userId: string) {
+  // 1. Get task details
+  const task = await getTaskWithGoal(taskId, userId);
+  
+  // 2. Mark task as completed
+  await updateTaskStatus(taskId, 'completed');
+  
+  // 3. Unstar the task
+  await unstarTask(taskId);
+  
+  // 4. Show notification to user
+  // "Task completed! Add points manually on Character screen"
+  
+  // 5. Optionally navigate to Character screen
+  // router.push('/dashboard/character');
+}
+```
+
+**User Experience:**
+- Task completion is separate from point entry
+- User manually manages points through existing Character progress interface
+- Maintains current workflow where points are manually controlled
+
+### 3. RLS Policies (if needed)
+```sql
+-- Ensure users can only star/unstar their own tasks
+-- (existing task policies should cover this)
+```
+
+## 🎨 UI/UX REQUIREMENTS
+
+### 1. Star Button on Task Cards
+**Location:** Throughout the app wherever tasks are displayed
+**Design:** Star icon (⭐) that toggles between filled and outlined states
+**Behavior:** 
+- Click to star/unstar a task for today
+- Visual feedback with smooth transition
+- Starred tasks show filled star, unstarred show outlined star
+
+### 2. Today's Tasks Section Layout
+```
+┌─────────────────────────────────────┐
+│ Today's Tasks                       │
+│ [Show/Hide Completed] [Settings]    │
+├─────────────────────────────────────┤
+│ ☐ Complete project proposal         │
+│   📝 Work & Learning > Development  │
+│   🎯 Goal: Ship MVP • 2 pts         │
+│                                     │
+│ ☐ Morning workout                   │
+│   💪 Health & Fitness > Exercise    │
+│   🎯 Goal: Build Strength • 1 pt    │
+│                                     │
+│ ☑ Daily meditation                  │
+│   ✅ Completed at 8:30 AM           │
+│   🧘 Mind & Spirit > Wellness       │
+│   🎯 Goal: Inner Peace • 1 pt       │
+└─────────────────────────────────────┘
+```
+
+### 3. Task Completion Flow
+**Checkbox Behavior:**
+- Click checkbox to mark task complete
+- Immediate visual feedback (checkmark appears)
+- Points cascade animation shows in progress bars
+- Task moves to completed section or disappears
+- Star is automatically removed
+
+### 4. Visual Design Elements
+- **Star Icon:** Clear, accessible star button on all task cards
+- **Hierarchy Display:** Show task > goal > subarea > area clearly
+- **Points Display:** Show point value prominently
+- **Completion Animation:** Smooth checkbox transition and point cascade
+- **Empty State:** Encouraging message when no tasks are starred
+
+## 🔄 USER FLOWS
+
+### 1. Starring Tasks Flow
+1. User browses tasks throughout the app (goals, projects, etc.)
+2. Sees star icon (⭐) on each task card
+3. Clicks star to add task to today's list
+4. Star fills in and task appears in Today's Tasks section
+5. Can unstar at any time to remove from today's list
+
+### 2. Task Completion Flow
+1. User opens Character dashboard
+2. Sees starred tasks in Today's Tasks section
+3. Clicks checkbox on a task to mark complete
+4. System immediately:
+   - Marks task as completed
+   - Removes star from task
+   - Shows notification: "Task completed! Add points manually on Character screen"
+5. User manually adds points through existing Character progress interface
+6. Character dashboard handles point cascade as usual
+
+### 3. Daily Reset Flow
+1. At midnight, all starred tasks are automatically unstarred
+2. User starts fresh each day with new starred tasks
+3. Previous day's completed tasks remain in history
+4. Progress bars reset for new day
+
+## 🔧 TECHNICAL IMPLEMENTATION
+
+### 1. Frontend Components
+- `TodayTasksSection.tsx` - Main container component for Today's Tasks
+- `StarButton.tsx` - Reusable star button component for task cards
+- `TodayTaskCard.tsx` - Individual task display with completion checkbox
+- `TaskStarService.ts` - Service for starring/unstarring tasks
+
+### 2. Backend Services
+- `taskStarService.ts` - Handle starring/unstarring operations
+- `taskCompletionService.ts` - Handle task completion and point cascade
+- `todayTasksService.ts` - Fetch starred tasks for today
+
+### 3. Database Functions
+```sql
+-- Get starred tasks for today
+CREATE OR REPLACE FUNCTION get_starred_tasks_for_today(user_uuid UUID)
+RETURNS TABLE (
+  task_id UUID,
+  title TEXT,
+  description TEXT,
+  points NUMERIC,
+  goal_title TEXT,
+  subarea_title TEXT,
+  area_title TEXT,
+  area_icon TEXT,
+  starred_at TIMESTAMPTZ
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    t.id as task_id,
+    t.title,
+    t.description,
+    t.points,
+    lg.title as goal_title,
+    lgs.title as subarea_title,
+    lga.title as area_title,
+    lga.icon as area_icon,
+    t.starred_at
+  FROM tasks t
+  JOIN life_goals lg ON t.goal_id = lg.id
+  JOIN life_goal_subareas lgs ON lg.subarea_id = lgs.id
+  JOIN life_goal_areas lga ON lgs.area_id = lga.id
+  WHERE t.user_id = user_uuid
+  AND t.is_starred_for_today = TRUE
+  AND DATE(t.starred_at) = CURRENT_DATE
+  ORDER BY t.starred_at ASC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to star/unstar a task
+CREATE OR REPLACE FUNCTION toggle_task_star(
+  task_uuid UUID,
+  user_uuid UUID,
+  star_it BOOLEAN
+) RETURNS BOOLEAN AS $$
+BEGIN
+  UPDATE tasks 
+  SET is_starred_for_today = star_it,
+      starred_at = CASE WHEN star_it THEN NOW() ELSE NULL END,
+      updated_at = NOW()
+  WHERE id = task_uuid AND user_id = user_uuid;
+  
+  RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;
+
+
+```
+
+### 4. API Endpoints
+```typescript
+// Star/unstar a task
+POST /api/tasks/[id]/star
+DELETE /api/tasks/[id]/star
+
+// Complete a task (triggers point cascade)
+POST /api/tasks/[id]/complete
+
+// Get today's starred tasks
+GET /api/today-tasks
+```
+
+## 📊 ANALYTICS & INSIGHTS
+
+### 1. Daily Completion Metrics
+- Tasks completed vs. planned
+- Time spent on different areas
+- Completion rate by task type
+- Streak tracking for daily planning
+
+### 2. Pattern Recognition
+- Most productive task types
+- Optimal task ordering
+- Time-of-day effectiveness
+- Goal area balance
+
+### 3. Smart Suggestions
+- Suggest tasks based on goal gaps
+- Recommend sequences based on time available
+- Propose task combinations that work well together
+
+## 🔮 FUTURE ENHANCEMENTS
+
+### Phase 2 Features
+- **Time Blocking:** Assign time slots to tasks
+- **Energy Level Tracking:** Match tasks to energy levels
+- **Context Switching:** Minimize context switches between tasks
+- **Focus Mode:** Hide other dashboard sections during focused work
+
+### Phase 3 Features
+- **AI Task Suggestions:** ML-powered task recommendations
+- **Social Sharing:** Share daily plans with accountability partners
+- **Integration:** Connect with calendar, email, and other productivity tools
+- **Gamification:** Daily challenges and achievement badges
+
+## 🎯 SUCCESS METRICS
+
+### Primary KPIs
+- **Daily Task Completion Rate:** % of planned tasks completed
+- **User Engagement:** Daily active users of Today's Tasks
+- **Goal Progress:** Correlation between daily task completion and goal achievement
+- **Character Progression:** XP and stat gains from daily task completion
+
+### Secondary KPIs
+- **Planning Frequency:** How often users plan their day
+- **Task Carryover Rate:** % of tasks carried to next day
+- **Area Balance:** Distribution of tasks across life areas
+- **User Satisfaction:** Feedback on task planning experience
+
+---
+
+**Implementation Priority:**
+1. **Database Migration:** Add starred fields to tasks table
+2. **Star Button Component:** Create reusable star button for task cards
+3. **Today's Tasks Section:** Display starred tasks on Character dashboard
+4. **Task Completion:** Implement checkbox completion with point cascade
+5. **Integration:** Connect with existing character and progress systems
+6. **Polish:** Animations, empty states, and user experience refinements
+
+This feature will transform the Character dashboard from a passive progress tracker into an active daily planning and execution tool, reinforcing the connection between daily actions and long-term character development.
+
 

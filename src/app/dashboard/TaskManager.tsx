@@ -29,7 +29,9 @@ interface Task {
   tags?: Tag[];
   time_spent?: number; // in seconds
   last_started_at?: string | null;
-  is_starred?: boolean;
+  is_starred?: boolean; // Legacy field
+  is_starred_for_today?: boolean; // New field for today's tasks
+  starred_at?: string | null;
   project?: {
     id: string;
     title: string;
@@ -160,6 +162,17 @@ export default function TaskManager({ user }: { user: User }) {
     fetchTags()
     fetchProjects()
     fetchLifeGoals()
+  }, [])
+
+  // Listen for task starring events and refresh data
+  useEffect(() => {
+    const handleTaskStarred = () => {
+      console.log('[TaskManager] Task starred event received, refreshing tasks...')
+      fetchTasks()
+    }
+
+    window.addEventListener('task-starred', handleTaskStarred)
+    return () => window.removeEventListener('task-starred', handleTaskStarred)
   }, [])
 
   const fetchProjects = async () => {
@@ -697,23 +710,31 @@ export default function TaskManager({ user }: { user: User }) {
       const taskToUpdate = tasks.find(t => t.id === taskId);
       if (!taskToUpdate) return;
 
-      const newStarredStatus = !taskToUpdate.is_starred;
+      const newStarredStatus = !taskToUpdate.is_starred_for_today;
 
-      const { error } = await supabase
-        .from('tasks')
-        .update({ is_starred: newStarredStatus })
-        .eq('id', taskId);
+      // Use the new database function for starring
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('User not authenticated');
+        return;
+      }
+
+      const { error } = await supabase.rpc('toggle_task_star', {
+        task_uuid: taskId,
+        user_uuid: user.id,
+        star_it: newStarredStatus
+      });
 
       if (error) throw error;
 
       // Update local state
       setTasks(tasks.map(task => 
         task.id === taskId 
-          ? { ...task, is_starred: newStarredStatus }
+          ? { ...task, is_starred_for_today: newStarredStatus }
           : task
       ));
 
-      toast.success(newStarredStatus ? 'Task starred' : 'Task unstarred');
+      toast.success(newStarredStatus ? 'Task added to today\'s list' : 'Task removed from today\'s list');
     } catch (error) {
       console.error('Error toggling star status:', error);
       toast.error('Failed to update star status');
@@ -903,13 +924,13 @@ export default function TaskManager({ user }: { user: User }) {
                     <button
                       onClick={() => handleToggleStarred(task.id)}
                       className={`text-xl focus:outline-none ${
-                        task.is_starred 
+                        task.is_starred_for_today 
                           ? 'text-yellow-400 hover:text-yellow-500' 
                           : 'text-gray-400 hover:text-gray-500'
                       }`}
-                      title={task.is_starred ? 'Unstar task' : 'Star task'}
+                      title={task.is_starred_for_today ? 'Remove from today\'s list' : 'Add to today\'s list'}
                     >
-                      {task.is_starred ? '★' : '☆'}
+                      {task.is_starred_for_today ? '★' : '☆'}
                     </button>
                     <button
                       onClick={() => handleEditClick(task)}

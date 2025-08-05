@@ -27,7 +27,7 @@ interface GoalFlowLinkResponse {
 }
 
 export function useGoalSystem() {
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const [areas, setAreas] = useState<LifeGoalArea[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -229,10 +229,6 @@ export function useGoalSystem() {
       setLoading(false);
     }
   }, [supabase]);
-
-  useEffect(() => {
-    fetchAreas();
-  }, [fetchAreas]);
 
   const addArea = useCallback(async (name: string, description?: string) => {
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();

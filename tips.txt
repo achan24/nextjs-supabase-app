@@ -937,3 +937,246 @@ Character XP and levels are calculated **on-the-fly** from goal points history, 
 
 ### Remember
 Character levels are calculated from goal points history, not stored in a separate table. If character levels seem wrong, check the history tables for duplicate entries or incorrect data.
+
+# LOCAL BUILD TESTING - ALWAYS TEST BEFORE PUSHING
+
+## The Problem: Deployment Failures After Push
+
+### Root Cause
+Pushing code directly to GitHub without local testing leads to:
+1. TypeScript compilation errors discovered only during Vercel build
+2. SSR (Server-Side Rendering) errors from browser-only APIs
+3. Build failures that block deployment for hours/days
+4. Frustrating back-and-forth debugging cycles
+
+### Solution: Always Run Local Build First
+
+**Before pushing to GitHub:**
+```bash
+# Always run this before pushing
+npm run build
+```
+
+**What Local Build Catches:**
+1. **TypeScript errors** - Compilation issues, missing types, interface mismatches
+2. **SSR errors** - `window is not defined`, `localStorage is not defined`
+3. **Import errors** - Missing modules, incorrect paths
+4. **Build optimization issues** - Bundle size problems, dependency conflicts
+
+### Real Example: 2-Day Deployment Block
+**Problem**: Vercel deployment failing for 2 days due to SSR errors
+**Root Cause**: `window` and `localStorage` access during static generation
+**Solution**: Added SSR safety checks in:
+- `useYouTube.tsx` - Check `typeof window !== 'undefined'`
+- `fileCache.ts` - Check `typeof localStorage !== 'undefined'`
+- `remarkYoutubeEmbed.ts` - Check `typeof window !== 'undefined'`
+
+**Result**: Local build caught all issues, fixed them, deployment succeeded immediately
+
+### Prevention Strategy
+
+1. **Always Test Locally First**
+   ```bash
+   # Run before every push
+   npm run build
+   
+   # If build fails, fix locally before pushing
+   # Only push when build succeeds with exit code 0
+   ```
+
+2. **Common SSR Issues to Check**
+   - Browser APIs: `window`, `document`, `localStorage`, `sessionStorage`
+   - DOM manipulation: `document.createElement`, `document.head`
+   - Browser events: `addEventListener`, `removeEventListener`
+   - Third-party libraries that access browser APIs
+
+3. **SSR Safety Pattern**
+   ```typescript
+   // ✅ CORRECT - Check for browser environment
+   if (typeof window !== 'undefined') {
+     // Browser-only code here
+   }
+   
+   // ✅ CORRECT - Check for localStorage
+   if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+     localStorage.setItem('key', 'value');
+   }
+   
+   // ❌ WRONG - Direct access without checks
+   window.location.reload();
+   localStorage.setItem('key', 'value');
+   ```
+
+### Benefits of Local Testing
+
+1. **Faster Feedback** - Catch errors in seconds, not hours
+2. **Immediate Fixes** - Debug and resolve issues locally
+3. **Confident Deployments** - Know code will deploy successfully
+4. **Reduced Frustration** - No more 2-day deployment blocks
+5. **Better Development Flow** - Fix → Test → Push → Deploy
+
+### Remember
+- **Always run `npm run build` before pushing**
+- **Fix all errors locally first**
+- **Only push when build succeeds**
+- **SSR safety checks prevent most deployment issues**
+- **Local testing saves hours of deployment debugging**
+
+This simple habit will make the entire deployment process much smoother and less painful.
+
+# INFINITE LOOP PREVENTION - MEMOIZE SUPABASE CLIENT
+
+## The Problem: Infinite API Calls and Database Timeouts
+
+### Root Cause
+When using Supabase client in React hooks, creating a new client instance on every render causes infinite loops:
+
+1. **Client recreation**: `const supabase = createClient()` creates new instance each render
+2. **useCallback dependency**: `fetchAreas` depends on `supabase` instance
+3. **useEffect trigger**: `useEffect` depends on `fetchAreas` function
+4. **Infinite loop**: New client → new function → useEffect runs → new client → repeat
+
+### Real Example: Goal System Performance Issue
+**Problem**: 
+- Repeated 500 errors: "canceling statement due to statement timeout"
+- Console flooded with "Fetching areas..." logs
+- Database overwhelmed with identical requests
+- UI becomes unresponsive
+
+**Root Cause**: Infinite loop in `useGoalSystem` hook
+```typescript
+// ❌ PROBLEMATIC - Creates new client every render
+export function useGoalSystem() {
+  const supabase = createClient(); // New instance each render
+  const fetchAreas = useCallback(async () => {
+    // ... fetch logic
+  }, [supabase]); // Depends on changing client instance
+  
+  useEffect(() => {
+    fetchAreas(); // Runs on every render due to changing dependency
+  }, [fetchAreas]); // fetchAreas changes every render
+}
+```
+
+**Solution**: Memoize the Supabase client
+```typescript
+// ✅ CORRECT - Memoized client instance
+export function useGoalSystem() {
+  const [supabase] = useState(() => createClient()); // Stable instance
+  const fetchAreas = useCallback(async () => {
+    // ... fetch logic
+  }, [supabase]); // Now depends on stable instance
+  
+  // Remove problematic useEffect that caused infinite loop
+  // Only call fetchAreas when auth state changes
+}
+```
+
+### Prevention Strategies
+
+1. **Always Memoize Supabase Client**
+   ```typescript
+   // ✅ CORRECT - Use useState to memoize
+   const [supabase] = useState(() => createClient());
+   
+   // ❌ WRONG - Creates new instance each render
+   const supabase = createClient();
+   ```
+
+2. **Avoid Unnecessary useEffect Dependencies**
+   ```typescript
+   // ✅ CORRECT - Only depend on stable references
+   useEffect(() => {
+     // Only run when auth state changes
+   }, [supabase]); // Stable client instance
+   
+   // ❌ WRONG - Depends on function that changes every render
+   useEffect(() => {
+     fetchAreas();
+   }, [fetchAreas]); // fetchAreas changes every render
+   ```
+
+3. **Use useCallback Wisely**
+   ```typescript
+   // ✅ CORRECT - Stable dependencies
+   const fetchAreas = useCallback(async () => {
+     // ... fetch logic
+   }, [supabase]); // Only stable client instance
+   
+   // ❌ WRONG - Unstable dependencies
+   const fetchAreas = useCallback(async () => {
+     // ... fetch logic
+   }, [supabase, someState]); // someState changes cause function recreation
+   ```
+
+### Common Patterns That Cause Loops
+
+1. **Client Recreation**
+   ```typescript
+   // ❌ PROBLEMATIC
+   const supabase = createClient(); // New instance each render
+   ```
+
+2. **Function Recreation**
+   ```typescript
+   // ❌ PROBLEMATIC
+   const fetchData = useCallback(() => {
+     // ...
+   }, [supabase, otherState]); // otherState changes cause recreation
+   ```
+
+3. **useEffect with Changing Dependencies**
+   ```typescript
+   // ❌ PROBLEMATIC
+   useEffect(() => {
+     fetchData();
+   }, [fetchData]); // fetchData changes every render
+   ```
+
+### Debugging Infinite Loops
+
+1. **Check Console Logs**
+   - Look for repeated function calls
+   - Check for "Fetching..." or similar logs
+   - Monitor for database timeout errors
+
+2. **Check useCallback Dependencies**
+   - Ensure dependencies are stable
+   - Remove unnecessary dependencies
+   - Use primitive values when possible
+
+3. **Check useEffect Dependencies**
+   - Avoid depending on functions that change
+   - Only depend on stable references
+   - Consider using useRef for mutable values
+
+### Best Practices
+
+1. **Memoize External Clients**
+   ```typescript
+   const [supabase] = useState(() => createClient());
+   const [apiClient] = useState(() => new ApiClient());
+   ```
+
+2. **Stable Function References**
+   ```typescript
+   const fetchData = useCallback(async () => {
+     // ... logic
+   }, [stableDependency]); // Only stable dependencies
+   ```
+
+3. **Minimal useEffect Dependencies**
+   ```typescript
+   useEffect(() => {
+     // Only run when necessary
+   }, [stableDependency]); // Avoid function dependencies
+   ```
+
+### Remember
+- **Always memoize Supabase client** with `useState(() => createClient())`
+- **Avoid depending on functions** in useEffect dependencies
+- **Use stable references** for useCallback dependencies
+- **Monitor console logs** for repeated function calls
+- **Fix infinite loops immediately** - they can overwhelm the database
+
+This pattern prevents the most common cause of performance issues and database timeouts in React applications using Supabase.
