@@ -222,7 +222,8 @@ class FileCache {
 
   getStats(): { fileCount: number; totalSize: number; maxSize: number } {
     let totalSize = 0;
-    for (const file of this.cache.values()) {
+    const files = Array.from(this.cache.values());
+    for (const file of files) {
       totalSize += file.size;
     }
     
