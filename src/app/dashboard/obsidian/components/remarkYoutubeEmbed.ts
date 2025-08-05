@@ -40,11 +40,12 @@ export const remarkYoutubeEmbed: Plugin = () => (tree) => {
     const aspectRatio = isShorts ? "aspect-[9/16]" : "aspect-video";
 
     // Replace the <link> node with an HTML (iframe) node
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const iframeNode: HTML = {
       type: 'html',
       value: `<div class="video-container my-4" style="max-width: ${width}px;">
         <iframe
-          src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&playsinline=1&modestbranding=1&rel=0&showinfo=0"
+          src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${encodeURIComponent(origin)}&playsinline=1&modestbranding=1&rel=0&showinfo=0"
           width="${width}"
           height="${height}"
           frameborder="0"

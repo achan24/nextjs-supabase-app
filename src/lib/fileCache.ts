@@ -33,6 +33,11 @@ class FileCache {
   }
 
   private loadFromStorage(): void {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return;
+    }
+    
     try {
       const stored = localStorage.getItem(this.storageKey);
       if (stored) {
@@ -47,6 +52,11 @@ class FileCache {
   }
 
   private saveToStorage(): void {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return;
+    }
+    
     try {
       const data = Array.from(this.cache.entries());
       localStorage.setItem(this.storageKey, JSON.stringify(data));
@@ -217,7 +227,10 @@ class FileCache {
 
   clear(): void {
     this.cache.clear();
-    localStorage.removeItem(this.storageKey);
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem(this.storageKey);
+    }
   }
 
   getStats(): { fileCount: number; totalSize: number; maxSize: number } {
