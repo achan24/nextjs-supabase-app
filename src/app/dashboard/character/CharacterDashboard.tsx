@@ -6,6 +6,7 @@ import ProgressBars from './components/ProgressBars'
 import SkillsOverview from './components/SkillsOverview'
 import RecentActivity from './components/RecentActivity'
 import TodayTasksSection from './components/TodayTasksSection'
+import ProblemWidget from './components/ProblemWidget'
 
 export default function CharacterDashboard() {
   return (
@@ -33,11 +34,14 @@ export default function CharacterDashboard() {
           <SkillsOverview />
         </Card>
 
-        {/* Recent Activity Feed */}
-        <Card className="p-6">
-          <h2 className="text-2xl font-semibold mb-4">Recent Activity</h2>
-          <RecentActivity />
-        </Card>
+                             {/* Problem Widget - NEW SECTION */}
+                     <ProblemWidget />
+
+                     {/* Recent Activity Feed */}
+                     <Card className="p-6">
+                       <h2 className="text-2xl font-semibold mb-4">Recent Activity</h2>
+                       <RecentActivity />
+                     </Card>
       </div>
     </div>
   )

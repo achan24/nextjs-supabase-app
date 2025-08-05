@@ -799,4 +799,81 @@ GET /api/today-tasks
 
 This feature will transform the Character dashboard from a passive progress tracker into an active daily planning and execution tool, reinforcing the connection between daily actions and long-term character development.
 
+---
+
+# NEW FEATURE: Problem → Tree Widget (2024-12-19)
+
+### How to shrink the "Problem → Tree" idea into a **small card inside the Character (Control-Centre) view**
+
+Think of the card as a **dashboard widget**—a quick-glance status tile that routes the user to the full List/Tree page when they need depth.
+
+---
+
+#### 1. What the card should (and shouldn't) do
+
+| KEEP                                                                                                                                                                                                                                                              | DROP (or link out)                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| • Show the **current focus problem** (or the one with most open items).<br>• Display a **red/green status dot** that reflects whether *any* descendant is still open.<br>• Tiny "N open / M total" counter.<br>• "Add sub-problem / experiment" quick-action (+). | • Full tree rendering—that belongs in its own page or modal.<br>• Deep filtering / searching.<br>• Drag-and-drop re-parenting.<br>• Analytics dashboards. |
+
+---
+
+#### 2. Recommended card layout (≈ 240 × 180 px)
+
+```
+┌─────────────────────────────┐
+│  🩺  Sleep Issues           │  ← title (truncated after 1 line)
+│  • 2 open / 7 total         │
+│                             │
+│  ┌─Progress bar──────────┐  │
+│  │■■■■□□□               │  │  ← solved vs. open
+│  └───────────────────────┘  │
+│                             │
+│  ↓ Open tree   ＋ Add       │  ← two tiny buttons
+└─────────────────────────────┘
+```
+
+*The colour of the title icon or left border flips red if any descendant is open.*
+
+---
+
+#### 3. Interaction flow
+
+1. **Tap title / progress bar** → deep-link to `/problems/:id` full Tree page (or open a right-side drawer on desktop).
+2. **Tap "＋ Add"** → modal with two radio buttons: *sub-problem* / *experiment*, single-field quick capture.
+3. **Card auto-rotates** every X seconds (optional) through top-level problems, so the user sees what else is pending without leaving Character view.
+
+---
+
+#### 4. Data & API needs (only the *minimum* slice)
+
+| Endpoint                            | Payload                                                  |                         |
+| ----------------------------------- | -------------------------------------------------------- | ----------------------- |
+| `GET /character/:id/problem-widget` | `{ problemId, title, openCount, totalCount, isBlocked }` |                         |
+| `POST /problems/:id/quick-child`    | \`{ type: "problem"                                      | "experiment", title }\` |
+
+The widget query can be a view that picks **either**:
+
+* the most recently edited top-level problem, **or**
+* the one with the highest `openCount`.
+
+---
+
+#### 5. Placement inside Character view
+
+* Put it in the **"Today" / Control-Centre column** where you already show mood, tasks, and vitals.
+* Keep it visually consistent (same card component, same border radius).
+* Because the Character view is already a hub, the card acts as the "You have fires to put out" reminder without yanking the user into a separate flow.
+
+---
+
+#### 6. Why this works
+
+* **At-a-glance clarity**—one coloured dot + fraction is enough to trigger user action.
+* **Progressive disclosure**—deep work happens only after the user explicitly chooses to dive in.
+* **Zero cognitive overload**—the card is just another metric in the dashboard, not a parallel app jammed into a tiny space.
+
+---
+
+Let me know if you want a quick Figma mock-up or the React snippet for the card component.
+
 
