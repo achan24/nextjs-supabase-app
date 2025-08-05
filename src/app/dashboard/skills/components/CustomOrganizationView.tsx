@@ -113,7 +113,11 @@ export default function CustomOrganizationView({
         });
         
         // Auto-expand the target folder when it receives children
-        setExpandedNodes(prev => new Set([...prev, targetNode.id]));
+        setExpandedNodes(prev => {
+          const newSet = new Set(prev);
+          newSet.add(targetNode.id);
+          return newSet;
+        });
         } else {
           // Drop skill into folder
           console.log('[CustomOrganizationView] Dropping skill into folder:', targetNode.label);
@@ -136,7 +140,11 @@ export default function CustomOrganizationView({
           setCustomTree(prev => prev.filter(node => node.id !== draggedSkill.id));
           
           // Auto-expand the target folder when it receives children
-          setExpandedNodes(prev => new Set([...prev, targetNode.id]));
+          setExpandedNodes(prev => {
+            const newSet = new Set(prev);
+            newSet.add(targetNode.id);
+            return newSet;
+          });
         }
       } else if (targetNode.type === 'skill') {
         // Drop skill onto another skill (make it a child)
@@ -190,7 +198,11 @@ export default function CustomOrganizationView({
     
     setFolders(prev => [...prev, newFolder]);
     // Auto-expand new folders
-    setExpandedNodes(prev => new Set([...prev, newFolder.id]));
+    setExpandedNodes(prev => {
+      const newSet = new Set(prev);
+      newSet.add(newFolder.id);
+      return newSet;
+    });
     setNewFolderName('');
   };
 
