@@ -22,6 +22,11 @@ const YouTubeCtx = createContext<Ctx>({
 
 let apiPromise: Promise<void> | null = null;
 function loadAPI() {
+  // Check if we're in a browser environment
+  if (typeof window === 'undefined') {
+    return Promise.resolve();
+  }
+  
   if (window.YT?.Player) return Promise.resolve();
   if (apiPromise) return apiPromise;
   apiPromise = new Promise<void>((resolve) => {
@@ -37,6 +42,11 @@ export function YouTubeProvider({ children }: { children: React.ReactNode }) {
   const activeRef = useRef<YT.Player | null>(null);
 
   const register = useCallback((iframeId: string) => {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
     loadAPI().then(() => {
       // Bind a YT.Player to the existing iframe
       const player = new window.YT.Player(iframeId, {
