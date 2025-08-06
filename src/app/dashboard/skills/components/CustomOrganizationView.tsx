@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,8 +12,13 @@ import {
   GripVertical, 
   Plus,
   Trash2,
-  Edit3
+  Edit3,
+  Save,
+  Loader2
 } from 'lucide-react';
+import { skillOrganizationService } from '@/services/skillOrganizationService';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 interface SkillNode {
   id: string;
@@ -42,11 +47,23 @@ export default function CustomOrganizationView({
   onNodeClick,
   selectedNode
 }: CustomOrganizationViewProps) {
+  const { user } = useAuth();
   const [customTree, setCustomTree] = useState<SkillNode[]>([]);
   const [draggedSkill, setDraggedSkill] = useState<SkillNode | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [newFolderName, setNewFolderName] = useState('');
   const [folders, setFolders] = useState<SkillNode[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [pendingSave, setPendingSave] = useState(false);
+
+  // Load saved custom organization on component mount
+  useEffect(() => {
+    if (user?.id) {
+      loadSavedOrganization();
+    }
+  }, [user?.id]);
 
   // Initialize custom tree with skills from the original tree
   React.useEffect(() => {
@@ -73,6 +90,109 @@ export default function CustomOrganizationView({
     const skills = extractSkills(skillTree);
     setCustomTree(skills);
   }, [skillTree]);
+
+  // Auto-save when organization changes
+  React.useEffect(() => {
+    if (autoSaveEnabled && user?.id && (folders.length > 0 || customTree.length > 0)) {
+      const timeoutId = setTimeout(() => {
+        saveOrganization();
+      }, 2000); // Debounce for 2 seconds
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [folders, customTree, autoSaveEnabled, user?.id]);
+
+  // Handle pending saves
+  React.useEffect(() => {
+    if (pendingSave && user?.id && autoSaveEnabled) {
+      console.log('[CustomOrganizationView] Processing pending save');
+      setPendingSave(false);
+      saveOrganization();
+    }
+  }, [pendingSave, user?.id, autoSaveEnabled]);
+
+  // Function to save organization with current state
+  const saveOrganizationWithState = async (currentFolders: SkillNode[], currentCustomTree: SkillNode[]) => {
+    if (!user?.id) return;
+    
+    setIsSaving(true);
+    try {
+      console.log('[CustomOrganizationView] Saving organization with state:', {
+        folders: currentFolders.length,
+        customTree: currentCustomTree.length,
+        folderDetails: currentFolders.map(f => ({ name: f.label, children: f.children?.length || 0 }))
+      });
+      
+      await skillOrganizationService.saveCustomOrganization(user.id, currentFolders, currentCustomTree);
+      toast.success('Custom organization saved successfully!');
+    } catch (error) {
+      console.error('[CustomOrganizationView] Error saving organization:', error);
+      toast.error('Failed to save custom organization');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const loadSavedOrganization = async () => {
+    if (!user?.id) return;
+    
+    setIsLoading(true);
+    try {
+      const savedData = await skillOrganizationService.loadCustomOrganization(user.id);
+      
+      if (savedData.length > 0) {
+        // Convert saved data to SkillNode format
+        const savedNodes = skillOrganizationService.convertToSkillNodes(savedData);
+        
+        // Separate folders and skills
+        const savedFolders = savedNodes.filter(node => node.type === 'folder');
+        const savedSkills = savedNodes.filter(node => node.type === 'skill');
+        
+        setFolders(savedFolders);
+        setCustomTree(savedSkills);
+        
+        // Set expanded state
+        const expandedSet = new Set<string>();
+        savedData.forEach(item => {
+          if (item.is_expanded) {
+            expandedSet.add(item.id);
+          }
+        });
+        setExpandedNodes(expandedSet);
+        
+        toast.success('Custom organization loaded successfully!');
+      }
+    } catch (error) {
+      console.error('[CustomOrganizationView] Error loading saved organization:', error);
+      toast.error('Failed to load saved organization');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveOrganization = async () => {
+    if (!user?.id) return;
+    
+    setIsSaving(true);
+    try {
+      // Use the current state values to ensure we save the latest changes
+      const currentFolders = folders;
+      const currentCustomTree = customTree;
+      
+      console.log('[CustomOrganizationView] Saving organization:', {
+        folders: currentFolders.length,
+        customTree: currentCustomTree.length
+      });
+      
+      await skillOrganizationService.saveCustomOrganization(user.id, currentFolders, currentCustomTree);
+      toast.success('Custom organization saved successfully!');
+    } catch (error) {
+      console.error('[CustomOrganizationView] Error saving organization:', error);
+      toast.error('Failed to save custom organization');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleDragStart = (e: React.DragEvent, skill: SkillNode) => {
     setDraggedSkill(skill);
@@ -138,7 +258,11 @@ export default function CustomOrganizationView({
           });
           
           // Remove skill from custom tree
-          setCustomTree(prev => prev.filter(node => node.id !== draggedSkill.id));
+          setCustomTree(prev => {
+            const filtered = prev.filter(node => node.id !== draggedSkill.id);
+            console.log('[CustomOrganizationView] Removed skill from custom tree, remaining:', filtered.length);
+            return filtered;
+          });
           
           // Auto-expand the target folder when it receives children
           setExpandedNodes(prev => {
@@ -171,6 +295,8 @@ export default function CustomOrganizationView({
         });
       }
       
+      // Trigger pending save after drop operation
+      setPendingSave(true);
       setDraggedSkill(null);
     }
   };
@@ -321,9 +447,9 @@ export default function CustomOrganizationView({
 
     return (
     <div className="space-y-4">
-      {/* Create Folder */}
+      {/* Create Folder and Save */}
       <Card className="p-4">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 mb-4">
           <Input
             placeholder="Enter folder name..."
             value={newFolderName}
@@ -335,6 +461,54 @@ export default function CustomOrganizationView({
             <Plus className="w-4 h-4 mr-1" />
             Create Folder
           </Button>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Button 
+              onClick={loadSavedOrganization} 
+              variant="outline" 
+              size="sm"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <Folder className="w-4 h-4 mr-1" />
+              )}
+              Load Saved
+            </Button>
+            
+            <Button 
+              onClick={() => setAutoSaveEnabled(!autoSaveEnabled)} 
+              variant={autoSaveEnabled ? "default" : "outline"}
+              size="sm"
+            >
+              {autoSaveEnabled ? "Auto-save ON" : "Auto-save OFF"}
+            </Button>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {isSaving && (
+              <span className="text-xs text-gray-500 flex items-center">
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                Saving...
+              </span>
+            )}
+            
+            <Button 
+              onClick={saveOrganization} 
+              size="sm"
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-1" />
+              )}
+              Save Now
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -352,10 +526,18 @@ export default function CustomOrganizationView({
           </div>
           
           {/* Render folders first */}
-          {folders.map(folder => renderTreeNode(folder))}
+          {folders.map(folder => (
+            <div key={folder.id}>
+              {renderTreeNode(folder)}
+            </div>
+          ))}
           
           {/* Render skills */}
-          {customTree.map(skill => renderTreeNode(skill))}
+          {customTree.map(skill => (
+            <div key={skill.id}>
+              {renderTreeNode(skill)}
+            </div>
+          ))}
         </div>
         
         {folders.length === 0 && customTree.length === 0 && (

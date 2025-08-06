@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Badge } from '@/components/ui/badge'
 import { Plus, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
+import GoalSelector from '@/components/GoalSelector'
 // Define the type locally to avoid import issues
 type ProblemWidgetType = {
   problemId: string
@@ -60,6 +61,7 @@ export default function ProblemWidget() {
   } | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskDescription, setNewTaskDescription] = useState('')
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [showTaskEditDialog, setShowTaskEditDialog] = useState(false)
   const [editingTask, setEditingTask] = useState<{
@@ -67,6 +69,7 @@ export default function ProblemWidget() {
     title: string
     description: string
     status: 'pending' | 'in_progress' | 'completed'
+    goal_id?: string | null
   } | null>(null)
   const [isUpdatingTask, setIsUpdatingTask] = useState(false)
   const [showAddSubProblem, setShowAddSubProblem] = useState(false)
@@ -377,7 +380,7 @@ export default function ProblemWidget() {
         throw new Error('Authentication error')
       }
       
-      // Create the task linked to the sub-problem
+      // Create the task linked to the sub-problem and optionally to a goal
       const { data: newTask, error: createError } = await supabase
         .from('tasks')
         .insert({
@@ -385,6 +388,7 @@ export default function ProblemWidget() {
           title: newTaskTitle.trim(),
           description: newTaskDescription.trim() || null,
           problem_id: selectedSubProblem.id,
+          goal_id: selectedGoalId, // Link to goal if selected
           status: 'pending',
           priority: 3, // Medium priority
           is_starred_for_today: true // Make it visible in today's tasks
@@ -402,12 +406,14 @@ export default function ProblemWidget() {
       // Reset form and close dialog
       setNewTaskTitle('')
       setNewTaskDescription('')
+      setSelectedGoalId(null)
       setShowAddTaskDialog(false)
       setSelectedSubProblem(null)
       
       // Refresh sub-problems to show the new task
       if (selectedProblem) {
-        fetchSubProblems(selectedProblem.problemId)
+        console.log('[Problem Widget] Refreshing sub-problems after task creation')
+        await fetchSubProblems(selectedProblem.problemId)
       }
     } catch (err) {
       console.error('[Problem Widget] Create task error:', err)
@@ -460,7 +466,8 @@ export default function ProblemWidget() {
         .update({
           title: editingTask.title.trim(),
           description: editingTask.description.trim() || null,
-          status: editingTask.status
+          status: editingTask.status,
+          goal_id: editingTask.goal_id
         })
         .eq('id', editingTask.id)
         .eq('user_id', session.user.id)
@@ -535,7 +542,7 @@ export default function ProblemWidget() {
         (data || []).map(async (subProblem) => {
           const { data: tasks, error: tasksError } = await supabase
             .from('tasks')
-            .select('id, title, status')
+            .select('id, title, status, goal_id')
             .eq('problem_id', subProblem.id)
             .eq('user_id', session.user.id)
             .order('created_at', { ascending: true })
@@ -545,10 +552,12 @@ export default function ProblemWidget() {
             return { ...subProblem, tasks: [] }
           }
 
+          console.log(`[Problem Widget] Fetched ${tasks?.length || 0} tasks for sub-problem:`, subProblem.title, tasks)
           return { ...subProblem, tasks: tasks || [] }
         })
       )
 
+      console.log('[Problem Widget] Final sub-problems with tasks:', subProblemsWithTasks)
       setSubProblems(subProblemsWithTasks)
     } catch (err) {
       console.error('[Problem Widget] Error fetching sub-problems:', err)
@@ -991,7 +1000,8 @@ export default function ProblemWidget() {
                                         id: task.id,
                                         title: task.title,
                                         description: '', // We'll need to fetch this
-                                        status: task.status
+                                        status: task.status,
+                                        goal_id: task.goal_id
                                       })
                                       setShowTaskEditDialog(true)
                                     }}
@@ -1159,6 +1169,11 @@ export default function ProblemWidget() {
                 className="w-full min-h-[80px] p-2 border border-input bg-background rounded-md text-sm"
               />
             </div>
+            <GoalSelector
+              selectedGoalId={selectedGoalId}
+              onGoalChange={setSelectedGoalId}
+              placeholder="Link to a life goal (optional)"
+            />
             <div className="flex justify-end gap-2">
               <Button 
                 variant="outline" 
@@ -1166,6 +1181,7 @@ export default function ProblemWidget() {
                   setShowAddTaskDialog(false)
                   setNewTaskTitle('')
                   setNewTaskDescription('')
+                  setSelectedGoalId(null)
                   setSelectedSubProblem(null)
                 }}
               >
@@ -1230,6 +1246,14 @@ export default function ProblemWidget() {
                   </div>
                 </RadioGroup>
               </div>
+              <GoalSelector
+                selectedGoalId={editingTask.goal_id}
+                onGoalChange={(goalId) => {
+                  console.log('[Problem Widget] Goal changed to:', goalId)
+                  setEditingTask({ ...editingTask, goal_id: goalId })
+                }}
+                placeholder="Link to a life goal (optional)"
+              />
               <div className="flex justify-end gap-2">
                 <Button 
                   variant="outline" 

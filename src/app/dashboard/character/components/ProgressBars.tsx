@@ -18,6 +18,7 @@ import { PointsHistoryDialog } from './PointsHistoryDialog'
 import { format } from 'date-fns'
 import React from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { usePointsHistory } from '@/hooks/usePointsHistory'
 
 const areaIcons: Record<string, string> = {
   'Work & Learning': '📚',
@@ -178,6 +179,7 @@ function ProgressItem({
   onClick
 }: ProgressItemProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [showHoverTooltip, setShowHoverTooltip] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const progressPercentage = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
 
@@ -271,14 +273,24 @@ function ProgressItem({
                 currentTarget={targetValue}
                 onUpdateTarget={onUpdateTarget}
               />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setHistoryOpen(true)}
-              >
-                <BarChart2 className="h-4 w-4" />
-              </Button>
+              <div className="relative group">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => setHistoryOpen(true)}
+                  onMouseEnter={() => setShowHoverTooltip(true)}
+                  onMouseLeave={() => setShowHoverTooltip(false)}
+                >
+                  <BarChart2 className="h-4 w-4" />
+                </Button>
+                <HistoryHoverTooltip
+                  id={id}
+                  type={level}
+                  title={title}
+                  isVisible={showHoverTooltip}
+                />
+              </div>
             </>
           )}
         </div>
@@ -674,6 +686,167 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
           />
         </LineChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+// Add hover tooltip component
+interface HistoryHoverTooltipProps {
+  id: string;
+  type: 'area' | 'subarea' | 'goal';
+  title: string;
+  isVisible: boolean;
+}
+
+function HistoryHoverTooltip({ id, type, title, isVisible }: HistoryHoverTooltipProps) {
+  const { history, loading, fetchHistory } = usePointsHistory();
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  useEffect(() => {
+    if (isVisible && !hasLoaded) {
+      fetchHistory(id, type);
+      setHasLoaded(true);
+    }
+  }, [isVisible, id, type, fetchHistory, hasLoaded]);
+
+  const stats = React.useMemo(() => {
+    if (!history.length) return { average: 0, best: 0, streak: 0, likelihood: 0 };
+    
+    const points = history.map(h => h.points);
+    const average = points.reduce((a, b) => a + b, 0) / history.length;
+    const best = Math.max(...points);
+    
+    // Calculate streak
+    let streak = 0;
+    let currentStreak = 0;
+    for (const { points } of history) {
+      if (points > 0) {
+        currentStreak++;
+        streak = Math.max(streak, currentStreak);
+      } else {
+        currentStreak = 0;
+      }
+    }
+
+    // Calculate likelihood
+    const recentWeight = 0.5;
+    const consistencyWeight = 0.5;
+    const recentDays = history.slice(-7);
+    const recentRate = recentDays.length > 0 ? 
+      recentDays.filter(h => h.points > 0).length / recentDays.length : 0;
+    const overallRate = history.filter(h => h.points > 0).length / history.length;
+    
+    let currentStreakForBonus = 0;
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].points > 0) {
+        currentStreakForBonus++;
+      } else {
+        break;
+      }
+    }
+    const streakBonus = Math.min(currentStreakForBonus / 10, 0.1);
+    const likelihood = (recentRate * recentWeight + overallRate * consistencyWeight) * 100 + streakBonus * 100;
+    const finalLikelihood = Math.min(Math.max(likelihood, 0), 98);
+
+    return {
+      average: Number(average.toFixed(1)),
+      best,
+      streak,
+      likelihood: Number(finalLikelihood.toFixed(1))
+    };
+  }, [history]);
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="absolute bottom-full right-0 mb-2 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 min-w-[280px]">
+      <div className="font-medium mb-2 text-sm">{title} History</div>
+      
+      {loading ? (
+        <div className="h-20 flex items-center justify-center text-gray-500 text-sm">
+          Loading...
+        </div>
+      ) : history.length > 0 ? (
+        <>
+          {/* Mini Graph */}
+          <div className="h-20 mb-3">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={history.slice(-14)} margin={{ top: 5, right: 5, left: 20, bottom: 15 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <YAxis 
+                  tick={{ fontSize: 10, fill: '#6b7280' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => `${value}+`}
+                  width={25}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="points" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props;
+                    if (payload.points > 0) {
+                      return (
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={2}
+                          fill="#3b82f6"
+                          stroke="#ffffff"
+                          strokeWidth={1}
+                        />
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-white dark:bg-gray-800 p-2 border rounded text-xs shadow-lg">
+                          <p className="font-medium">{format(new Date(payload[0].payload.date), 'MMM d')}</p>
+                          <p className="text-blue-600">{payload[0].value} pts</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <div className="text-gray-500">Avg</div>
+              <div className="font-medium">{stats.average} pts</div>
+            </div>
+            <div>
+              <div className="text-gray-500">Best</div>
+              <div className="font-medium">{stats.best} pts</div>
+            </div>
+            <div>
+              <div className="text-gray-500">Streak</div>
+              <div className="font-medium">{stats.streak} days</div>
+            </div>
+            <div>
+              <div className="text-gray-500">Likelihood</div>
+              <div className="font-medium">{stats.likelihood}%</div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="h-20 flex items-center justify-center text-gray-500 text-sm">
+          No history data
+        </div>
+      )}
+      
+      {/* Arrow pointing to button */}
+      <div className="absolute top-full right-2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-200 dark:border-t-gray-700"></div>
     </div>
   );
 }

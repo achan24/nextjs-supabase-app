@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { ProcessFlowLinkButton } from '@/components/ui/process-flow-link-button';
 import StarButton from '@/components/StarButton';
+import TaskCreator from '@/components/TaskCreator';
 
 interface GoalManagerProps {
   selectedSubareaId: string | null;
@@ -1501,18 +1502,27 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                               <div className="mt-4">
                                 <div className="flex justify-between items-center mb-3">
                                   <h4 className="text-sm font-medium text-gray-500">Milestones</h4>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setTempSelectedGoalId(goal.id);
-                                      setIsAddingMilestone(true);
-                                    }}
-                                  >
-                                    <Plus className="w-3 h-3 mr-1" />
-                                    Add Milestone
-                                  </Button>
+                                  <div className="flex gap-2">
+                                    <TaskCreator
+                                      goalId={goal.id}
+                                      triggerText="Add Task"
+                                      triggerVariant="outline"
+                                      triggerSize="sm"
+                                      className="h-8"
+                                    />
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTempSelectedGoalId(goal.id);
+                                        setIsAddingMilestone(true);
+                                      }}
+                                    >
+                                      <Plus className="w-3 h-3 mr-1" />
+                                      Add Milestone
+                                    </Button>
+                                  </div>
                                 </div>
                                 {goal.milestones && goal.milestones.length > 0 ? (
                                   <div className="space-y-2">

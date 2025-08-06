@@ -73,6 +73,21 @@ export const Task: TableDefinition = {
       type: 'timestamptz',
       notNull: true,
       defaultValue: 'now()'
+    },
+    area_id: {
+      type: 'uuid',
+      references: 'life_goal_areas(id)',
+      notNull: false
+    },
+    subarea_id: {
+      type: 'uuid',
+      references: 'life_goal_subareas(id)',
+      notNull: false
+    },
+    goal_id: {
+      type: 'uuid',
+      references: 'life_goals(id)',
+      notNull: false
     }
   },
   relationships: [
@@ -102,6 +117,21 @@ export const Task: TableDefinition = {
       type: 'hasMany',
       table: 'task_time_entries',
       foreignKey: 'task_id'
+    },
+    {
+      type: 'belongsTo',
+      table: 'life_goal_areas',
+      foreignKey: 'area_id'
+    },
+    {
+      type: 'belongsTo',
+      table: 'life_goal_subareas',
+      foreignKey: 'subarea_id'
+    },
+    {
+      type: 'belongsTo',
+      table: 'life_goals',
+      foreignKey: 'goal_id'
     }
   ],
   indexes: [
@@ -116,6 +146,30 @@ export const Task: TableDefinition = {
     {
       name: 'tasks_due_date_idx',
       columns: ['due_date']
+    },
+    {
+      name: 'tasks_area_id_idx',
+      columns: ['area_id']
+    },
+    {
+      name: 'tasks_subarea_id_idx',
+      columns: ['subarea_id']
+    },
+    {
+      name: 'tasks_goal_id_idx',
+      columns: ['goal_id']
+    },
+    {
+      name: 'tasks_user_area_idx',
+      columns: ['user_id', 'area_id']
+    },
+    {
+      name: 'tasks_user_subarea_idx',
+      columns: ['user_id', 'subarea_id']
+    },
+    {
+      name: 'tasks_user_goal_idx',
+      columns: ['user_id', 'goal_id']
     }
   ],
   policies: [

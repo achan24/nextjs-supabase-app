@@ -22,6 +22,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
 import { NoteLinkButton } from '@/components/ui/note-link-button';
+import TaskCreator from '@/components/TaskCreator';
 
 interface AreaManagerProps {
   selectedAreaId: string | null;
@@ -367,6 +368,13 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
                               )}
                             </div>
                             <div className="flex gap-2">
+                              <TaskCreator
+                                subareaId={subarea.id}
+                                triggerText="Task"
+                                triggerVariant="ghost"
+                                triggerSize="sm"
+                                className="h-6 w-auto px-1 text-xs"
+                              />
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -505,6 +513,13 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
 
                   {/* Action Buttons */}
                   <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t">
+                    <TaskCreator
+                      areaId={area.id}
+                      triggerText="Add Task"
+                      triggerVariant="ghost"
+                      triggerSize="sm"
+                      className="h-8 w-auto px-2"
+                    />
                     <Button
                       variant="ghost"
                       size="icon"
