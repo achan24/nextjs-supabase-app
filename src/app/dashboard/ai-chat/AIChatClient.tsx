@@ -956,15 +956,15 @@ export default function AIChatClient({ user }: { user: User }) {
                             </div>
                           )}
                           {message.role === 'user' && (
-                            <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
-                              <UserIcon className="h-3 w-3 text-gray-600" />
+                            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+                              <UserIcon className="h-3 w-3 text-white" />
                             </div>
                           )}
                         </div>
                         
                         {/* Message */}
                         <div
-                          className={`w-full max-w-[95%] sm:max-w-[85%] p-3 rounded-lg break-words ${
+                          className={`w-full p-3 rounded-lg break-words ${
                             message.role === 'user'
                               ? 'bg-blue-600 text-white'
                               : 'bg-gray-100 text-gray-900'
@@ -985,11 +985,13 @@ export default function AIChatClient({ user }: { user: User }) {
                     ))}
                     
                     {isLoading && (
-                      <div className="flex gap-3 justify-start">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                          <Bot className="h-4 w-4 text-blue-600" />
+                      <div className="flex flex-col items-start">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Bot className="h-3 w-3 text-blue-600" />
+                          </div>
                         </div>
-                        <div className="bg-gray-100 p-3 rounded-lg">
+                        <div className="w-full bg-gray-100 p-3 rounded-lg">
                           <Loader2 className="h-4 w-4 animate-spin" />
                         </div>
                       </div>
