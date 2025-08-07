@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User as UserIcon, Loader2, Paperclip, X, ChevronDown } from 'lucide-react';
+import { Send, Bot, User as UserIcon, Loader2, Paperclip, X, ChevronDown, Menu } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -54,6 +54,7 @@ export default function AIChatClient({ user }: { user: User }) {
   const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [processFlows, setProcessFlows] = useState<ProcessFlow[]>([]);
+  const [showSidebar, setShowSidebar] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -629,11 +630,62 @@ export default function AIChatClient({ user }: { user: User }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-6rem)]">
-          {/* Sidebar - Chat History */}
-          <div className="lg:col-span-1">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 h-[calc(100vh-2rem)] sm:h-[calc(100vh-6rem)]">
+          {/* Sidebar - Chat History (Hidden on mobile, overlay on mobile) */}
+          <div className={`${showSidebar ? 'block' : 'hidden'} lg:block lg:col-span-1 fixed lg:relative inset-0 z-50 lg:z-auto`}>
+            {showSidebar && (
+              <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowSidebar(false)} />
+            )}
+            <div className="lg:hidden absolute left-0 top-0 w-80 h-full bg-white shadow-lg">
+              <Card className="h-full border-0 rounded-none">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Chats</span>
+                    <Button
+                      size="sm"
+                      onClick={createNewChat}
+                      disabled={isCreatingChat}
+                    >
+                      {isCreatingChat ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'New'
+                      )}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[calc(100vh-8rem)]">
+                    <div className="space-y-2">
+                      {chats.map((chat) => (
+                        <div
+                          key={chat.id}
+                          className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                            currentChatId === chat.id
+                              ? 'bg-blue-100 text-blue-900'
+                              : 'hover:bg-gray-100'
+                          }`}
+                          onClick={() => {
+                            loadChatMessages(chat.id);
+                            setShowSidebar(false);
+                          }}
+                        >
+                          <div className="font-medium text-sm truncate">
+                            {chat.title}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(chat.updated_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="hidden lg:block">
             <Card className="h-full">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -676,13 +728,38 @@ export default function AIChatClient({ user }: { user: User }) {
                 </ScrollArea>
               </CardContent>
             </Card>
+            </div>
           </div>
 
           {/* Main Chat Area */}
-          <div className="lg:col-span-3">
+          <div className="col-span-1 lg:col-span-3">
             <Card className="h-full flex flex-col">
               <CardHeader>
-                <CardTitle>AI Chat</CardTitle>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowSidebar(!showSidebar)}
+                      className="lg:hidden"
+                    >
+                      <Menu className="h-4 w-4" />
+                    </Button>
+                    <CardTitle>AI Chat</CardTitle>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={createNewChat}
+                    disabled={isCreatingChat}
+                    className="lg:hidden"
+                  >
+                    {isCreatingChat ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      'New'
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
                 {/* Attachments */}
@@ -711,11 +788,11 @@ export default function AIChatClient({ user }: { user: User }) {
                           
                           {attachment.type === 'character-data' && (
                             <div className="text-xs text-gray-600 space-y-1">
-                              <div className="flex gap-4">
-                                <span>Level: {attachment.data.character?.level || 1}</span>
-                                <span>Areas: {attachment.data.stats?.totalAreas || 0}</span>
-                                <span>Tasks: {attachment.data.stats?.totalTasks || 0}</span>
-                                <span>Completion: {attachment.data.stats?.completionRate || 0}%</span>
+                              <div className="flex flex-wrap gap-2 sm:gap-4">
+                                <span className="text-xs">Level: {attachment.data.character?.level || 1}</span>
+                                <span className="text-xs">Areas: {attachment.data.stats?.totalAreas || 0}</span>
+                                <span className="text-xs">Tasks: {attachment.data.stats?.totalTasks || 0}</span>
+                                <span className="text-xs">Completion: {attachment.data.stats?.completionRate || 0}%</span>
                               </div>
                               {attachment.data.areas?.length > 0 && (
                                 <div className="mt-2">
@@ -878,7 +955,7 @@ export default function AIChatClient({ user }: { user: User }) {
                         )}
                         
                         <div
-                          className={`max-w-[70%] p-3 rounded-lg ${
+                          className={`max-w-[85%] sm:max-w-[70%] p-3 rounded-lg break-words ${
                             message.role === 'user'
                               ? 'bg-blue-600 text-white'
                               : 'bg-gray-100 text-gray-900'
@@ -920,7 +997,7 @@ export default function AIChatClient({ user }: { user: User }) {
                 </ScrollArea>
 
                 {/* Input */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                   <div className="relative attachment-menu-container">
                     <Button
                       onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
@@ -937,7 +1014,7 @@ export default function AIChatClient({ user }: { user: User }) {
                     </Button>
                     
                     {showAttachmentMenu && (
-                      <div className="absolute bottom-full mb-2 left-0 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                      <div className="absolute bottom-full mb-2 left-0 w-64 sm:w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-96 overflow-y-auto">
                         <div className="p-2">
                           <div className="text-xs font-medium text-gray-700 mb-2">Attach Data</div>
                           
