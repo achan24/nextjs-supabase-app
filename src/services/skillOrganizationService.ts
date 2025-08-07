@@ -77,11 +77,10 @@ class SkillOrganizationService {
       const insertData = allNodes.map((node, index) => ({
         user_id: userId,
         name: node.label,
-        type: node.type,
+        type: node.type.toLowerCase(), // Ensure type is lowercase to match the check constraint
         parent_id: null, // Will be updated in step 2
-        skill_id: node.type === 'skill' ? node.id : null,
+        skill_id: node.type.toLowerCase() === 'skill' ? node.id : null,
         flow_id: node.flowId || null,
-        data: node.data || null, // Save the data object
         display_order: index,
         is_expanded: true
       }));
@@ -92,6 +91,15 @@ class SkillOrganizationService {
         .from('skill_organizations')
         .insert(insertData)
         .select();
+
+      if (insertError) {
+        console.error('[SkillOrganizationService] Insert error details:', {
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code
+        });
+      }
 
       if (insertError) {
         console.error('[SkillOrganizationService] Error inserting nodes:', insertError);
@@ -148,26 +156,47 @@ class SkillOrganizationService {
    */
   private buildParentUpdates(nodes: SkillNode[], insertedNodes: any[]): Array<{childId: string, parentId: string}> {
     const updates: Array<{childId: string, parentId: string}> = [];
+    const nodeMap = new Map<string, any>();
     
-    const traverse = (nodeList: SkillNode[], parentNode?: any) => {
+    // First, build a map of original nodes to inserted nodes
+    const buildNodeMap = (nodeList: SkillNode[], parentNode?: any) => {
       nodeList.forEach(node => {
-        // Find the inserted node by name and type
-        const insertedNode = insertedNodes.find(n => n.name === node.label && n.type === node.type);
+        // For skills, match by skill_id, for folders match by name and type
+        const insertedNode = node.type === 'skill' 
+          ? insertedNodes.find(n => n.skill_id === node.id)
+          : insertedNodes.find(n => n.name === node.label && n.type === node.type);
         
-        if (insertedNode && parentNode) {
-          updates.push({
-            childId: insertedNode.id,
-            parentId: parentNode.id
-          });
+        if (insertedNode) {
+          nodeMap.set(node.id, insertedNode);
         }
         
         if (node.children && node.children.length > 0) {
-          traverse(node.children, insertedNode);
+          buildNodeMap(node.children);
         }
       });
     };
     
-    traverse(nodes);
+    // Then, build the parent-child relationships
+    const buildRelationships = (nodeList: SkillNode[], parentNode?: SkillNode) => {
+      nodeList.forEach(node => {
+        const insertedNode = nodeMap.get(node.id);
+        const insertedParent = parentNode ? nodeMap.get(parentNode.id) : null;
+        
+        if (insertedNode && insertedParent) {
+          updates.push({
+            childId: insertedNode.id,
+            parentId: insertedParent.id
+          });
+        }
+        
+        if (node.children && node.children.length > 0) {
+          buildRelationships(node.children, node);
+        }
+      });
+    };
+    
+    buildNodeMap(nodes);
+    buildRelationships(nodes);
     return updates;
   }
 
