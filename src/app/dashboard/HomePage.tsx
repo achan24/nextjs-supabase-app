@@ -487,6 +487,25 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
+          {/* AI Chat Card */}
+          <Link href="/dashboard/ai-chat" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-sky-100 rounded-lg">
+                    <Bot className="h-6 w-6 text-sky-600" />
+                  </div>
+                  AI Chat
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Chat with AI for advice, brainstorming, or support. Powered by OpenRouter.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
           {/* Projects Card */}
           <Link href="/dashboard/projects" className="group">
             <Card className="hover:shadow-md transition-shadow">
