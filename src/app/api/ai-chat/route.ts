@@ -31,24 +31,40 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const completion = await openai.chat.completions.create({
+    // Create streaming response
+    const stream = await openai.chat.completions.create({
       model: "openai/gpt-oss-20b:free",
       messages: messages,
-      max_tokens: 1000,
+      max_tokens: 4000,
       temperature: 0.7,
+      stream: true,
     });
 
-    const response = completion.choices[0]?.message;
+    // Create a readable stream
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`));
+            }
+          }
+          controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`));
+          controller.close();
+        } catch (error) {
+          console.error('Streaming error:', error);
+          controller.error(error);
+        }
+      },
+    });
 
-    if (!response) {
-      return NextResponse.json(
-        { error: 'No response from AI model' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      content: response.content,
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
 
   } catch (error) {
