@@ -125,4 +125,30 @@ html, body {
 .dark .video-embed iframe,
 .dark .video-embed video {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+}
+
+/* AI Chat Mobile Responsiveness */
+.prose table {
+  font-size: 0.75rem;
+  overflow-x: auto;
+  display: block;
+  white-space: nowrap;
+}
+
+.prose table th,
+.prose table td {
+  padding: 0.25rem 0.5rem;
+  min-width: 60px;
+}
+
+@media (max-width: 640px) {
+  .prose table {
+    font-size: 0.7rem;
+  }
+  
+  .prose table th,
+  .prose table td {
+    padding: 0.2rem 0.3rem;
+    min-width: 50px;
+  }
 } 

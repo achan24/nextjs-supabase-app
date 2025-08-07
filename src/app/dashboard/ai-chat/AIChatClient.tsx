@@ -630,7 +630,7 @@ export default function AIChatClient({ user }: { user: User }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-2 sm:p-6">
+    <div className="min-h-screen bg-gray-50 p-1 sm:p-4">
       <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 h-[calc(100vh-2rem)] sm:h-[calc(100vh-6rem)]">
           {/* Sidebar - Chat History (Hidden on mobile, overlay on mobile) */}
@@ -761,7 +761,7 @@ export default function AIChatClient({ user }: { user: User }) {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
+              <CardContent className="flex-1 flex flex-col p-2 sm:p-6">
                 {/* Attachments */}
                 {attachments.length > 0 && (
                   <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -944,24 +944,33 @@ export default function AIChatClient({ user }: { user: User }) {
                     {messages.map((message) => (
                       <div
                         key={message.id}
-                        className={`flex gap-3 ${
-                          message.role === 'user' ? 'justify-end' : 'justify-start'
+                        className={`${
+                          message.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start'
                         }`}
                       >
-                        {message.role === 'assistant' && (
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <Bot className="h-4 w-4 text-blue-600" />
-                          </div>
-                        )}
+                        {/* Avatar */}
+                        <div className="flex items-center gap-2 mb-1">
+                          {message.role === 'assistant' && (
+                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                              <Bot className="h-3 w-3 text-blue-600" />
+                            </div>
+                          )}
+                          {message.role === 'user' && (
+                            <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                              <UserIcon className="h-3 w-3 text-gray-600" />
+                            </div>
+                          )}
+                        </div>
                         
+                        {/* Message */}
                         <div
-                          className={`max-w-[85%] sm:max-w-[70%] p-3 rounded-lg break-words ${
+                          className={`w-full max-w-[95%] sm:max-w-[85%] p-3 rounded-lg break-words ${
                             message.role === 'user'
                               ? 'bg-blue-600 text-white'
                               : 'bg-gray-100 text-gray-900'
                           }`}
                         >
-                          <div className="prose prose-sm max-w-none">
+                          <div className="prose prose-sm max-w-none prose-table:overflow-x-auto prose-table:max-w-full">
                             {message.role === 'assistant' ? (
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                             ) : (
@@ -972,12 +981,6 @@ export default function AIChatClient({ user }: { user: User }) {
                             {message.timestamp.toLocaleTimeString()}
                           </div>
                         </div>
-                        
-                        {message.role === 'user' && (
-                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                            <UserIcon className="h-4 w-4 text-gray-600" />
-                          </div>
-                        )}
                       </div>
                     ))}
                     
