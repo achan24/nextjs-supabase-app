@@ -14,6 +14,8 @@ interface SkillNode {
   type: string;
   parentId?: string;
   children?: SkillNode[];
+  flowId?: string;
+  data?: any;
 }
 
 interface EnhancedSkillsUIProps {

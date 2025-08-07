@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS public.skill_organizations (
   parent_id UUID REFERENCES skill_organizations(id) ON DELETE CASCADE,
   skill_id TEXT,
   flow_id TEXT,
+  data JSONB,
   display_order INTEGER NOT NULL DEFAULT 0,
   is_expanded BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,

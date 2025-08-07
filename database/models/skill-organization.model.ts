@@ -40,6 +40,10 @@ export const SkillOrganization: TableDefinition = {
       type: 'text',
       notNull: false
     },
+    data: {
+      type: 'jsonb',
+      notNull: false
+    },
     display_order: {
       type: 'integer',
       notNull: true,

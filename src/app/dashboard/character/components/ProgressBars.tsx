@@ -799,7 +799,7 @@ function HistoryHoverTooltip({ id, type, title, isVisible }: HistoryHoverTooltip
                         />
                       );
                     }
-                    return null;
+                    return <g />; // Fix: return empty group instead of null
                   }}
                 />
                 <Tooltip 

@@ -14,7 +14,8 @@ import {
   Trash2,
   Edit3,
   Save,
-  Loader2
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 import { skillOrganizationService } from '@/services/skillOrganizationService';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +28,7 @@ interface SkillNode {
   parentId?: string;
   children?: SkillNode[];
   flowId?: string;
+  data?: any;
 }
 
 interface CustomFolder {
@@ -368,7 +370,7 @@ export default function CustomOrganizationView({
         <div 
           className={`flex items-center space-x-1 py-1 px-2 rounded cursor-pointer hover:bg-gray-100 ${
             isSelected ? 'bg-blue-100' : ''
-          }`}
+          } ${node.type === 'skill' ? 'hover:bg-blue-50' : ''}`}
           style={{ paddingLeft: `${level * 16 + 8}px` }}
           onClick={() => onNodeClick(node)}
           draggable={node.type === 'skill' || node.type === 'folder'}
@@ -409,6 +411,11 @@ export default function CustomOrganizationView({
 
           {/* Actions */}
           <div className="flex items-center space-x-1">
+            {/* External link icon for skills */}
+            {node.type === 'skill' && node.flowId && (
+              <ExternalLink className="w-3 h-3 text-blue-500" />
+            )}
+            
             {/* Drag handle for skills and folders */}
             {(node.type === 'skill' || node.type === 'folder') && (
               <span className="text-gray-400 cursor-move">

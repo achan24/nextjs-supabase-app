@@ -7,6 +7,7 @@ export interface SkillOrganizationData {
   parent_id?: string;
   skill_id?: string;
   flow_id?: string;
+  data?: any;
   display_order: number;
   is_expanded: boolean;
   children?: SkillOrganizationData[];
@@ -19,6 +20,7 @@ export interface SkillNode {
   parentId?: string;
   children?: SkillNode[];
   flowId?: string;
+  data?: any;
 }
 
 class SkillOrganizationService {
@@ -79,6 +81,7 @@ class SkillOrganizationService {
         parent_id: null, // Will be updated in step 2
         skill_id: node.type === 'skill' ? node.id : null,
         flow_id: node.flowId || null,
+        data: node.data || null, // Save the data object
         display_order: index,
         is_expanded: true
       }));
@@ -192,7 +195,7 @@ class SkillOrganizationService {
       
       // Recursively process children
       if (node.children && node.children.length > 0) {
-        const childData = this.flattenHierarchy(node.children, userId, null, currentOrder + 1);
+        const childData = this.flattenHierarchy(node.children, userId, undefined, currentOrder + 1);
         flatData.push(...childData);
       }
     });
@@ -216,6 +219,7 @@ class SkillOrganizationService {
         parent_id: item.parent_id,
         skill_id: item.skill_id,
         flow_id: item.flow_id,
+        data: item.data,
         display_order: item.display_order,
         is_expanded: item.is_expanded,
         children: []
@@ -261,7 +265,8 @@ class SkillOrganizationService {
         label: node.name,
         type: node.type,
         children: node.children ? node.children.map(convertNode) : [],
-        flowId: node.flow_id
+        flowId: node.flow_id,
+        data: node.data
       };
     };
     

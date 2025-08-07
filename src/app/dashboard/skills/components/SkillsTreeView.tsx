@@ -10,6 +10,7 @@ interface SkillNode {
   parentId?: string;
   children?: SkillNode[];
   flowId?: string;
+  data?: any;
 }
 
 interface SkillsTreeViewProps {

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import React from 'react';
 import EnhancedSkillsUI from './components/EnhancedSkillsUI';
+import { useRouter } from 'next/navigation';
 
 interface SkillNode {
   id: string;
@@ -12,6 +13,8 @@ interface SkillNode {
   type: string;
   parentId?: string;
   children?: SkillNode[];
+  flowId?: string;
+  data?: any;
 }
 
 // Build tree with process flows as top level, skills/targets nested under flows based on edges
@@ -38,7 +41,10 @@ function buildProcessFlowTreeWithEdges(allNodes: any[], allEdges: any[], process
           id: node.id,
           label: node.data?.label || node.title || 'Untitled',
           type: node.type,
-          children: []
+          children: [],
+          flowId: node.flow_id, // Add the flowId to skill nodes
+          data: node.data, // Preserve the full data object
+          ...node // Preserve all other original properties
         });
       }
     }
@@ -271,6 +277,7 @@ function TreeNode({
 
 export default function SkillsExplorerClient() {
   const supabase = createClient();
+  const router = useRouter();
   const [skillTree, setSkillTree] = useState<SkillNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [debugNodes, setDebugNodes] = useState<SkillNode[]>([]);
@@ -440,6 +447,8 @@ export default function SkillsExplorerClient() {
                     <span className="font-medium text-gray-700">ID:</span>
                     <span className="ml-2 text-sm text-gray-600 font-mono">{selectedNode.id}</span>
                   </div>
+                  
+
                 </div>
 
                 {/* Skill-specific details */}
