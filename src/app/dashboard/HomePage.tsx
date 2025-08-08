@@ -8,9 +8,10 @@ import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star } from 'lucide-react'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
+import { GuardianAngelAI } from '@/components/GuardianAngelAI'
 
 interface CharacterData {
   name: string;
@@ -142,6 +143,25 @@ export default function HomePage({ user }: { user: User }) {
             This app combines task management, habit tracking, and AI assistance to help you stay on track 
             and make progress on what matters most to you.
           </p>
+
+          {/* Guardian Angel AI - Conversational companion */}
+          <div className="mt-8">
+                      <GuardianAngelAI 
+            userEnergy={characterData.overallScore}
+            timeOfDay={(() => {
+              const hour = new Date().getHours();
+              if (hour < 12) return 'morning';
+              if (hour < 17) return 'afternoon';
+              return 'evening';
+            })()}
+            currentFocus={topStarredTask?.title || topProgress?.goalTitle || 'Getting organized'}
+            characterLevel={characterData.level}
+            characterXP={characterData.xp}
+            starredTask={topStarredTask}
+            areas={areas}
+            topProgress={topProgress}
+          />
+          </div>
         </div>
 
         {/* Feature Cards */}
@@ -502,6 +522,30 @@ export default function HomePage({ user }: { user: User }) {
                 <p className="text-sm text-gray-600">
                   Chat with AI for advice, brainstorming, or support. Powered by OpenRouter.
                 </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* AI Pipeline Card */}
+          <Link href="/dashboard/ai-pipeline" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-indigo-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <Brain className="h-6 w-6 text-indigo-600" />
+                  </div>
+                  AI Pipeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Visualize and test AI prompt construction. See how prompts are built and how conversations flow in real-time.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Visualizer</span>
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Templates</span>
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Testing</span>
+                </div>
               </CardContent>
             </Card>
           </Link>

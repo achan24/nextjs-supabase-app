@@ -13,7 +13,7 @@ import { LifeGoalArea, LifeGoalSubarea, LifeGoal } from '@/types/goal';
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { resetAllDailyPoints, savePointsToDate } from '@/services/characterProgressService'
-import { updateXPFromPoints } from '@/services/characterService'
+// updateXPFromPoints removed - XP is calculated on-the-fly now
 import { PointsHistoryDialog } from './PointsHistoryDialog'
 import { format } from 'date-fns'
 import React from 'react'
@@ -644,9 +644,9 @@ function ProgressGraph({ areas }: { areas: LifeGoalArea[] }) {
                 const dateStr = dataPoint.dateStr;
                 const totalPoints = dataPoint.points;
                 
-                // Fetch breakdown data when hovering
+                // Fetch breakdown data when hovering - use setTimeout to avoid setState during render
                 if (!dailyBreakdowns[dateStr]) {
-                  fetchBreakdownForDate(dateStr);
+                  setTimeout(() => fetchBreakdownForDate(dateStr), 0);
                 }
                 
                 const breakdown = dailyBreakdowns[dateStr] || [];

@@ -114,6 +114,12 @@ const apps = [
     icon: Bot
   },
   { 
+    name: 'AI Pipeline', 
+    href: '/dashboard/ai-pipeline', 
+    description: 'Visualize and test AI prompt construction',
+    icon: Brain
+  },
+  { 
     name: 'Recommendations', 
     href: '/dashboard/recommendations', 
     description: 'Get personalized recommendations',

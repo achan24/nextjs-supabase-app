@@ -22,29 +22,24 @@ export function calculateRequiredXP(level: number): number {
   return Math.round(exact / 10) * 10; // Round to nearest 10
 }
 
-export async function updateXPFromPoints(userId: string, points: number) {
-  // Get current character
-  const { data: characters } = await supabase
-    .from('characters')
-    .select('id, xp')
-    .eq('user_id', userId)
-    .limit(1);
-
-  if (!characters?.length) return;
-
-  const character = characters[0];
-  const newXP = (character.xp || 0) + points;
-
-  // Update character XP
-  await supabase
-    .from('characters')
-    .update({ xp: newXP })
-    .eq('id', character.id);
-}
+// Character XP is calculated on-the-fly from points history
+// No need to store or update character XP separately
 
 export async function calculateTotalPoints(userId: string) {
   const { data: totalPoints } = await supabase
     .rpc('get_user_total_points', { p_user_id: userId });
+
+  console.log('[Character XP] Total points from function:', totalPoints);
+
+  // Also check what's actually in the goal_points_history table
+  const { data: goalHistory } = await supabase
+    .from('goal_points_history')
+    .select('points, goal_id, date')
+    .eq('user_id', userId);
+
+  const manualSum = (goalHistory || []).reduce((sum, record) => sum + (record.points || 0), 0);
+  console.log('[Character XP] Manual sum from goal_history:', manualSum);
+  console.log('[Character XP] Goal history records:', goalHistory?.length || 0);
 
   return totalPoints || 0;
 }
@@ -75,6 +70,9 @@ export async function getCharacterProgress(userId: string) {
   const totalPoints = await calculateTotalPoints(userId);
   const totalXP = totalPoints * XP_PER_POINT;
   
+  console.log('[Character XP] Total points:', totalPoints);
+  console.log('[Character XP] Total XP:', totalXP);
+  
   // Calculate level and remaining XP
   let level = 1;
   let remainingXP = totalXP;
@@ -86,15 +84,11 @@ export async function getCharacterProgress(userId: string) {
   
   const requiredXP = calculateRequiredXP(level);
   
-  // Update character record to match calculated values
-  await supabase
-    .from('characters')
-    .update({ 
-      level,
-      xp: remainingXP
-    })
-    .eq('user_id', userId);
+  console.log('[Character XP] Calculated level:', level);
+  console.log('[Character XP] Remaining XP:', remainingXP);
+  console.log('[Character XP] Required XP for next level:', requiredXP);
   
+  // No need to update characters table - just return calculated values
   return {
     level,
     xp: remainingXP,

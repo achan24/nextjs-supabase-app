@@ -575,6 +575,24 @@ export default function SkillsExplorerClient() {
                     </div>
                   </div>
                 )}
+
+                {/* Navigation button for skills */}
+                {selectedNode.type === 'skill' && selectedNode.flowId && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        console.log('[SkillsExplorerClient] Navigating to process flow:', selectedNode.flowId);
+                        router.push(`/dashboard/process-flow?flowId=${selectedNode.flowId}`);
+                      }}
+                      className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Open in Process Flow
+                    </button>
+                  </div>
+                )}
           </div>
             ) : (
               <div className="text-gray-500">Select a skill or target to view details</div>

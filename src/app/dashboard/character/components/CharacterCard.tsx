@@ -1,8 +1,10 @@
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { getCharacterProgress } from '@/services/characterService'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -40,21 +42,31 @@ export default function CharacterCard() {
     ]
   })
   const [topProgress, setTopProgress] = useState<TopProgress | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  useEffect(() => {
+  const refreshCharacterData = useCallback(async () => {
     if (user?.id) {
-      getCharacterProgress(user.id).then(data => {
+      setIsRefreshing(true);
+      try {
+        const data = await getCharacterProgress(user.id);
         setCharacterData(prev => ({
           ...prev,
           level: data.level,
           xp: data.xp,
           nextLevelXp: data.requiredXP
-        }))
-      }).catch(error => {
-        console.error('Error fetching character data:', error)
-      })
+        }));
+        console.log('[Character XP] Refreshed character data:', data);
+      } catch (error) {
+        console.error('Error fetching character data:', error);
+      } finally {
+        setIsRefreshing(false);
+      }
     }
-  }, [user?.id])
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshCharacterData();
+  }, [refreshCharacterData]);
 
   useEffect(() => {
     // Find the top daily progress from areas
@@ -106,6 +118,16 @@ export default function CharacterCard() {
               <h2 className="text-2xl font-bold">{characterData.name}</h2>
               <p className="text-gray-500 dark:text-gray-400">Level {characterData.level}</p>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshCharacterData}
+              disabled={isRefreshing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh XP'}
+            </Button>
           </div>
 
           {/* XP Progress */}
@@ -115,6 +137,9 @@ export default function CharacterCard() {
               <span>{characterData.xp} / {characterData.nextLevelXp}</span>
             </div>
             <Progress value={xpProgress} className="h-2" />
+            <div className="text-xs text-gray-500 mt-1">
+              Last updated: {new Date().toLocaleTimeString()}
+            </div>
           </div>
 
           {/* Traits Grid */}
