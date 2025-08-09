@@ -1180,3 +1180,88 @@ export function useGoalSystem() {
 - **Fix infinite loops immediately** - they can overwhelm the database
 
 This pattern prevents the most common cause of performance issues and database timeouts in React applications using Supabase.
+
+# ALWAYS CHECK DATABASE MODELS BEFORE IMPLEMENTING FEATURES
+
+## The Problem: Field Name Assumptions Lead to Broken Features
+
+### Root Cause
+When implementing features that interact with database data, making assumptions about field names without checking the actual database schema leads to:
+1. **Data mapping failures** - Fields not being copied correctly
+2. **Missing functionality** - Features that don't work because data isn't passed through
+3. **Type mismatches** - Expected fields don't exist in the actual data structure
+4. **Wasted debugging time** - Hours spent fixing issues that could have been prevented
+
+### Real Example: Practice Visualization Tooltip Issue
+**Problem**: Tooltip showing basic info only, missing date and notes
+**Root Cause**: Assumed field names without checking database models
+**Data Structure Mismatch**:
+- **Assumed**: `date` and `notes` fields
+- **Actual**: `completedAt` (timestamp) and `note` (singular) fields
+
+**Result**: 2+ hours of debugging for a simple field mapping issue
+
+### The Solution: ALWAYS Check Database Models First
+
+**Before implementing ANY feature that uses database data:**
+
+1. **Check the database models** in `database/models/` directory
+2. **Look at existing interfaces** in the codebase that use the same data
+3. **Examine the actual data structure** with console logging if needed
+4. **Follow established patterns** for data transformation
+
+### Prevention Strategy
+
+```typescript
+// ✅ CORRECT APPROACH
+// 1. First, check database/models/table-name.model.ts
+// 2. Look at existing interfaces that use this data
+// 3. Then implement with correct field names
+
+interface ActualDataStructure {
+  completedAt: number;  // From database model
+  note?: string;        // From database model (singular!)
+  timeSpent: number;
+}
+
+// Map to UI-friendly structure
+const mappedData = rawData.map(record => ({
+  date: record.completedAt ? new Date(record.completedAt).toISOString() : undefined,
+  notes: record.note,  // note -> notes for UI
+  timeSpent: record.timeSpent
+}));
+
+// ❌ WRONG APPROACH
+// Assume field names without checking
+interface AssumedDataStructure {
+  date?: string;        // Wrong - actual field is completedAt (number)
+  notes?: string;       // Wrong - actual field is note (singular)
+  timeSpent: number;
+}
+```
+
+### Established Memory Pattern
+This aligns with the existing memory: **"ALWAYS check the database models in database/models/ first before making any code changes or database migrations. The models are the source of truth for the database schema."**
+
+### Common Field Name Patterns to Watch For
+- **Timestamps**: Often `completedAt`, `createdAt`, `updatedAt` (not `date`)
+- **Notes**: Often `note` (singular) not `notes` (plural)
+- **IDs**: Often `entity_id` not `entityId` (snake_case vs camelCase)
+- **Status**: Check exact enum values in the model
+- **Relationships**: Check foreign key names and relationship structures
+
+### Debugging Steps When Data is Missing
+1. **Log the raw data** at the source to see actual field names
+2. **Check the database model** for the table being queried
+3. **Look for existing interfaces** that use the same data
+4. **Fix the mapping** to use correct field names
+5. **Remove debug logging** after confirming fix
+
+### Remember
+- **Database models are the source of truth** - not assumptions
+- **Field names matter** - `note` vs `notes`, `completedAt` vs `date`
+- **Check existing code** - other parts of the app likely use the same data
+- **Log raw data** - when in doubt, console.log the actual structure
+- **Follow established patterns** - don't reinvent data transformation
+
+This simple step of checking database models first prevents the majority of data-related bugs and saves hours of debugging time.

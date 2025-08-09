@@ -55,6 +55,17 @@ export default function HomePage({ user }: { user: User }) {
     fetchTopStarredTask()
   }, [])
 
+  // Listen for task starring events and refresh data
+  useEffect(() => {
+    const handleTaskStarred = () => {
+      console.log('[Guardian Angel] Task starred event received, refreshing starred task...')
+      fetchTopStarredTask()
+    }
+
+    window.addEventListener('task-starred', handleTaskStarred)
+    return () => window.removeEventListener('task-starred', handleTaskStarred)
+  }, [])
+
   useEffect(() => {
     // Find the top daily progress from areas
     if (areas.length > 0) {
@@ -80,7 +91,7 @@ export default function HomePage({ user }: { user: User }) {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('is_starred', true)
+        .eq('is_starred_for_today', true)
         .eq('status', 'todo')
         .order('priority', { ascending: true })
         .order('created_at', { ascending: true })
@@ -89,14 +100,14 @@ export default function HomePage({ user }: { user: User }) {
 
       if (error) {
         if (error.code !== 'PGRST116') { // PGRST116 is the "no rows returned" error
-          console.error('Error fetching starred task:', error)
+          console.error('[Guardian Angel] Error fetching starred task:', error)
         }
         return
       }
 
       setTopStarredTask(data)
     } catch (error) {
-      console.error('Error fetching starred task:', error)
+      console.error('[Guardian Angel] Error fetching starred task:', error)
     }
   }
 

@@ -6,8 +6,14 @@ import BaseNode from './BaseNode';
 import { createClient } from '@/lib/supabase';
 import { useTaskTimer } from '@/contexts/TaskTimerContext';
 import { useReactFlow } from 'reactflow';
+import PracticeVisualization from './PracticeVisualization';
 
-type CompletionRecord = { timeSpent: number };
+type CompletionRecord = { 
+  timeSpent: number;
+  completed?: boolean;
+  completedAt?: number; // timestamp
+  note?: string; // note not notes!
+};
 
 interface SkillNodeData {
   timeSpent: number;
@@ -191,6 +197,25 @@ export const SkillNode = memo(({ id, data, dragHandle, selected, type, zIndex, i
   return (
     <div className="skill-node relative">
       <BaseNode id={id} data={data} dragHandle={dragHandle} selected={selected} type={type} zIndex={zIndex} isConnectable={isConnectable} xPos={xPos} yPos={yPos} dragging={dragging} {...rest} />
+      
+      {/* Practice Visualization */}
+      <PracticeVisualization
+        completionHistory={(() => {
+          const mapped = (data.completionHistory || []).map(record => ({
+            timeSpent: record.timeSpent,
+            completed: record.completed ?? true,
+            date: record.completedAt ? new Date(record.completedAt).toISOString() : undefined,
+            notes: record.note // note not notes!
+          }));
+          console.log('[SkillNode] raw completionHistory:', JSON.stringify(data.completionHistory?.slice(0,3), null, 2));
+          console.log('[SkillNode] mapped completionHistory:', JSON.stringify(mapped.slice(0,3), null, 2));
+          return mapped;
+        })()}
+        timeSpent={displayTime}
+        isRunning={data.isRunning}
+        label={data.label}
+      />
+      
       <div className="mt-2 text-xs text-gray-500 flex items-center justify-between w-full">
         <span>⏱ {formatTime(displayTime)}</span>
         <span className="flex-1 text-center text-gray-500">
