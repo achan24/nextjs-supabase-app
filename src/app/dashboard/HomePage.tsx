@@ -8,7 +8,7 @@ import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain } from 'lucide-react'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain, DollarSign } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { GuardianAngelAI } from '@/components/GuardianAngelAI'
@@ -595,6 +595,30 @@ export default function HomePage({ user }: { user: User }) {
                 <p className="text-sm text-gray-600">
                   Build and maintain positive habits. Track your progress, set reminders, and develop consistent routines for personal growth.
                 </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Budget Card */}
+          <Link href="/dashboard/budget" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <DollarSign className="h-6 w-6 text-emerald-600" />
+                  </div>
+                  Budget
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Track your income, expenses, and financial goals. Monitor spending patterns, set budgets, and build healthy financial habits.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">Expense Tracking</span>
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">Budget Planning</span>
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">Financial Goals</span>
+                </div>
               </CardContent>
             </Card>
           </Link>

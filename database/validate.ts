@@ -43,6 +43,8 @@ import { NoteFolder } from './models/note-folder.model';
 import { EnhancedNote } from './models/enhanced-note.model';
 import { NoteLink } from './models/note-link.model';
 import { Problem } from './models/problem.model';
+import { BudgetTransaction } from './models/budget-transaction.model';
+import { BudgetTarget } from './models/budget-target.model';
 
 // Load environment variables from root .env.local
 dotenv.config({ path: join(__dirname, '..', '.env.local') });
@@ -101,6 +103,8 @@ async function validateDatabase() {
     EnhancedNote,
     NoteLink,
     Problem,
+    BudgetTransaction,
+    BudgetTarget,
   ];
 
   for (const [modelName, model] of Object.entries(models)) {
