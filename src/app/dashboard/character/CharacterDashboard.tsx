@@ -34,14 +34,14 @@ export default function CharacterDashboard() {
           <SkillsOverview />
         </Card>
 
-                             {/* Problem Widget - NEW SECTION */}
-                     <ProblemWidget />
+        {/* Problem Widget - NEW SECTION */}
+        <ProblemWidget />
 
-                     {/* Recent Activity Feed */}
-                     <Card className="p-6">
-                       <h2 className="text-2xl font-semibold mb-4">Recent Activity</h2>
-                       <RecentActivity />
-                     </Card>
+        {/* Recent Activity Feed */}
+        <Card className="p-6">
+          <h2 className="text-2xl font-semibold mb-4">Recent Activity</h2>
+          <RecentActivity />
+        </Card>
       </div>
     </div>
   )

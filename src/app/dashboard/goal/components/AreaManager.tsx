@@ -6,7 +6,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Link as LinkIcon, ChevronDown, ChevronRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Edit2, Trash2, Link as LinkIcon, ChevronDown, ChevronRight, Star } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,7 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
   const [editingSubarea, setEditingSubarea] = useState<string | null>(null);
   const [editSubareaName, setEditSubareaName] = useState('');
   const [editSubareaDescription, setEditSubareaDescription] = useState('');
+  const [editSubareaPriority, setEditSubareaPriority] = useState<number>(3);
   const [deletingArea, setDeletingArea] = useState<string | null>(null);
   const [deletingSubarea, setDeletingSubarea] = useState<string | null>(null);
   const [isLinkingNote, setIsLinkingNote] = useState(false);
@@ -158,10 +160,12 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
       await updateSubarea(id, {
         name: editSubareaName,
         description: editSubareaDescription,
+        priority: editSubareaPriority,
       });
       setEditingSubarea(null);
       setEditSubareaName('');
       setEditSubareaDescription('');
+      setEditSubareaPriority(3);
     } catch (err) {
       console.error('Error updating subarea:', err);
     }
@@ -355,12 +359,33 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
                         >
                           <div className="flex justify-between items-start">
                             <div>
-                              <button
-                                onClick={() => handleSubareaClick(subarea.id)}
-                                className="font-medium hover:text-blue-600 transition-colors text-left"
-                              >
-                                {subarea.name}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleSubareaClick(subarea.id)}
+                                  className="font-medium hover:text-blue-600 transition-colors text-left"
+                                >
+                                  {subarea.name}
+                                </button>
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs ${
+                                    subarea.priority === 1 ? 'bg-red-50 text-red-700 border-red-200' :
+                                    subarea.priority === 2 ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                    subarea.priority === 3 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                    subarea.priority === 4 ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                  }`}
+                                >
+                                  {subarea.priority === 1 ? '🔥' : 
+                                   subarea.priority === 2 ? '⚡' : 
+                                   subarea.priority === 3 ? '📋' : 
+                                   subarea.priority === 4 ? '📝' : '📚'} 
+                                  {subarea.priority === 1 ? 'Critical' : 
+                                   subarea.priority === 2 ? 'High' : 
+                                   subarea.priority === 3 ? 'Medium' : 
+                                   subarea.priority === 4 ? 'Low' : 'Backlog'}
+                                </Badge>
+                              </div>
                               {subarea.description && (
                                 <p className="text-sm text-gray-600 mt-1">
                                   {subarea.description}
@@ -382,6 +407,7 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
                                   setEditingSubarea(subarea.id);
                                   setEditSubareaName(subarea.name);
                                   setEditSubareaDescription(subarea.description || '');
+                                  setEditSubareaPriority(subarea.priority || 3);
                                 }}
                               >
                                 <Edit2 className="w-3 h-3" />
@@ -696,6 +722,26 @@ export default function AreaManager({ selectedAreaId }: AreaManagerProps) {
                 placeholder="Describe this subarea..."
                 rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="edit-subarea-priority" className="text-sm font-medium">
+                Priority
+              </label>
+              <Select
+                value={editSubareaPriority.toString()}
+                onValueChange={(value) => setEditSubareaPriority(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">🔥 Critical</SelectItem>
+                  <SelectItem value="2">⚡ High</SelectItem>
+                  <SelectItem value="3">📋 Medium</SelectItem>
+                  <SelectItem value="4">📝 Low</SelectItem>
+                  <SelectItem value="5">📚 Backlog</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex justify-end gap-3">

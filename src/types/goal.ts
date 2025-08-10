@@ -20,6 +20,7 @@ export interface LifeGoalSubarea {
   daily_points: number;
   target_points: number;
   daily_target: number;
+  priority: number;
   created_at: string;
   updated_at: string;
   goals: LifeGoal[];
@@ -73,6 +74,7 @@ export interface LifeGoal {
   daily_points: number;
   target_points: number;
   daily_target: number;
+  priority: number;
   created_at: string;
   updated_at: string;
   milestones: LifeGoalMilestone[];

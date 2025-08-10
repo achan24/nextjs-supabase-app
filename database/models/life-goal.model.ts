@@ -46,6 +46,12 @@ export const LifeGoal: TableDefinition = {
       notNull: true,
       defaultValue: '0'
     },
+    priority: {
+      type: 'integer',
+      notNull: true,
+      defaultValue: '5',
+      check: 'priority between 1 and 5'
+    },
     created_at: {
       type: 'timestamptz',
       notNull: true,

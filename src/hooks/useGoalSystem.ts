@@ -80,6 +80,7 @@ export function useGoalSystem() {
             daily_points,
             target_points,
             daily_target,
+            priority,
             created_at,
             updated_at,
             goals:life_goals (
@@ -91,6 +92,7 @@ export function useGoalSystem() {
               daily_points,
               target_points,
               daily_target,
+              priority,
               created_at,
               updated_at,
               milestones:life_goal_milestones (

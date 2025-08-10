@@ -660,6 +660,41 @@ export default function HomePage({ user }: { user: User }) {
               </CardContent>
             </Card>
           </Link>
+
+          {/* Infinite Canvas Card */}
+          <Link href="/dashboard/infinite-canvas" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-lime-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-lime-100 rounded-lg">
+                    <svg 
+                      className="h-6 w-6 text-lime-600"
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2"
+                    >
+                      <path d="M3 3h18v18H3z" />
+                      <path d="M9 9h6v6H9z" />
+                      <path d="M15 3v18" />
+                      <path d="M3 15h18" />
+                    </svg>
+                  </div>
+                  Infinite Canvas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Explore an infinite canvas for brainstorming, mind mapping, and visual thinking. Create, connect, and organize ideas without boundaries.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded">Mind Mapping</span>
+                  <span className="text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded">Brainstorming</span>
+                  <span className="text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded">Visual Thinking</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
     </div>

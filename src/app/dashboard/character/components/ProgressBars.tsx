@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Plus, Minus, ChevronRight, ChevronDown, Settings2, Target, BarChart2 } from 'lucide-react'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { createClient } from '@/lib/supabase/client'
@@ -155,6 +156,7 @@ interface ProgressItemProps {
   isExpanded: boolean;
   hasChildren: boolean;
   completionLikelihood?: number;
+  priority?: number;
   onToggle: () => void;
   onIncrement: () => void;
   onDecrement: () => void;
@@ -172,6 +174,7 @@ function ProgressItem({
   isExpanded,
   hasChildren,
   completionLikelihood,
+  priority,
   onToggle,
   onIncrement,
   onDecrement,
@@ -230,6 +233,23 @@ function ProgressItem({
                 ${level === 'subarea' ? 'font-medium' : ''}
                 ${level === 'goal' ? 'text-sm text-gray-600' : ''}
               `}>{title}</span>
+              {priority && priority !== 5 && (
+                <Badge 
+                  variant="outline" 
+                  className={`text-[10px] px-1 py-0.5 ${
+                    priority === 1 ? 'bg-red-50 text-red-700 border-red-200' :
+                    priority === 2 ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                    priority === 4 ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                    priority === 5 ? 'bg-gray-50 text-gray-700 border-gray-200' :
+                    'bg-yellow-50 text-yellow-700 border-yellow-200'
+                  }`}
+                >
+                  {priority === 1 ? 'Critical' : 
+                   priority === 2 ? 'High' : 
+                   priority === 4 ? 'Low' : 
+                   priority === 5 ? 'Backlog' : 'Medium'}
+                </Badge>
+              )}
               {isCompleted && (
                 <span className="text-green-500 text-sm font-medium ml-2">
                   ✓ Complete
@@ -1280,6 +1300,7 @@ export default function ProgressBars() {
                       isExpanded={expandedSubareas[subarea.id]}
                       hasChildren={subarea.goals.length > 0}
                       completionLikelihood={completionLikelihoods[subarea.id]}
+                      priority={subarea.priority || 5}
                       onToggle={() => toggleSubarea(subarea.id)}
                       onIncrement={() => handleIncrement(subarea.id, 'subarea')}
                       onDecrement={() => handleDecrement(subarea.id, 'subarea')}
@@ -1298,6 +1319,7 @@ export default function ProgressBars() {
                             isExpanded={false}
                             hasChildren={false}
                             completionLikelihood={completionLikelihoods[goal.id]}
+                            priority={goal.priority || 5}
                             onToggle={() => {}}
                             onIncrement={() => handleIncrement(goal.id, 'goal')}
                             onDecrement={() => handleDecrement(goal.id, 'goal')}

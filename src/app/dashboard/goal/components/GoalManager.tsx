@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer, X, Share2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer, X, Share2, Star } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -162,6 +163,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [editGoalTitle, setEditGoalTitle] = useState('');
   const [editGoalDescription, setEditGoalDescription] = useState('');
+  const [editGoalPriority, setEditGoalPriority] = useState<number>(3);
   const supabase = createClient();
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
@@ -869,7 +871,28 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
             <CardHeader>
               <CardTitle className="flex justify-between items-start">
                 <div className="flex flex-col">
-                  <h3 className="text-2xl">{selectedGoal.title}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-2xl">{selectedGoal.title}</h3>
+                    <Badge 
+                      variant="outline" 
+                      className={`text-xs ${
+                        selectedGoal.priority === 1 ? 'bg-red-50 text-red-700 border-red-200' :
+                        selectedGoal.priority === 2 ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                        selectedGoal.priority === 3 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                        selectedGoal.priority === 4 ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        'bg-gray-50 text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      {selectedGoal.priority === 1 ? '🔥' : 
+                       selectedGoal.priority === 2 ? '⚡' : 
+                       selectedGoal.priority === 3 ? '📋' : 
+                       selectedGoal.priority === 4 ? '📝' : '📚'} 
+                      {selectedGoal.priority === 1 ? 'Critical' : 
+                       selectedGoal.priority === 2 ? 'High' : 
+                       selectedGoal.priority === 3 ? 'Medium' : 
+                       selectedGoal.priority === 4 ? 'Low' : 'Backlog'}
+                    </Badge>
+                  </div>
                   {selectedGoal.description && (
                     <p className="text-gray-600 mt-1 text-base">{selectedGoal.description}</p>
                   )}
@@ -898,6 +921,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                         setEditingGoal(selectedGoal.id);
                         setEditGoalTitle(selectedGoal.title);
                         setEditGoalDescription(selectedGoal.description || '');
+                        setEditGoalPriority(selectedGoal.priority || 3);
                       }}
                     >
                       <Edit2 className="h-4 w-4" />
@@ -1479,12 +1503,33 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                               onClick={() => router.push(`/dashboard/goal?tab=goals&subarea=${subarea.id}&goal=${goal.id}`)}
                             >
                               <div className="flex justify-between items-start">
-                                <div className="flex-grow">
+                                                              <div className="flex-grow">
+                                <div className="flex items-center gap-2">
                                   <h3 className="text-xl font-semibold group-hover:text-blue-600 transition-colors">{goal.title}</h3>
-                                  {goal.description && (
-                                    <p className="text-gray-600 mt-1 text-base">{goal.description}</p>
-                                  )}
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-xs ${
+                                      goal.priority === 1 ? 'bg-red-50 text-red-700 border-red-200' :
+                                      goal.priority === 2 ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                      goal.priority === 3 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                      goal.priority === 4 ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                      'bg-gray-50 text-gray-700 border-gray-200'
+                                    }`}
+                                  >
+                                    {goal.priority === 1 ? '🔥' : 
+                                     goal.priority === 2 ? '⚡' : 
+                                     goal.priority === 3 ? '📋' : 
+                                     goal.priority === 4 ? '📝' : '📚'} 
+                                    {goal.priority === 1 ? 'Critical' : 
+                                     goal.priority === 2 ? 'High' : 
+                                     goal.priority === 3 ? 'Medium' : 
+                                     goal.priority === 4 ? 'Low' : 'Backlog'}
+                                  </Badge>
                                 </div>
+                                {goal.description && (
+                                  <p className="text-gray-600 mt-1 text-base">{goal.description}</p>
+                                )}
+                              </div>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -2237,6 +2282,26 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                 rows={3}
               />
             </div>
+            <div className="space-y-2">
+              <label htmlFor="editGoalPriority" className="text-sm font-medium">
+                Priority
+              </label>
+              <Select
+                value={editGoalPriority.toString()}
+                onValueChange={(value) => setEditGoalPriority(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">🔥 Critical</SelectItem>
+                  <SelectItem value="2">⚡ High</SelectItem>
+                  <SelectItem value="3">📋 Medium</SelectItem>
+                  <SelectItem value="4">📝 Low</SelectItem>
+                  <SelectItem value="5">📚 Backlog</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex justify-end gap-3">
             <Button 
@@ -2245,6 +2310,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                 setEditingGoal(null);
                 setEditGoalTitle('');
                 setEditGoalDescription('');
+                setEditGoalPriority(3);
               }}
             >
               Cancel
@@ -2257,6 +2323,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                   await updateGoal(editingGoal, {
                     title: editGoalTitle,
                     description: editGoalDescription || undefined,
+                    priority: editGoalPriority,
                   });
                   setEditingGoal(null);
                   setEditGoalTitle('');
