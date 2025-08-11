@@ -696,29 +696,45 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Branching Timelines Card */}
-          <Link href="/dashboard/timeline-explorer/demo" className="group">
-            <Card className="hover:shadow-md transition-shadow border-2 border-orange-200">
+          {/* Decision Timelines Card */}
+          <Link href="/dashboard/decision-timelines" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-cyan-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <GitBranch className="h-6 w-6 text-orange-600" />
+                  <div className="p-2 bg-cyan-100 rounded-lg">
+                    <svg 
+                      className="h-6 w-6 text-cyan-600"
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2"
+                    >
+                      <path d="M9 12l2 2 4-4" />
+                      <path d="M21 12c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
+                      <path d="M3 12c1 0 2-1 2-2s-1-2-2-2-2 1-2 2 1 2 2 2z" />
+                      <path d="M12 3c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z" />
+                      <path d="M12 21c0-1 1-2 2-2s2 1 2 2-1 2-2 2-2-1-2-2z" />
+                      <path d="M12 9c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
+                      <path d="M12 15c1 0 2 1 2 2s-1 2-2 2-2-1-2-2 1-2 2-2z" />
+                    </svg>
                   </div>
-                  Branching Timelines
+                  Decision Timelines
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Create and explore branching timelines with decision nodes. Zoom into any branch, pan around, and build complex decision trees with metadata.
+                  Track and visualize your decision-making process over time. Create decision trees, record outcomes, and learn from your choices to improve future decisions.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Zoomable Canvas</span>
-                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Decision Trees</span>
-                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Workflowy-style</span>
+                  <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded">Decision Trees</span>
+                  <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded">Outcome Tracking</span>
+                  <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded">Learning History</span>
                 </div>
               </CardContent>
             </Card>
           </Link>
+
+
         </div>
       </div>
     </div>
