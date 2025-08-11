@@ -8,7 +8,7 @@ import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain, DollarSign } from 'lucide-react'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain, DollarSign, GitBranch } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { GuardianAngelAI } from '@/components/GuardianAngelAI'
@@ -691,6 +691,30 @@ export default function HomePage({ user }: { user: User }) {
                   <span className="text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded">Mind Mapping</span>
                   <span className="text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded">Brainstorming</span>
                   <span className="text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded">Visual Thinking</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Branching Timelines Card */}
+          <Link href="/dashboard/timeline-explorer/demo" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-orange-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <GitBranch className="h-6 w-6 text-orange-600" />
+                  </div>
+                  Branching Timelines
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Create and explore branching timelines with decision nodes. Zoom into any branch, pan around, and build complex decision trees with metadata.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Zoomable Canvas</span>
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Decision Trees</span>
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Workflowy-style</span>
                 </div>
               </CardContent>
             </Card>

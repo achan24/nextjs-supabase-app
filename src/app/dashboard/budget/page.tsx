@@ -580,6 +580,8 @@ export default function BudgetApp() {
     async function loadData() {
       setLoading(true);
       try {
+        if (!user) return;
+        
         // Load transactions
         const { data: txData, error: txError } = await supabase
           .from('budget_transactions')

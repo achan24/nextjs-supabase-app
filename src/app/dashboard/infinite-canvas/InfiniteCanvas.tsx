@@ -37,18 +37,31 @@ const NodeTypes = {
   TEXT: "text",
   IMAGE: "image",
   WEB: "web",
-};
+} as const;
+
+type NodeType = typeof NodeTypes[keyof typeof NodeTypes];
+
+interface Node {
+  id: string;
+  type: NodeType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  data: any;
+  title?: string;
+}
 
 function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-function clamp(n, min, max) {
+function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
 // Helper: Download JSON as file
-function downloadJSON(filename, data) {
+function downloadJSON(filename: string, data: any) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -71,16 +84,16 @@ const gridBg = {
 };
 
 export default function InfiniteCanvas() {
-  const containerRef = useRef(null);
-  const [nodes, setNodes] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [camera, setCamera] = useState({ x: 0, y: 0, scale: INITIAL_SCALE });
   const [isPanning, setIsPanning] = useState(false);
   const panState = useRef({ startX: 0, startY: 0, camX: 0, camY: 0 });
 
   // Keyboard delete
   useEffect(() => {
-    function onKey(e) {
+    function onKey(e: KeyboardEvent) {
       if ((e.key === "Backspace" || e.key === "Delete") && selectedId) {
         setNodes((prev) => prev.filter((n) => n.id !== selectedId));
         setSelectedId(null);
@@ -91,8 +104,8 @@ export default function InfiniteCanvas() {
   }, [selectedId]);
 
   // Pan logic
-  const onPointerDown = useCallback((e) => {
-    const isSpace = e.shiftKey || e.button === 1 || e.buttons === 4 || e.button === 2 || e.getModifierState?.("Space");
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    const isSpace = e.shiftKey || e.button === 1 || e.buttons === 4 || e.button === 2 || e.getModifierState?.("Space" as any);
     if (isSpace) {
       setIsPanning(true);
       panState.current = { startX: e.clientX, startY: e.clientY, camX: camera.x, camY: camera.y };
@@ -100,7 +113,7 @@ export default function InfiniteCanvas() {
     }
   }, [camera]);
 
-  const onPointerMove = useCallback((e) => {
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
     if (!isPanning) return;
     const dx = e.clientX - panState.current.startX;
     const dy = e.clientY - panState.current.startY;
@@ -110,7 +123,7 @@ export default function InfiniteCanvas() {
   const endPan = useCallback(() => setIsPanning(false), []);
 
   // Zoom with wheel / trackpad
-  const onWheel = useCallback((e) => {
+  const onWheel = useCallback((e: React.WheelEvent) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -130,12 +143,12 @@ export default function InfiniteCanvas() {
 
   // Convert screen to world coords
   const screenToWorld = useCallback(
-    (sx, sy) => ({ x: (sx - camera.x) / camera.scale, y: (sy - camera.y) / camera.scale }),
+    (sx: number, sy: number) => ({ x: (sx - camera.x) / camera.scale, y: (sy - camera.y) / camera.scale }),
     [camera]
   );
 
   // Create nodes
-  const createTextNode = useCallback((pos, initialText = "Double-click to edit") => {
+  const createTextNode = useCallback((pos: { x: number; y: number }, initialText = "Double-click to edit") => {
     const id = uid();
     const node = {
       id,
@@ -150,14 +163,14 @@ export default function InfiniteCanvas() {
     setSelectedId(id);
   }, []);
 
-  const createImageNode = useCallback((pos, dataUrl, name = "image") => {
+  const createImageNode = useCallback((pos: { x: number; y: number }, dataUrl: string, name = "image") => {
     const id = uid();
     const node = { id, type: NodeTypes.IMAGE, x: pos.x, y: pos.y, width: 420, height: 280, data: { src: dataUrl, name } };
     setNodes((n) => [...n, node]);
     setSelectedId(id);
   }, []);
 
-  const createWebNode = useCallback((pos, url) => {
+  const createWebNode = useCallback((pos: { x: number; y: number }, url: string) => {
     const id = uid();
     const node = { id, type: NodeTypes.WEB, x: pos.x, y: pos.y, width: 560, height: 360, data: { url } };
     setNodes((n) => [...n, node]);
@@ -166,7 +179,7 @@ export default function InfiniteCanvas() {
 
   // Drag & Drop handlers
   const onDrop = useCallback(
-    async (e) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       const pos = screenToWorld(e.clientX, e.clientY);
 
@@ -200,7 +213,7 @@ export default function InfiniteCanvas() {
     [createImageNode, createTextNode, createWebNode, screenToWorld]
   );
 
-  const onDragOver = useCallback((e) => {
+  const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
   }, []);
@@ -216,9 +229,9 @@ export default function InfiniteCanvas() {
     downloadJSON("canvas.dropboard.json", payload);
   };
 
-  const importRef = useRef(null);
+  const importRef = useRef<HTMLInputElement>(null);
   const onImport = () => importRef.current?.click();
-  const handleImport = async (e) => {
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
@@ -273,13 +286,13 @@ export default function InfiniteCanvas() {
   };
 
   // Node interactions: drag & resize
-  const beginDragNode = (e, id) => {
+  const beginDragNode = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
     const start = { sx: e.clientX, sy: e.clientY, nx: node.x, ny: node.y };
 
-    const onMove = (ev) => {
+    const onMove = (ev: MouseEvent) => {
       const dx = (ev.clientX - start.sx) / camera.scale;
       const dy = (ev.clientY - start.sy) / camera.scale;
       setNodes((arr) => arr.map((n) => (n.id === id ? { ...n, x: start.nx + dx, y: start.ny + dy } : n)));
@@ -292,12 +305,12 @@ export default function InfiniteCanvas() {
     window.addEventListener("mouseup", onUp);
   };
 
-  const beginResize = (e, id) => {
+  const beginResize = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
     const start = { sx: e.clientX, sy: e.clientY, w: node.width, h: node.height };
-    const onMove = (ev) => {
+    const onMove = (ev: MouseEvent) => {
       const dx = (ev.clientX - start.sx) / camera.scale;
       const dy = (ev.clientY - start.sy) / camera.scale;
       setNodes((arr) =>
@@ -376,8 +389,8 @@ export default function InfiniteCanvas() {
                 node={n}
                 selected={n.id === selectedId}
                 onSelect={() => setSelectedId(n.id)}
-                onDrag={(e) => beginDragNode(e, n.id)}
-                onResize={(e) => beginResize(e, n.id)}
+                onDrag={(e: React.MouseEvent) => beginDragNode(e, n.id)}
+                onResize={(e: React.MouseEvent) => beginResize(e, n.id)}
                 setNodes={setNodes}
               />
             ))}
@@ -395,7 +408,7 @@ export default function InfiniteCanvas() {
   );
 }
 
-function ToolButton({ icon, label, onClick, disabled }) {
+function ToolButton({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -410,7 +423,14 @@ function ToolButton({ icon, label, onClick, disabled }) {
   );
 }
 
-function NodeCard({ node, selected, onSelect, onDrag, onResize, setNodes }) {
+function NodeCard({ node, selected, onSelect, onDrag, onResize, setNodes }: { 
+  node: Node; 
+  selected: boolean; 
+  onSelect: () => void; 
+  onDrag: (e: React.MouseEvent) => void; 
+  onResize: (e: React.MouseEvent) => void; 
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+}) {
   const common = "absolute rounded-2xl shadow-xl border overflow-hidden";
   const ring = selected ? "ring-2 ring-cyan-400/80" : "ring-1 ring-white/10";
 
@@ -476,7 +496,7 @@ function NodeCard({ node, selected, onSelect, onDrag, onResize, setNodes }) {
   );
 }
 
-function TextEditor({ node, setNodes }) {
+function TextEditor({ node, setNodes }: { node: Node; setNodes: React.Dispatch<React.SetStateAction<Node[]>> }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(node.data?.text || "");
 
@@ -513,23 +533,23 @@ function TextEditor({ node, setNodes }) {
 }
 
 // Utils
-function readFileAsDataURL(file) {
+function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => resolve(reader.result as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
-function readFileAsText(file) {
+function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => resolve(reader.result as string);
     reader.onerror = reject;
     reader.readAsText(file);
   });
 }
-function extractUrl(text) {
+function extractUrl(text: string): string | null {
   try {
     const url = new URL(text.trim());
     return url.href;
@@ -539,7 +559,7 @@ function extractUrl(text) {
     return m ? m[0] : null;
   }
 }
-function safeUrl(u) {
+function safeUrl(u: string | undefined): string {
   if (!u) return "about:blank";
   if (/^https?:\/\//i.test(u)) return u;
   return `https://${u}`;

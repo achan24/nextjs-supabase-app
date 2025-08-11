@@ -23,7 +23,8 @@ import {
   BookOpen,
   Brain,
   Network,
-  Heart
+  Heart,
+  Clock
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
 import { PostgrestResponse } from '@supabase/supabase-js';
@@ -88,6 +89,12 @@ const apps = [
     href: '/dashboard/calendar', 
     description: 'View your schedule',
     icon: Calendar
+  },
+  { 
+    name: 'Timeline Explorer', 
+    href: '/dashboard/timeline-explorer', 
+    description: 'Create and explore branching timelines with decision nodes',
+    icon: Clock
   },
   { 
     name: 'Relationship CRM', 
