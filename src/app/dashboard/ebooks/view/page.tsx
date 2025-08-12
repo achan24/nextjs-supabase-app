@@ -58,7 +58,7 @@ export default async function EbookViewPage({ searchParams }: { searchParams: { 
       {!signedUrl ? (
         <div className="text-sm text-red-600">Failed to open file.</div>
       ) : (
-        <EbookViewerClient signedUrl={signedUrl} />
+        <EbookViewerClient signedUrl={signedUrl} storagePath={path} />
       )}
     </div>
   );

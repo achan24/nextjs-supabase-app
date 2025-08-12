@@ -16,6 +16,13 @@ interface EbookFile {
   size?: number;
 }
 
+// Minimal shape to discriminate file vs prefix
+interface StorageObjectMinimal {
+  name: string;
+  id?: string;
+  metadata?: { size?: number } | null;
+}
+
 export default function EbooksClient({ user }: { user: User }) {
   const supabase = createClient();
   const router = useRouter();
@@ -24,6 +31,10 @@ export default function EbooksClient({ user }: { user: User }) {
   const [files, setFiles] = useState<EbookFile[]>([]);
 
   const userPrefix = useMemo(() => `${user.id}`, [user.id]);
+
+  function isFile(entry: StorageObjectMinimal): boolean {
+    return !!entry.metadata; // files have metadata; prefixes do not
+  }
 
   async function listFiles() {
     const { data, error } = await supabase.storage.from('ebooks').list(userPrefix, { limit: 100, offset: 0, sortBy: { column: 'name', order: 'asc' } });
@@ -36,31 +47,20 @@ export default function EbooksClient({ user }: { user: User }) {
     const fileEntries: EbookFile[] = [];
 
     // include files directly under userPrefix
-    for (const entry of data) {
-      // If entry has metadata, it's a file directly under the user folder
-      // If metadata is null/undefined, treat as a subfolder (bookId)
-      // Supabase Storage returns prefixes with no metadata
-      // Handle top-level files
-      // @ts-expect-error metadata may not exist on prefix
-      if (entry?.metadata) {
-        // @ts-expect-error metadata type
-        fileEntries.push({ path: `${userPrefix}/${entry.name}`, name: entry.name, size: entry.metadata?.size });
+    for (const raw of data as unknown as StorageObjectMinimal[]) {
+      if (isFile(raw)) {
+        fileEntries.push({ path: `${userPrefix}/${raw.name}`, name: raw.name, size: raw.metadata?.size });
       }
     }
 
     // descend into subfolders (bookId) to collect actual files
-    for (const entry of data) {
-      // prefixes have no metadata
-      // @ts-expect-error metadata may not exist on prefix
-      if (!entry?.metadata && entry.name) {
-        const sub = await supabase.storage.from('ebooks').list(`${userPrefix}/${entry.name}`);
+    for (const raw of data as unknown as StorageObjectMinimal[]) {
+      if (!isFile(raw) && raw.name) {
+        const sub = await supabase.storage.from('ebooks').list(`${userPrefix}/${raw.name}`);
         if (sub.data) {
-          for (const f of sub.data) {
-            // only include files (not further prefixes)
-            // @ts-expect-error metadata present only for files
-            if (f?.metadata) {
-              // @ts-expect-error metadata type
-              fileEntries.push({ path: `${userPrefix}/${entry.name}/${f.name}`, name: f.name, size: f.metadata?.size });
+          for (const fraw of sub.data as unknown as StorageObjectMinimal[]) {
+            if (isFile(fraw)) {
+              fileEntries.push({ path: `${userPrefix}/${raw.name}/${fraw.name}`, name: fraw.name, size: fraw.metadata?.size });
             }
           }
         }
