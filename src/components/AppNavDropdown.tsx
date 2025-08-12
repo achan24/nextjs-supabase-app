@@ -24,7 +24,8 @@ import {
   Brain,
   Network,
   Heart,
-  Clock
+  Clock,
+  Book
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { PostgrestResponse } from '@supabase/supabase-js';
@@ -47,6 +48,12 @@ const apps = [
     href: '/dashboard/obsidian', 
     description: 'Note-taking and knowledge management',
     icon: BookOpen
+  },
+  { 
+    name: 'Ebook Reader', 
+    href: '/dashboard/ebooks', 
+    description: 'Read PDFs/EPUBs with highlights and notes',
+    icon: Book
   },
   { 
     name: 'Tasks', 

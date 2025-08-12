@@ -404,6 +404,41 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
+          {/* Ebook Reader Card */}
+          <Link href="/dashboard/ebooks" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-emerald-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <svg 
+                      className="h-6 w-6 text-emerald-600"
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2"
+                    >
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                      <path d="M20 22V5a2 2 0 0 0-2-2H7.5A2.5 2.5 0 0 0 5 5.5V19" />
+                      <path d="M16 8H8" />
+                      <path d="M16 12H8" />
+                    </svg>
+                  </div>
+                  Ebook Reader
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Upload and read PDFs/EPUBs with highlights, bookmarks, and a linked notes panel.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">Reader</span>
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">PDF</span>
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">EPUB</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
           {/* Process Flow Card */}
           <Link href="/dashboard/process-flow" className="group">
             <Card className="hover:shadow-md transition-shadow">

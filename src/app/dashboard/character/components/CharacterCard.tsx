@@ -1,12 +1,13 @@
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Info } from 'lucide-react'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
 import { getCharacterProgress } from '@/services/characterService'
 import { useAuth } from '@/hooks/useAuth'
+import XPDetailsDialog from './XPDetailsDialog'
 
 interface CharacterData {
   name: string;
@@ -43,6 +44,7 @@ export default function CharacterCard() {
   })
   const [topProgress, setTopProgress] = useState<TopProgress | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [xpDialogOpen, setXpDialogOpen] = useState(false)
 
   const refreshCharacterData = useCallback(async () => {
     if (user?.id) {
@@ -133,7 +135,16 @@ export default function CharacterCard() {
           {/* XP Progress */}
           <div className="mb-6">
             <div className="flex justify-between text-sm mb-1">
-              <span>XP Progress</span>
+              <span className="flex items-center gap-2">
+                XP Progress
+                <button
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                  onClick={() => setXpDialogOpen(true)}
+                  aria-label="View XP details"
+                >
+                  <Info className="w-3 h-3" /> Details
+                </button>
+              </span>
               <span>{characterData.xp} / {characterData.nextLevelXp}</span>
             </div>
             <Progress value={xpProgress} className="h-2" />
@@ -156,6 +167,7 @@ export default function CharacterCard() {
           </div>
         </div>
       </div>
+      <XPDetailsDialog open={xpDialogOpen} onOpenChange={setXpDialogOpen} />
     </Card>
   )
 } 
