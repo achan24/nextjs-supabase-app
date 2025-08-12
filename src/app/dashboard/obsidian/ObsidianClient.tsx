@@ -9,7 +9,7 @@ import MarkdownEditor from './components/MarkdownEditor';
 import RightPanel from './components/RightPanel';
 import QuickSwitcher from './components/QuickSwitcher';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, Settings } from 'lucide-react';
+import { Search, Plus, Settings, Bookmark } from 'lucide-react';
 import { YouTubeProvider } from './components/useYouTube';
 
 export default function ObsidianClient({ user }: { user: User }) {
@@ -31,11 +31,63 @@ export default function ObsidianClient({ user }: { user: User }) {
     lastSaved: null
   } satisfies EditorState);
 
+  const [isHotlinked, setIsHotlinked] = useState(false);
+
   // Fetch initial data
   useEffect(() => {
     fetchNotes();
     fetchFolders();
   }, []);
+
+  // Open note from URL param (?noteId=...)
+  useEffect(() => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const noteId = params.get('noteId');
+    if (!noteId) return;
+    const note = notes.find(n => n.id === noteId);
+    if (note) setCurrentNote(note);
+  }, [notes]);
+
+  // Track hotlink state for current note
+  useEffect(() => {
+    async function checkHotlink() {
+      if (!currentNote) return setIsHotlinked(false);
+      const { data, error } = await supabase
+        .from('note_hotlinks')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('note_id', currentNote.id)
+        .single();
+      if (error && (error as any).code !== 'PGRST116') {
+        console.error('[Obsidian] Error checking hotlink:', error);
+      }
+      setIsHotlinked(!!data);
+    }
+    checkHotlink();
+  }, [currentNote, supabase, user.id]);
+
+  const toggleHotlink = async () => {
+    if (!currentNote) return;
+    try {
+      if (isHotlinked) {
+        const { error } = await supabase
+          .from('note_hotlinks')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('note_id', currentNote.id);
+        if (error) throw error;
+        setIsHotlinked(false);
+      } else {
+        const { error } = await supabase
+          .from('note_hotlinks')
+          .insert({ user_id: user.id, note_id: currentNote.id });
+        if (error) throw error;
+        setIsHotlinked(true);
+      }
+    } catch (error) {
+      console.error('[Obsidian] Error toggling hotlink:', error);
+    }
+  };
 
   const fetchNotes = async () => {
     try {
@@ -198,6 +250,17 @@ export default function ObsidianClient({ user }: { user: User }) {
             <Plus className="h-4 w-4 md:mr-2" />
             <span className="hidden md:inline">New Note</span>
           </Button>
+          {currentNote && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleHotlink}
+              title={isHotlinked ? 'Remove from hotlinks' : 'Add to hotlinks'}
+              className={isHotlinked ? 'text-purple-600' : ''}
+            >
+              <Bookmark className="h-4 w-4" fill={isHotlinked ? 'currentColor' : 'none'} />
+            </Button>
+          )}
           <Button variant="outline" size="sm">
             <Settings className="h-4 w-4" />
           </Button>

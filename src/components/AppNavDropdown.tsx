@@ -26,7 +26,7 @@ import {
   Heart,
   Clock
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 import { PostgrestResponse } from '@supabase/supabase-js';
 
 const apps = [
@@ -156,6 +156,12 @@ interface FavoriteFlow extends ProcessFlow {
   created_at: string;
 }
 
+interface NoteHotlink {
+  id: string;
+  title: string;
+  created_at: string;
+}
+
 interface ProcessFlowFavorite {
   flow_id: string;
   created_at: string;
@@ -167,6 +173,7 @@ export function AppNavDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [isHotlinksOpen, setIsHotlinksOpen] = useState(false);
   const [favoriteFlows, setFavoriteFlows] = useState<FavoriteFlow[]>([]);
+  const [noteHotlinks, setNoteHotlinks] = useState<NoteHotlink[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const hotlinksRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
@@ -211,7 +218,37 @@ export function AppNavDropdown() {
       setFavoriteFlows(flows);
     }
 
+    async function fetchNoteHotlinks() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('note_hotlinks')
+        .select(`
+          note_id:note_id,
+          created_at,
+          notes ( id, title )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }) as PostgrestResponse<{
+          note_id: string;
+          created_at: string;
+          notes: { id: string; title: string };
+        }>;
+
+      if (error) {
+        console.error('Error fetching note hotlinks:', error);
+        return;
+      }
+      if (!data) return;
+
+      setNoteHotlinks(
+        data.map((r) => ({ id: r.notes.id, title: r.notes.title, created_at: r.created_at }))
+      );
+    }
+
     fetchFavoriteFlows();
+    fetchNoteHotlinks();
   }, []);
 
   useEffect(() => {
@@ -283,25 +320,36 @@ export function AppNavDropdown() {
         {isHotlinksOpen && (
           <div className="absolute right-0 z-10 mt-2 w-64 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
             <div className="py-1">
+              <div className="px-4 py-2 text-xs uppercase tracking-wide text-gray-400">Process Flows</div>
               {favoriteFlows.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                  No favorite flows yet. Star a flow to add it here.
-                </div>
-              ) : (
-                favoriteFlows.map((flow) => (
-                  <Link
-                    key={flow.id}
-                    href={`/dashboard/process-flow?flowId=${flow.id}`}
-                    className="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    onClick={() => setIsHotlinksOpen(false)}
-                  >
-                    <div className="font-medium text-gray-900 dark:text-white">{flow.title}</div>
-                    {flow.description && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{flow.description}</div>
-                    )}
-                  </Link>
-                ))
-              )}
+                <div className="px-4 pb-2 text-sm text-gray-500 dark:text-gray-400">None</div>
+              ) : favoriteFlows.map((flow) => (
+                <Link
+                  key={flow.id}
+                  href={`/dashboard/process-flow?flowId=${flow.id}`}
+                  className="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => setIsHotlinksOpen(false)}
+                >
+                  <div className="font-medium text-gray-900 dark:text-white">{flow.title}</div>
+                  {flow.description && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{flow.description}</div>
+                  )}
+                </Link>
+              ))}
+
+              <div className="px-4 pt-3 pb-2 text-xs uppercase tracking-wide text-gray-400">Notes</div>
+              {noteHotlinks.length === 0 ? (
+                <div className="px-4 pb-3 text-sm text-gray-500 dark:text-gray-400">None</div>
+              ) : noteHotlinks.map((n) => (
+                <Link
+                  key={n.id}
+                  href={`/dashboard/obsidian?noteId=${n.id}`}
+                  className="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => setIsHotlinksOpen(false)}
+                >
+                  <div className="font-medium text-gray-900 dark:text-white">{n.title}</div>
+                </Link>
+              ))}
             </div>
           </div>
         )}

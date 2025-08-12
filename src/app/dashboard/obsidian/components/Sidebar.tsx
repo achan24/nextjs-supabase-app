@@ -151,7 +151,7 @@ export default function Sidebar({
   };
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <div className="w-64 h-full bg-white border-r border-gray-200 flex flex-col min-h-0">
       {/* Tabs */}
       <div className="flex border-b border-gray-200">
         <button
@@ -181,7 +181,7 @@ export default function Sidebar({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2 min-h-0">
         {activeTab === 'all' ? (
           <div>
             {/* Root level notes */}

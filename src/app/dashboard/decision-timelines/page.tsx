@@ -1,5 +1,5 @@
-import DecisionTimelines from '@/components/DecisionTimelines'
+import TimelineList from '@/components/TimelineList';
 
 export default function DecisionTimelinesPage() {
-  return <DecisionTimelines />
+  return <TimelineList />;
 }
