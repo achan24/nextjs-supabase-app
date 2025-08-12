@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF Viewer</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #toolbar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #ddd; align-items: center; font-family: system-ui, sans-serif; flex-wrap: wrap; }
+    #viewer { height: calc(100% - 48px); overflow: auto; background: #f5f5f5; }
+    .page { margin: 12px auto; background: white; box-shadow: 0 0 2px rgba(0,0,0,0.2); }
+    input, select, button { height: 32px; }
+    #pageHud { position: fixed; right: 12px; bottom: 12px; padding: 6px 10px; background: rgba(0,0,0,0.7); color: #fff; border-radius: 8px; font-family: system-ui, sans-serif; font-size: 12px; z-index: 1000; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="zoomOut">-</button>
+    <select id="zoomSelect">
+      <option value="0.5">50%</option>
+      <option value="0.67">67%</option>
+      <option value="0.75">75%</option>
+      <option value="0.9">90%</option>
+      <option value="1">100%</option>
+      <option value="1.25">125%</option>
+      <option value="1.5">150%</option>
+      <option value="2">200%</option>
+      <option value="page-width">Fit width</option>
+    </select>
+    <span>Page</span>
+    <input id="pageInput" type="number" min="1" value="1" style="width:72px" />
+    <span id="pageTotal" style="opacity:0.7"></span>
+    <button id="goBtn">Go</button>
+    <span style="margin-left:12px; opacity:0.7">Display offset</span>
+    <input id="offsetInput" type="number" value="0" style="width:72px" />
+  </div>
+  <div id="viewer"></div>
+  <div id="pageHud" aria-live="polite">Page 1</div>
+
+  <script>
+    if (!('withResolvers' in Promise)) {
+      Promise.withResolvers = function () {
+        let resolve, reject;
+        const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+        return { promise, resolve, reject };
+      };
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(location.search);
+    const fileUrl = urlParams.get('file');
+    const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+
+    const pageInput = document.getElementById('pageInput');
+    const zoomSelect = document.getElementById('zoomSelect');
+    const viewer = document.getElementById('viewer');
+    const pageTotal = document.getElementById('pageTotal');
+    const pageHud = document.getElementById('pageHud');
+    const offsetInput = document.getElementById('offsetInput');
+
+    let pdfDoc = null;
+    let scale = 1;
+
+    function parseInitial() {
+      const page = parseInt(hashParams.get('page') || '1', 10);
+      const zoom = hashParams.get('zoom') || 'page-width';
+      pageInput.value = String(page);
+      zoomSelect.value = isNaN(parseFloat(zoom)) ? zoom : String(parseFloat(zoom));
+    }
+
+    async function computeGlobalScale() {
+      const first = await pdfDoc.getPage(1);
+      const base = first.getViewport({ scale: 1 });
+      if (zoomSelect.value === 'page-width') {
+        const available = viewer.clientWidth - 24;
+        return available / base.width;
+      }
+      const z = parseFloat(zoomSelect.value);
+      return isNaN(z) ? 1 : z;
+    }
+
+    function getVisiblePage() {
+      const t = viewer.scrollTop;
+      const pages = Array.from(viewer.children);
+      let bestIdx = 0;
+      let bestDelta = Infinity;
+      pages.forEach((el, idx) => {
+        const d = Math.abs(el.offsetTop - t);
+        if (d < bestDelta) { bestDelta = d; bestIdx = idx; }
+      });
+      return bestIdx + 1;
+    }
+
+    function notifyParent() {
+      const p = getVisiblePage();
+      const payload = { type: 'ebook:viewer_state', page: p, total: pdfDoc ? pdfDoc.numPages : 0, zoom: zoomSelect.value };
+      try { window.parent && window.parent.postMessage(payload, '*'); } catch {}
+    }
+
+    function updateHud() {
+      const p = getVisiblePage();
+      const offset = parseInt(offsetInput.value || '0', 10) || 0;
+      const displayPage = p + offset;
+      pageHud.textContent = `Page ${displayPage} / ${pdfDoc ? pdfDoc.numPages + offset : '?'}`;
+      notifyParent();
+    }
+
+    async function renderDocument() {
+      if (!fileUrl) return;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      pdfDoc = await pdfjsLib.getDocument({ url: fileUrl, withCredentials: false }).promise;
+      viewer.innerHTML = '';
+
+      pageTotal.textContent = `/ ${pdfDoc.numPages}`;
+
+      scale = await computeGlobalScale();
+
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.className = 'page';
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+        viewer.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+      }
+
+      gotoPage();
+      updateHud();
+    }
+
+    function rezoom() {
+      const visible = getVisiblePage();
+      pageInput.value = String(visible);
+      renderDocument();
+    }
+
+    function gotoPage() {
+      const target = parseInt(pageInput.value || '1', 10);
+      const node = viewer.children[target - 1];
+      if (node) node.scrollIntoView({ block: 'start' });
+      location.hash = `page=${target}&zoom=${zoomSelect.value}`;
+      updateHud();
+    }
+
+    document.getElementById('goBtn').addEventListener('click', gotoPage);
+    document.getElementById('zoomOut').addEventListener('click', () => {
+      const current = parseFloat(zoomSelect.value) || 1;
+      const next = Math.max(0.5, current - 0.1);
+      zoomSelect.value = String(Number(next.toFixed(2)));
+      rezoom();
+    });
+    zoomSelect.addEventListener('change', () => {
+      rezoom();
+    });
+    offsetInput.addEventListener('change', updateHud);
+
+    let scrollTimer = null;
+    viewer.addEventListener('scroll', () => {
+      if (scrollTimer) return;
+      scrollTimer = setTimeout(() => {
+        scrollTimer = null;
+        const p = getVisiblePage();
+        pageInput.value = String(p);
+        location.hash = `page=${p}&zoom=${zoomSelect.value}`;
+        updateHud();
+      }, 150);
+    });
+
+    // Receive commands from parent
+    window.addEventListener('message', (e) => {
+      const data = e.data || {};
+      if (data.type === 'ebook:go' && typeof data.page === 'number') {
+        pageInput.value = String(Math.max(1, Math.min(pdfDoc?.numPages || 1, data.page)));
+        gotoPage();
+      } else if (data.type === 'ebook:setZoom' && typeof data.zoom === 'string') {
+        zoomSelect.value = data.zoom;
+        rezoom();
+      }
+    });
+
+    parseInitial();
+    renderDocument();
+    window.addEventListener('resize', () => {
+      if (zoomSelect.value === 'page-width') rezoom();
+    });
+  </script>
+</body>
+</html>

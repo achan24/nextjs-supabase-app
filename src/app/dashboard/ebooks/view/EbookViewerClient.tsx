@@ -21,16 +21,17 @@ interface BookmarkItem {
 export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   const router = useRouter();
   const [zoom, setZoom] = useState<string>('page-width');
-  const [leftOpen, setLeftOpen] = useState(false); // TOC placeholder
-  const [rightOpen, setRightOpen] = useState(true); // Notes + Bookmarks
+  const [leftOpen, setLeftOpen] = useState(false);
+  const [rightOpen, setRightOpen] = useState(true);
   const [notes, setNotes] = useState('');
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [editingBookmarkId, setEditingBookmarkId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<string>('');
-  const [pageInput, setPageInput] = useState<string>('1');
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(0);
   const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     const mq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)') : null;
@@ -43,54 +44,67 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   }, []);
 
   useEffect(() => {
-    if (isMobile) {
-      setLeftOpen(false);
-      setRightOpen(false);
-    }
+    if (isMobile) { setLeftOpen(false); setRightOpen(false); }
   }, [isMobile]);
 
-  // Load/save notes and bookmarks to localStorage (wire to SQL later)
+  // Persist notes/bookmarks
   useEffect(() => {
     const nk = `ebook-notes:${storagePath}`;
     const bk = `ebook-bookmarks:${storagePath}`;
     const savedNotes = typeof window !== 'undefined' ? window.localStorage.getItem(nk) : null;
     const savedBookmarks = typeof window !== 'undefined' ? window.localStorage.getItem(bk) : null;
     if (savedNotes) setNotes(savedNotes);
-    if (savedBookmarks) {
-      try { setBookmarks(JSON.parse(savedBookmarks)); } catch {}
-    }
+    if (savedBookmarks) { try { setBookmarks(JSON.parse(savedBookmarks)); } catch {} }
   }, [storagePath]);
-  useEffect(() => {
-    const nk = `ebook-notes:${storagePath}`;
-    if (typeof window !== 'undefined') window.localStorage.setItem(nk, notes);
-  }, [notes, storagePath]);
-  useEffect(() => {
-    const bk = `ebook-bookmarks:${storagePath}`;
-    if (typeof window !== 'undefined') window.localStorage.setItem(bk, JSON.stringify(bookmarks));
-  }, [bookmarks, storagePath]);
+  useEffect(() => { if (typeof window !== 'undefined') window.localStorage.setItem(`ebook-notes:${storagePath}`, notes); }, [notes, storagePath]);
+  useEffect(() => { if (typeof window !== 'undefined') window.localStorage.setItem(`ebook-bookmarks:${storagePath}`, JSON.stringify(bookmarks)); }, [bookmarks, storagePath]);
 
-  const iframeSrc = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set('toolbar', '1');
-    params.set('navpanes', '0');
-    params.set('scrollbar', '1');
-    params.set('zoom', zoom);
-    params.set('page', String(currentPage));
-    const hash = `#${params.toString()}`;
-    return `${signedUrl}${hash}`;
-  }, [signedUrl, zoom, currentPage]);
+  // Stable viewer URL – do not include page/zoom to avoid reload loops
+  const viewerBase = '/pdfjs-viewer.html';
+  const viewerSrc = useMemo(() => `${viewerBase}?file=${encodeURIComponent(signedUrl)}`, [signedUrl]);
 
-  function handleFullscreen() {
-    const elem = containerRef.current;
-    if (elem && elem.requestFullscreen) {
-      elem.requestFullscreen().catch(() => {});
+  const externalHref = useMemo(
+    () => `${viewerBase}?file=${encodeURIComponent(signedUrl)}#page=${currentPage}&zoom=${encodeURIComponent(zoom)}`,
+    [signedUrl, currentPage, zoom]
+  );
+
+  // Listen to viewer state
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      const data = e.data as any;
+      if (data && data.type === 'ebook:viewer_state') {
+        if (typeof data.page === 'number') setCurrentPage(data.page);
+        if (typeof data.total === 'number') setTotalPages(data.total);
+        if (typeof data.zoom === 'string') setZoom(data.zoom);
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  function sendToViewer(msg: any) {
+    const win = iframeRef.current?.contentWindow;
+    if (win) {
+      try { win.postMessage(msg, '*'); } catch {}
     }
   }
 
-  function goToPage() {
-    const n = Number(pageInput);
-    if (!Number.isFinite(n) || n <= 0) return;
-    setCurrentPage(Math.floor(n));
+  // Initialize viewer once it loads
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const handleLoad = () => {
+      sendToViewer({ type: 'ebook:setZoom', zoom });
+      sendToViewer({ type: 'ebook:go', page: currentPage });
+    };
+    iframe.addEventListener('load', handleLoad);
+    return () => iframe.removeEventListener('load', handleLoad);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedUrl]);
+
+  function handleFullscreen() {
+    const elem = containerRef.current;
+    if (elem && elem.requestFullscreen) { elem.requestFullscreen().catch(() => {}); }
   }
 
   function addBookmark() {
@@ -100,41 +114,22 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
     setBookmarks((prev) => [item, ...prev]);
   }
 
-  function startEditBookmark(bm: BookmarkItem) {
-    setEditingBookmarkId(bm.id);
-    setEditingLabel(bm.label);
-  }
-  function saveEditBookmark(id: string) {
-    setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, label: editingLabel } : b)));
-    setEditingBookmarkId(null);
-    setEditingLabel('');
-  }
-
-  function openBookmark(bm: BookmarkItem) {
-    setCurrentPage(bm.page);
-    setPageInput(String(bm.page));
-  }
-
-  function deleteBookmark(id: string) {
-    setBookmarks((prev) => prev.filter((b) => b.id !== id));
-  }
+  function startEditBookmark(bm: BookmarkItem) { setEditingBookmarkId(bm.id); setEditingLabel(bm.label); }
+  function saveEditBookmark(id: string) { setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, label: editingLabel } : b))); setEditingBookmarkId(null); setEditingLabel(''); }
+  function openBookmark(bm: BookmarkItem) { sendToViewer({ type: 'ebook:go', page: bm.page }); }
+  function deleteBookmark(id: string) { setBookmarks((prev) => prev.filter((b) => b.id !== id)); }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
         <Button variant="outline" onClick={() => router.push('/dashboard/ebooks')}>Back</Button>
-        <a href={`${signedUrl}#page=${currentPage}&zoom=${encodeURIComponent(zoom)}`} target="_blank" rel="noreferrer">
-          <Button variant="outline">Open in new tab</Button>
-        </a>
-        {isMobile && (
-          <Button onClick={() => window.open(`${signedUrl}#page=${currentPage}&zoom=${encodeURIComponent(zoom)}`, '_blank')}>Open Externally</Button>
-        )}
+        <a href={externalHref} target="_blank" rel="noreferrer"><Button variant="outline">Open in new tab</Button></a>
+        {isMobile && (<Button onClick={() => window.open(externalHref, '_blank')}>Open Externally</Button>)}
+
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Zoom</span>
-          <Select value={zoom} onValueChange={setZoom}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="Zoom" />
-            </SelectTrigger>
+          <Select value={zoom} onValueChange={(z) => { setZoom(z); sendToViewer({ type: 'ebook:setZoom', zoom: z }); }}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="Zoom" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="50">50%</SelectItem>
               <SelectItem value="67">67%</SelectItem>
@@ -149,12 +144,8 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Page</span>
-          <Input className="w-20" value={pageInput} onChange={(e) => setPageInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') goToPage(); }} />
-          <Button variant="outline" onClick={goToPage}>Go</Button>
-          <Button variant="outline" onClick={addBookmark}>Add Bookmark</Button>
-        </div>
+
+        <Button variant="outline" onClick={addBookmark}>Add Bookmark</Button>
         <Button variant="outline" onClick={() => setLeftOpen((v) => !v)} className="hidden md:inline-flex">{leftOpen ? 'Hide TOC' : 'Show TOC'}</Button>
         <Button variant="outline" onClick={() => setRightOpen((v) => !v)} className="hidden md:inline-flex">{rightOpen ? 'Hide Notes' : 'Show Notes'}</Button>
         <Button variant="outline" onClick={handleFullscreen} className="hidden md:inline-flex">Fullscreen</Button>
@@ -168,12 +159,8 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
           </aside>
         )}
 
-        <div
-          ref={containerRef}
-          className="flex-1 border rounded md:h-[80vh] h-[calc(100vh-160px)] overflow-auto"
-          style={{ WebkitOverflowScrolling: 'touch' as any }}
-        >
-          <iframe key={`${currentPage}-${zoom}`} src={iframeSrc} className="w-full md:h-full h-[calc(100vh-160px)]" />
+        <div ref={containerRef} className="flex-1 border rounded md:h:[80vh] h-[calc(100vh-160px)] overflow-auto" style={{ WebkitOverflowScrolling: 'touch' as any }}>
+          <iframe ref={iframeRef} src={viewerSrc} className="w-full md:h-full h-[calc(100vh-160px)]" />
         </div>
 
         {rightOpen && (
@@ -208,12 +195,8 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
 
             <div className="flex-1 flex flex-col">
               <div className="text-sm font-medium mb-2">Notes</div>
-              <textarea
-                className="flex-1 w-full resize-none border rounded p-2 text-sm"
-                placeholder="Write notes here. Use [p.123] to jump to a page."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
+              <textarea className="flex-1 w-full resize-none border rounded p-2 text-sm" placeholder="Write notes here. Use [p.123] to jump to a page." value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <div className="text-xs text-muted-foreground mt-2">Current page: {currentPage} / {totalPages || '...'}</div>
             </div>
           </aside>
         )}
