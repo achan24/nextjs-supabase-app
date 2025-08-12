@@ -33,19 +33,42 @@ export default function EbooksClient({ user }: { user: User }) {
     }
     if (!data) return;
 
-    // If user root contains folders, descend one level and list contents
     const fileEntries: EbookFile[] = [];
+
+    // include files directly under userPrefix
     for (const entry of data) {
-      if (entry.name && entry.id) {
+      // If entry has metadata, it's a file directly under the user folder
+      // If metadata is null/undefined, treat as a subfolder (bookId)
+      // Supabase Storage returns prefixes with no metadata
+      // Handle top-level files
+      // @ts-expect-error metadata may not exist on prefix
+      if (entry?.metadata) {
+        // @ts-expect-error metadata type
+        fileEntries.push({ path: `${userPrefix}/${entry.name}`, name: entry.name, size: entry.metadata?.size });
+      }
+    }
+
+    // descend into subfolders (bookId) to collect actual files
+    for (const entry of data) {
+      // prefixes have no metadata
+      // @ts-expect-error metadata may not exist on prefix
+      if (!entry?.metadata && entry.name) {
         const sub = await supabase.storage.from('ebooks').list(`${userPrefix}/${entry.name}`);
         if (sub.data) {
           for (const f of sub.data) {
-            if (f.id) fileEntries.push({ path: `${userPrefix}/${entry.name}/${f.name}`, name: f.name, size: f.metadata?.size });
+            // only include files (not further prefixes)
+            // @ts-expect-error metadata present only for files
+            if (f?.metadata) {
+              // @ts-expect-error metadata type
+              fileEntries.push({ path: `${userPrefix}/${entry.name}/${f.name}`, name: f.name, size: f.metadata?.size });
+            }
           }
         }
       }
     }
-    setFiles(fileEntries);
+
+    // newest first
+    setFiles(fileEntries.reverse());
   }
 
   useEffect(() => {
@@ -77,7 +100,8 @@ export default function EbooksClient({ user }: { user: User }) {
 
     setProgress(100);
     setIsUploading(false);
-    setFiles((prev) => [{ path, name: file.name, size: file.size }, ...prev]);
+    // refresh list to include newly uploaded file
+    listFiles();
     toast.success(`Uploaded ${file.name}`);
   }
 
@@ -100,8 +124,9 @@ export default function EbooksClient({ user }: { user: User }) {
         </Card>
 
         <Card className="md:col-span-2">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Library</CardTitle>
+            <Button variant="outline" size="sm" onClick={listFiles}>Refresh</Button>
           </CardHeader>
           <CardContent>
             {files.length === 0 ? (

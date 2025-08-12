@@ -11,8 +11,10 @@ export default function EbookViewerClient({ signedUrl }: { signedUrl: string }) 
   const containerRef = useRef<HTMLDivElement>(null);
 
   const iframeSrc = useMemo(() => {
-    const hash = `#zoom=${encodeURIComponent(zoom)}`;
-    return `${signedUrl}${signedUrl.includes('#') ? '' : hash}`;
+    // Many browsers (Chrome, Edge) respect PDF hash params like toolbar & zoom.
+    // Safari may ignore them; we will move to pdf.js viewer next for full control.
+    const hash = `#toolbar=1&navpanes=0&scrollbar=1&zoom=${encodeURIComponent(zoom)}`;
+    return `${signedUrl}${hash}`;
   }, [signedUrl, zoom]);
 
   function handleFullscreen() {
