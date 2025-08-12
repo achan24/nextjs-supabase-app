@@ -137,6 +137,7 @@ export async function savePointsToDate(date?: string) {
         let { error: historyError } = await supabase
           .from('area_points_history')
           .insert({
+            user_id: user.id,
             area_id: area.id,
             date: dateStr,
             points: area.daily_points,
@@ -199,6 +200,7 @@ export async function savePointsToDate(date?: string) {
         let { error: historyError } = await supabase
           .from('subarea_points_history')
           .insert({
+            user_id: user.id,
             subarea_id: subarea.id,
             date: dateStr,
             points: subarea.daily_points,
@@ -269,6 +271,7 @@ export async function savePointsToDate(date?: string) {
         let { error: historyError } = await supabase
           .from('goal_points_history')
           .insert({
+            user_id: user.id,
             goal_id: goal.id,
             date: dateStr,
             points: goal.daily_points,
