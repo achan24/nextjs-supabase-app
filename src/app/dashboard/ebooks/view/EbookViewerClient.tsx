@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { upsertEbookByPath, fetchBookmarks as fetchBookmarksSql, addBookmarkSql, updateBookmarkLabel, removeBookmark, fetchNotes as fetchNotesSql, saveNotes as saveNotesSql, saveProgress, getProgress } from '@/lib/timeline-db';
 
 interface Props {
   signedUrl: string;
@@ -32,6 +33,7 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [ebookId, setEbookId] = useState<string | null>(null);
 
   useEffect(() => {
     const mq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)') : null;
@@ -47,17 +49,35 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
     if (isMobile) { setLeftOpen(false); setRightOpen(false); }
   }, [isMobile]);
 
-  // Persist notes/bookmarks
+  // Load SQL state for this ebook
   useEffect(() => {
-    const nk = `ebook-notes:${storagePath}`;
-    const bk = `ebook-bookmarks:${storagePath}`;
-    const savedNotes = typeof window !== 'undefined' ? window.localStorage.getItem(nk) : null;
-    const savedBookmarks = typeof window !== 'undefined' ? window.localStorage.getItem(bk) : null;
-    if (savedNotes) setNotes(savedNotes);
-    if (savedBookmarks) { try { setBookmarks(JSON.parse(savedBookmarks)); } catch {} }
+    (async () => {
+      try {
+        const id = await upsertEbookByPath(storagePath);
+        setEbookId(id);
+        const [bms, note, progress] = await Promise.all([
+          fetchBookmarksSql(id),
+          fetchNotesSql(id),
+          getProgress(storagePath),
+        ]);
+        setBookmarks(bms.map(b => ({ id: b.id, page: b.page, label: b.label, createdAt: Date.parse(b.created_at) })));
+        if (note?.content) setNotes(note.content);
+        if (progress?.last_page) setCurrentPage(progress.last_page);
+        if (progress?.last_zoom) setZoom(progress.last_zoom);
+      } catch (e) {
+        console.warn('[Ebooks] load sql failed', e);
+      }
+    })();
   }, [storagePath]);
+
+  // Persist notes/bookmarks
   useEffect(() => { if (typeof window !== 'undefined') window.localStorage.setItem(`ebook-notes:${storagePath}`, notes); }, [notes, storagePath]);
   useEffect(() => { if (typeof window !== 'undefined') window.localStorage.setItem(`ebook-bookmarks:${storagePath}`, JSON.stringify(bookmarks)); }, [bookmarks, storagePath]);
+  // Persist progress when page/zoom change (debounced)
+  useEffect(() => {
+    const t = setTimeout(() => { saveProgress(storagePath, currentPage, zoom).catch(() => {}); }, 500);
+    return () => clearTimeout(t);
+  }, [storagePath, currentPage, zoom]);
 
   // Stable viewer URL – do not include page/zoom to avoid reload loops
   const viewerBase = '/pdfjs-viewer.html';
@@ -108,16 +128,27 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   }
 
   function addBookmark() {
+    if (!ebookId) return;
     const n = currentPage;
     const label = `Page ${n}`;
-    const item: BookmarkItem = { id: crypto.randomUUID(), page: n, label, createdAt: Date.now() };
-    setBookmarks((prev) => [item, ...prev]);
+    addBookmarkSql(ebookId, n, label)
+      .then((row) => setBookmarks((prev) => [{ id: row.id, page: row.page, label: row.label, createdAt: Date.parse(row.created_at) }, ...prev]))
+      .catch((e) => console.warn('[Ebooks] add bookmark failed', e));
   }
 
   function startEditBookmark(bm: BookmarkItem) { setEditingBookmarkId(bm.id); setEditingLabel(bm.label); }
-  function saveEditBookmark(id: string) { setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, label: editingLabel } : b))); setEditingBookmarkId(null); setEditingLabel(''); }
+  function saveEditBookmark(id: string) {
+    updateBookmarkLabel(id, editingLabel)
+      .then(() => setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, label: editingLabel } : b))))
+      .catch((e) => console.warn('[Ebooks] update bookmark failed', e));
+    setEditingBookmarkId(null);
+    setEditingLabel('');
+  }
   function openBookmark(bm: BookmarkItem) { sendToViewer({ type: 'ebook:go', page: bm.page }); }
-  function deleteBookmark(id: string) { setBookmarks((prev) => prev.filter((b) => b.id !== id)); }
+  function deleteBookmark(id: string) {
+    removeBookmark(id).catch((e) => console.warn('[Ebooks] delete bookmark failed', e));
+    setBookmarks((prev) => prev.filter((b) => b.id !== id));
+  }
 
   return (
     <div className="space-y-3">
@@ -146,6 +177,11 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
         </div>
 
         <Button variant="outline" onClick={addBookmark}>Add Bookmark</Button>
+        <Button variant="outline" onClick={() => {
+          // Manual reload from storage
+          const data = window.localStorage.getItem(`ebook-bookmarks:${storagePath}`);
+          if (data) { try { setBookmarks(JSON.parse(data)); } catch {} }
+        }}>Refresh Bookmarks</Button>
         <Button variant="outline" onClick={() => setLeftOpen((v) => !v)} className="hidden md:inline-flex">{leftOpen ? 'Hide TOC' : 'Show TOC'}</Button>
         <Button variant="outline" onClick={() => setRightOpen((v) => !v)} className="hidden md:inline-flex">{rightOpen ? 'Hide Notes' : 'Show Notes'}</Button>
         <Button variant="outline" onClick={handleFullscreen} className="hidden md:inline-flex">Fullscreen</Button>
@@ -180,7 +216,12 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
                         </>
                       ) : (
                         <>
-                          <button className="text-blue-600 hover:underline" onClick={() => openBookmark(bm)}>{bm.label}</button>
+                          <button
+                            className="text-blue-600 hover:underline text-left whitespace-normal break-words flex-1"
+                            onClick={() => openBookmark(bm)}
+                          >
+                            {bm.label}
+                          </button>
                           <div className="flex items-center gap-2">
                             <Button size="sm" variant="outline" onClick={() => startEditBookmark(bm)}>Edit</Button>
                             <Button size="sm" variant="outline" onClick={() => deleteBookmark(bm.id)}>Remove</Button>
@@ -195,7 +236,7 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
 
             <div className="flex-1 flex flex-col">
               <div className="text-sm font-medium mb-2">Notes</div>
-              <textarea className="flex-1 w-full resize-none border rounded p-2 text-sm" placeholder="Write notes here. Use [p.123] to jump to a page." value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <textarea className="flex-1 w-full resize-none border rounded p-2 text-sm" placeholder="Write notes here. Use [p.123] to jump to a page." value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => { if (ebookId) saveNotesSql(ebookId, notes).catch((err) => console.warn('[Ebooks] save notes failed', err)); }} />
               <div className="text-xs text-muted-foreground mt-2">Current page: {currentPage} / {totalPages || '...'}</div>
             </div>
           </aside>

@@ -50,6 +50,8 @@
   <script>
     const urlParams = new URLSearchParams(location.search);
     const fileUrl = urlParams.get('file');
+    const startPageParam = urlParams.get('startPage');
+    const startZoomParam = urlParams.get('startZoom');
     const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
 
     const pageInput = document.getElementById('pageInput');
@@ -61,10 +63,11 @@
 
     let pdfDoc = null;
     let scale = 1;
+    let renderSeq = 0; // increments to cancel previous renders
 
     function parseInitial() {
-      const page = parseInt(hashParams.get('page') || '1', 10);
-      const zoom = hashParams.get('zoom') || 'page-width';
+      const page = parseInt(startPageParam || hashParams.get('page') || '1', 10);
+      const zoom = startZoomParam || hashParams.get('zoom') || 'page-width';
       pageInput.value = String(page);
       zoomSelect.value = isNaN(parseFloat(zoom)) ? zoom : String(parseFloat(zoom));
     }
@@ -108,16 +111,21 @@
 
     async function renderDocument() {
       if (!fileUrl) return;
+      const mySeq = ++renderSeq; // mark this render as latest
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-      pdfDoc = await pdfjsLib.getDocument({ url: fileUrl, withCredentials: false }).promise;
+      const doc = await pdfjsLib.getDocument({ url: fileUrl, withCredentials: false }).promise;
+      if (mySeq !== renderSeq) return; // cancelled
+      pdfDoc = doc;
       viewer.innerHTML = '';
 
       pageTotal.textContent = `/ ${pdfDoc.numPages}`;
 
       scale = await computeGlobalScale();
+      if (mySeq !== renderSeq) return;
 
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         const page = await pdfDoc.getPage(pageNum);
+        if (mySeq !== renderSeq) return;
         const viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
@@ -128,6 +136,7 @@
         viewer.appendChild(canvas);
         const ctx = canvas.getContext('2d');
         await page.render({ canvasContext: ctx, viewport }).promise;
+        if (mySeq !== renderSeq) return;
       }
 
       gotoPage();
@@ -172,7 +181,6 @@
       }, 150);
     });
 
-    // Receive commands from parent
     window.addEventListener('message', (e) => {
       const data = e.data || {};
       if (data.type === 'ebook:go' && typeof data.page === 'number') {

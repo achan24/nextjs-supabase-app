@@ -290,3 +290,98 @@ class TimelineDB {
 }
 
 export const timelineDB = new TimelineDB();
+
+export async function upsertEbookByPath(storagePath: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No auth');
+  const payload = { user_id: user.id, storage_path: storagePath } as const;
+  const { data, error } = await supabase
+    .from('ebooks')
+    .upsert(payload, { onConflict: 'user_id,storage_path' })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data!.id as string;
+}
+
+export async function fetchBookmarks(ebookId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('ebook_bookmarks')
+    .select('id,page,label,created_at')
+    .eq('ebook_id', ebookId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addBookmarkSql(ebookId: string, page: number, label: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No auth');
+  const { data, error } = await supabase
+    .from('ebook_bookmarks')
+    .insert({ ebook_id: ebookId, page, label, user_id: user.id })
+    .select('id,page,label,created_at')
+    .single();
+  if (error) throw error;
+  return data!;
+}
+
+export async function updateBookmarkLabel(id: string, label: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from('ebook_bookmarks').update({ label }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function removeBookmark(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from('ebook_bookmarks').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchNotes(ebookId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('ebook_notes')
+    .select('id,content')
+    .eq('ebook_id', ebookId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function saveNotes(ebookId: string, content: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No auth');
+  const existing = await fetchNotes(ebookId);
+  if (existing) {
+    const { error } = await supabase
+      .from('ebook_notes')
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('ebook_notes')
+      .insert({ ebook_id: ebookId, content, user_id: user.id });
+    if (error) throw error;
+  }
+}
+
+export async function saveProgress(storagePath: string, lastPage: number, lastZoom: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from('ebooks').update({ last_page: lastPage, last_zoom: lastZoom }).eq('user_id', user.id).eq('storage_path', storagePath);
+}
+
+export async function getProgress(storagePath: string) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from('ebooks').select('last_page,last_zoom').eq('user_id', user.id).eq('storage_path', storagePath).maybeSingle();
+  return data || null;
+}
