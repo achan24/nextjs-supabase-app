@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +16,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import GoalSelector from '@/components/GoalSelector';
+import TraitClassificationDialog from '@/components/TraitClassificationDialog';
 
 interface TaskCreatorProps {
   areaId?: string;
@@ -43,7 +44,13 @@ export default function TaskCreator({
   const [description, setDescription] = useState('');
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [step, setStep] = useState<'create' | 'classify'>('create');
+  const [createdTaskId, setCreatedTaskId] = useState<string>('');
   const supabase = createClient();
+
+  useEffect(() => {
+    console.log('[TaskCreator] Step changed to:', step);
+  }, [step]);
 
   const handleCreateTask = async () => {
     if (!title.trim()) {
@@ -82,11 +89,15 @@ export default function TaskCreator({
       }
 
       toast.success('Task created and starred for today!');
-      setTitle('');
-      setDescription('');
-      setSelectedGoalId(null);
-      setIsOpen(false);
-      onTaskCreated?.();
+      
+      // Store task info for trait classification
+      setCreatedTaskId(data.id);
+      
+      // Move to classification step
+      setStep('classify');
+      
+      console.log('[TaskCreator] Moving to classification step for task:', data.id);
+      console.log('[TaskCreator] Current step after setting:', step);
     } catch (error) {
       console.error('[TaskCreator] Error creating task:', error);
       toast.error('Failed to create task');
@@ -97,86 +108,152 @@ export default function TaskCreator({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      handleCreateTask();
+      if (step === 'create') {
+        handleCreateTask();
+      }
     }
   };
 
+  const handleTraitClassificationComplete = () => {
+    console.log('[TaskCreator] Completing trait classification, closing dialog');
+    // Reset form and close dialog
+    setTitle('');
+    setDescription('');
+    setSelectedGoalId(null);
+    setStep('create');
+    setCreatedTaskId('');
+    setIsOpen(false);
+    
+    // Call onTaskCreated callback after a short delay to ensure dialog closes first
+    setTimeout(() => {
+      onTaskCreated?.();
+    }, 100);
+  };
+
+  const handleSkipClassification = () => {
+    handleTraitClassificationComplete();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button 
-          variant={triggerVariant} 
-          size={triggerSize}
-          className={className}
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          {triggerText}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Star className="h-4 w-4 text-yellow-500" />
-            Create Task
-            {areaId && <span className="text-sm text-muted-foreground">(Area)</span>}
-            {subareaId && <span className="text-sm text-muted-foreground">(Subarea)</span>}
-            {goalId && <span className="text-sm text-muted-foreground">(Goal)</span>}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="task-title">Task Title *</Label>
-            <Input
-              id="task-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="What needs to be done?"
-              onKeyDown={handleKeyDown}
-              autoFocus
-            />
-          </div>
-          <div>
-            <Label htmlFor="task-description">Description (optional)</Label>
-            <Textarea
-              id="task-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add more details..."
-              rows={3}
-              onKeyDown={handleKeyDown}
-            />
-          </div>
-          {!goalId && (
-            <GoalSelector
-              selectedGoalId={selectedGoalId}
-              onGoalChange={setSelectedGoalId}
-              placeholder="Link to a life goal (optional)"
-            />
-          )}
-          <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-            <div className="flex items-center gap-1 mb-1">
-              <Star className="h-3 w-3 text-yellow-500" />
-              <span>This task will be automatically starred for today</span>
+    <>
+      <Dialog 
+        open={isOpen} 
+        onOpenChange={(open) => {
+          console.log('[TaskCreator] Dialog onOpenChange called with:', open);
+          setIsOpen(open);
+          if (!open) {
+            // Reset step when dialog is closed
+            setStep('create');
+          }
+        }}
+      >
+        <DialogTrigger asChild>
+          <Button 
+            variant={triggerVariant} 
+            size={triggerSize}
+            className={className}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            {triggerText}
+          </Button>
+        </DialogTrigger>
+        <DialogContent className={step === 'classify' ? "sm:max-w-2xl" : "sm:max-w-md"}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {step === 'create' ? (
+                <>
+                  <Star className="h-4 w-4 text-yellow-500" />
+                  Create Task
+                  {areaId && <span className="text-sm text-muted-foreground">(Area)</span>}
+                  {subareaId && <span className="text-sm text-muted-foreground">(Subarea)</span>}
+                  {goalId && <span className="text-sm text-muted-foreground">(Goal)</span>}
+                </>
+              ) : (
+                <>
+                  Trait Classification
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {step === 'create' ? (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="task-title">Task Title *</Label>
+                <Input
+                  id="task-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="What needs to be done?"
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label htmlFor="task-description">Description (optional)</Label>
+                <Textarea
+                  id="task-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add more details..."
+                  rows={3}
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+              {!goalId && (
+                <GoalSelector
+                  selectedGoalId={selectedGoalId}
+                  onGoalChange={setSelectedGoalId}
+                  placeholder="Link to a life goal (optional)"
+                />
+              )}
+              <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                <div className="flex items-center gap-1 mb-1">
+                  <Star className="h-3 w-3 text-yellow-500" />
+                  <span>This task will be automatically starred for today</span>
+                </div>
+                <div>Press Cmd/Ctrl + Enter to create quickly</div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsOpen(false)}
+                  disabled={isCreating}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleCreateTask}
+                  disabled={!title.trim() || isCreating}
+                >
+                  {isCreating ? 'Creating...' : 'Create Task'}
+                </Button>
+              </div>
             </div>
-            <div>Press Cmd/Ctrl + Enter to create quickly</div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsOpen(false)}
-              disabled={isCreating}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleCreateTask}
-              disabled={!title.trim() || isCreating}
-            >
-              {isCreating ? 'Creating...' : 'Create Task'}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-gray-600">Help us understand how this task will develop your character traits</p>
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm font-medium text-blue-900">Task: {title}</p>
+              </div>
+              
+              {/* Trait Classification Content - We'll add the full component content here */}
+              <div className="text-center py-8">
+                <p className="text-gray-500">Trait classification form will go here...</p>
+              </div>
+              
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button variant="outline" onClick={handleSkipClassification}>
+                  Skip
+                </Button>
+                <Button onClick={handleTraitClassificationComplete}>
+                  Save & Continue
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 } 

@@ -18,6 +18,13 @@ export interface Reminder {
   sent_at?: string; // timestamp when reminder was sent
 }
 
+export interface TaskTraitTag {
+  id: string;
+  trait_tags: any[]; // JSONB array
+  task_metadata: any; // JSONB object containing task_type, friction_level, stakes, discomfort_level
+  auto_classified: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -31,4 +38,5 @@ export interface Task {
   project_id?: string;
   project?: Project;
   reminders?: Reminder[];
+  task_trait_tags?: TaskTraitTag[];
 } 

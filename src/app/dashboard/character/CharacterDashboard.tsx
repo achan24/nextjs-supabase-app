@@ -7,6 +7,7 @@ import SkillsOverview from './components/SkillsOverview'
 import RecentActivity from './components/RecentActivity'
 import TodayTasksSection from './components/TodayTasksSection'
 import ProblemWidget from './components/ProblemWidget'
+import TraitsOverview from './components/TraitsOverview'
 
 export default function CharacterDashboard() {
   return (
@@ -27,6 +28,9 @@ export default function CharacterDashboard() {
       <div className="space-y-6">
         {/* Today's Tasks - NEW SECTION */}
         <TodayTasksSection />
+
+        {/* Character Traits - NEW SECTION */}
+        <TraitsOverview />
 
         {/* Skills Overview */}
         <Card className="p-6">

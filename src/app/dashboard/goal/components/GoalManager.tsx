@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit2, Trash2, Target, Flag, Calendar, Link as LinkIcon, ChevronDown, ChevronRight, CheckCircle2, Timer, X, Share2, Star } from 'lucide-react';
+import SessionTimer from '@/components/SessionTimer';
 import {
   Dialog,
   DialogContent,
@@ -93,6 +94,12 @@ interface SupabaseTaskResponse {
       unit: string | null;
     } | null;
   }> | null;
+  task_trait_tags?: Array<{
+    id: string;
+    trait_tags: any[]; // JSONB array
+    task_metadata: any; // JSONB object
+    auto_classified: boolean;
+  }>;
 }
 
 export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalManagerProps) {
@@ -186,6 +193,14 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [taskDialogStep, setTaskDialogStep] = useState<'create' | 'classify'>('create');
+  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
+  const [createdTaskTitle, setCreatedTaskTitle] = useState<string>('');
+  const [isEditingTask, setIsEditingTask] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskTitle, setEditingTaskTitle] = useState('');
+  const [editingTaskDescription, setEditingTaskDescription] = useState('');
+  const [editingTaskDueDate, setEditingTaskDueDate] = useState('');
 
   // Add state for sequence dialog
   const [isAddingSequence, setIsAddingSequence] = useState(false);
@@ -520,13 +535,19 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               name,
               unit
             )
+          ),
+          task_trait_tags (
+            id,
+            trait_tags,
+            task_metadata,
+            auto_classified
           )
         `)
         .returns<SupabaseTaskResponse[]>();
 
       if (error) throw error;
 
-      // Transform the tasks data to include metric contributions
+      // Transform the tasks data to include metric contributions and trait tags
       const transformedTasks = (data || []).map((task: SupabaseTaskResponse): Task => ({
         id: task.id,
         title: task.title,
@@ -544,6 +565,12 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
             name: contrib.metric.name,
             unit: contrib.metric.unit || undefined
           } : undefined
+        })) || [],
+        task_trait_tags: task.task_trait_tags?.map(tag => ({
+          id: tag.id,
+          trait_tags: tag.trait_tags,
+          task_metadata: tag.task_metadata,
+          auto_classified: tag.auto_classified
         })) || []
       }));
 
@@ -642,15 +669,110 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
       }
 
       await fetchTasks(); // Fetch tasks after creating and adding
-      // Reset form
+      
+      // Store created task info for trait classification
+      setCreatedTaskId(newTask.id);
+      setCreatedTaskTitle(newTask.title);
+      
+      // Move to trait classification step
+      console.log('[GoalManager] Moving to classification step for task:', newTask.id, newTask.title);
+      setTaskDialogStep('classify');
+      
+      // Reset form but keep dialog open for classification
       setNewTaskTitle('');
       setNewTaskDescription('');
       setNewTaskDueDate('');
-      setIsAddingTask(false);
       toast.success('Task created and added to goal');
     } catch (error) {
       console.error('Error creating task:', error);
       toast.error('Failed to create task');
+    }
+  };
+
+  const handleTaskClassificationComplete = async () => {
+    if (!createdTaskId) return;
+    
+    console.log('[GoalManager] Task classification completed');
+    
+    try {
+      // Get form data from the classification form
+      const formData = new FormData(document.querySelector('#trait-classification-form') as HTMLFormElement);
+      const taskType = formData.get('taskType') as string;
+      const frictionLevel = formData.get('frictionLevel') as string;
+      const stakes = formData.get('stakes') as string;
+      const discomfort = formData.get('discomfort') as string;
+      
+      // Save trait classification to database
+      const { error } = await supabase
+        .from('task_trait_tags')
+        .insert({
+          task_id: createdTaskId,
+          task_metadata: {
+            task_type: taskType,
+            friction_level: frictionLevel,
+            stakes: stakes,
+            discomfort_level: discomfort
+          },
+          trait_tags: [], // Will be populated later by scoring system
+          auto_classified: false
+        });
+      
+      if (error) {
+        console.error('Error saving trait classification:', error);
+        toast.error('Failed to save trait classification');
+      } else {
+        toast.success('Task classified successfully!');
+        await fetchTasks(); // Refresh tasks to show the new trait tags
+      }
+    } catch (error) {
+      console.error('Error saving trait classification:', error);
+      toast.error('Failed to save trait classification');
+    }
+    
+    setIsAddingTask(false);
+    setTaskDialogStep('create');
+    setCreatedTaskId(null);
+    setCreatedTaskTitle('');
+  };
+
+  const handleSkipTaskClassification = () => {
+    console.log('[GoalManager] Task classification skipped');
+    setIsAddingTask(false);
+    setTaskDialogStep('create');
+    setCreatedTaskId(null);
+    setCreatedTaskTitle('');
+  };
+
+  // Debug step changes
+  useEffect(() => {
+    console.log('[GoalManager] Task dialog step changed to:', taskDialogStep);
+  }, [taskDialogStep]);
+
+  const handleEditTask = async () => {
+    if (!editingTaskId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          title: editingTaskTitle,
+          description: editingTaskDescription,
+          due_date: editingTaskDueDate || null,
+        })
+        .eq('id', editingTaskId);
+
+      if (error) throw error;
+
+      await fetchTasks(); // Refresh tasks after update
+      setIsEditingTask(false);
+      setEditingTaskId(null);
+      setEditingTaskTitle('');
+      setEditingTaskDescription('');
+      setEditingTaskDueDate('');
+      toast.success('Task updated successfully');
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error('Failed to update task');
     }
   };
 
@@ -771,39 +893,39 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     if (selectedGoalId) {
       const fetchDailyPoints = async () => {
         const { data, error } = await supabase
-          .rpc('get_goal_daily_points', { goal_id: selectedGoalId })
+          .rpc('get_goal_daily_points', { goal_id: selectedGoalId });
         
         if (error) {
-          console.error('Error fetching daily points:', error)
-          return
+          console.error('Error fetching daily points:', error);
+          return;
         }
 
-        setDailyPoints(Number(data) || 0)
-      }
+        setDailyPoints(Number(data) || 0);
+      };
 
-      fetchDailyPoints()
+      fetchDailyPoints();
     }
-  }, [selectedGoalId])
+  }, [selectedGoalId]);
 
   const handleAddPoint = async () => {
-    if (!selectedGoalId) return
+    if (!selectedGoalId) return;
 
     try {
       const { data, error } = await supabase
         .rpc('add_goal_points', { 
           goal_id: selectedGoalId,
           points_to_add: 1
-        })
+        });
 
-      if (error) throw error
+      if (error) throw error;
 
-      setDailyPoints(Number(data) || 0)
-      toast.success('Point added successfully')
+      setDailyPoints(Number(data) || 0);
+      toast.success('Point added successfully');
     } catch (err) {
-      console.error('Error adding point:', err)
-      toast.error('Failed to add point')
+      console.error('Error adding point:', err);
+      toast.error('Failed to add point');
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -1255,7 +1377,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                       return (
                         <div 
                           key={goalTask.id}
-                          className="flex items-center justify-between py-1.5 px-3 rounded-lg border"
+                          className="flex flex-col py-1.5 px-3 rounded-lg border"
                         >
                           <div className="flex items-center gap-2">
                             <Button
@@ -1301,6 +1423,38 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                                   Due: {new Date(task.due_date).toLocaleDateString()}
                                 </p>
                               )}
+                              {/* Show trait tags */}
+                              {task.task_trait_tags && task.task_trait_tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {task.task_trait_tags.map(tag => {
+                                    const metadata = tag.task_metadata || {};
+                                    return (
+                                      <div key={tag.id} className="flex items-center gap-1">
+                                        {metadata.task_type && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            {metadata.task_type}
+                                          </span>
+                                        )}
+                                        {metadata.friction_level === 'high' && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            High Friction
+                                          </span>
+                                        )}
+                                        {metadata.stakes === 'high' && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                            High Stakes
+                                          </span>
+                                        )}
+                                        {(metadata.discomfort_level === 'high' || metadata.discomfort_level === 'moderate') && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                            {metadata.discomfort_level === 'high' ? 'High Discomfort' : 'Moderate Discomfort'}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               {/* Show linked metrics */}
                               {task.metric_contributions?.map(contribution => (
                                 <div key={contribution.id} className="flex items-center gap-1 mt-1">
@@ -1328,10 +1482,36 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                               variant="ghost"
                               size="icon"
                               className="h-4 w-4"
+                              onClick={() => {
+                                setEditingTaskId(task.id);
+                                setEditingTaskTitle(task.title);
+                                setEditingTaskDescription(task.description || '');
+                                setEditingTaskDueDate(task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '');
+                                setIsEditingTask(true);
+                              }}
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4"
                               onClick={() => handleRemoveTaskFromGoal(goalTask.id)}
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
+                          </div>
+
+                          {/* Session Timer */}
+                          <div className="mt-2">
+                            <SessionTimer
+                              taskId={task.id}
+                              taskTitle={task.title}
+                              onSessionComplete={(sessionData) => {
+                                console.log('Session completed:', sessionData);
+                                // TODO: Calculate trait XP based on session data and task classifications
+                              }}
+                            />
                           </div>
                         </div>
                       );
@@ -1678,17 +1858,27 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
       {/* Add Task Dialog */}
       <Dialog 
         open={isAddingTask} 
-        onOpenChange={(open: boolean) => setIsAddingTask(open)}
+        onOpenChange={(open: boolean) => {
+          if (!open) {
+            setIsAddingTask(false);
+            setTaskDialogStep('create');
+            setCreatedTaskId(null);
+            setCreatedTaskTitle('');
+          }
+        }}
       >
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Task to Goal</DialogTitle>
+            <DialogTitle>
+              {taskDialogStep === 'create' ? 'Add Task to Goal' : `Classify Task: ${createdTaskTitle}`}
+            </DialogTitle>
           </DialogHeader>
-          <Tabs defaultValue="existing">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="existing">Select Existing Task</TabsTrigger>
-              <TabsTrigger value="new">Create New Task</TabsTrigger>
-            </TabsList>
+          {taskDialogStep === 'create' ? (
+            <Tabs defaultValue="existing">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="existing">Select Existing Task</TabsTrigger>
+                <TabsTrigger value="new">Create New Task</TabsTrigger>
+              </TabsList>
             <TabsContent value="existing" className="space-y-4 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Select Task</label>
@@ -1765,7 +1955,12 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                 />
               </div>
               <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setIsAddingTask(false)}>
+                <Button variant="outline" onClick={() => {
+                  setIsAddingTask(false);
+                  setTaskDialogStep('create');
+                  setCreatedTaskId(null);
+                  setCreatedTaskTitle('');
+                }}>
                   Cancel
                 </Button>
                 <Button
@@ -1777,6 +1972,187 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               </div>
             </TabsContent>
           </Tabs>
+          ) : (
+            <>
+              {/* Trait Classification Step */}
+              <p className="text-gray-600 mb-6">
+                Help us understand this task better to track relevant character traits and provide personalized insights.
+              </p>
+              
+              <form id="trait-classification-form">
+                <div className="space-y-6">
+                {/* Task Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    What type of task is this?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'creative', label: 'Creative Work', desc: 'Writing, design, brainstorming, artistic tasks' },
+                      { value: 'analytical', label: 'Analytical Work', desc: 'Research, data analysis, problem-solving' },
+                      { value: 'communication', label: 'Communication', desc: 'Emails, calls, meetings, presentations' },
+                      { value: 'administrative', label: 'Administrative', desc: 'Scheduling, organizing, paperwork' },
+                      { value: 'learning', label: 'Learning', desc: 'Reading, studying, skill development' },
+                      { value: 'physical', label: 'Physical Task', desc: 'Exercise, cleaning, manual work' }
+                    ].map((type) => (
+                      <label key={type.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="taskType"
+                          value={type.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{type.label}</div>
+                          <div className="text-sm text-gray-500">{type.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Friction Level */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    How much friction does this task have?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'low', label: 'Low Friction', desc: 'Easy to start, clear steps, familiar territory' },
+                      { value: 'medium', label: 'Medium Friction', desc: 'Some uncertainty, requires focus or planning' },
+                      { value: 'high', label: 'High Friction', desc: 'Unclear steps, intimidating, requires significant mental energy' }
+                    ].map((friction) => (
+                      <label key={friction.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="frictionLevel"
+                          value={friction.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{friction.label}</div>
+                          <div className="text-sm text-gray-500">{friction.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stakes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    What are the stakes for this task?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'low', label: 'Low Stakes', desc: 'Nice to have, no major consequences if delayed' },
+                      { value: 'medium', label: 'Medium Stakes', desc: 'Important for progress, moderate consequences' },
+                      { value: 'high', label: 'High Stakes', desc: 'Critical, significant consequences if not done' }
+                    ].map((stakes) => (
+                      <label key={stakes.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="stakes"
+                          value={stakes.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{stakes.label}</div>
+                          <div className="text-sm text-gray-500">{stakes.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Discomfort Level */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    How much discomfort does this task cause you?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'none', label: 'No Discomfort', desc: 'Enjoyable or neutral task' },
+                      { value: 'mild', label: 'Mild Discomfort', desc: 'Slightly unpleasant but manageable' },
+                      { value: 'moderate', label: 'Moderate Discomfort', desc: 'Noticeably unpleasant, requires effort to push through' },
+                      { value: 'high', label: 'High Discomfort', desc: 'Very unpleasant, strong urge to avoid or procrastinate' }
+                    ].map((discomfort) => (
+                      <label key={discomfort.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="discomfort"
+                          value={discomfort.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{discomfort.label}</div>
+                          <div className="text-sm text-gray-500">{discomfort.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              </form>
+
+              <div className="mt-8 flex justify-between">
+                <Button variant="outline" onClick={handleSkipTaskClassification}>
+                  Skip for Now
+                </Button>
+                <Button onClick={handleTaskClassificationComplete}>
+                  Complete Classification
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={isEditingTask} onOpenChange={setIsEditingTask}>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Task Title</label>
+              <Input
+                value={editingTaskTitle}
+                onChange={(e) => setEditingTaskTitle(e.target.value)}
+                placeholder="Enter task title"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Description</label>
+              <Textarea
+                value={editingTaskDescription}
+                onChange={(e) => setEditingTaskDescription(e.target.value)}
+                placeholder="Enter task description"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Due Date</label>
+              <Input
+                type="date"
+                value={editingTaskDueDate}
+                onChange={(e) => setEditingTaskDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsEditingTask(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditTask}
+              disabled={!editingTaskTitle.trim()}
+            >
+              Update Task
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

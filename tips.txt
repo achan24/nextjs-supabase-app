@@ -1181,6 +1181,100 @@ export function useGoalSystem() {
 
 This pattern prevents the most common cause of performance issues and database timeouts in React applications using Supabase.
 
+# VIRTUAL CHARACTER SYSTEM - NO CHARACTERS TABLE
+
+## The Problem: Assuming Character Data is Stored
+
+### Root Cause
+The Guardian Angel app uses a **virtual character system** where character data is calculated on-the-fly from points history, not stored in a separate `characters` table. This can cause confusion when implementing character-related features.
+
+### How the Virtual Character System Works
+1. **No stored character data**: There is no `characters` table in the database
+2. **On-the-fly calculation**: Character XP and levels are calculated from goal points history
+3. **Formula**: Total XP = Sum of goal points × 10
+4. **Level calculation**: Uses XP progression formula to determine level
+5. **Virtual character ID**: Uses `character-${user.id}` pattern for trait storage
+
+### Real Example: Traits System Implementation
+**Problem**: Trying to reference non-existent `characters` table in migrations
+**Root Cause**: Assumed character data was stored in a table
+**Solution**: Use `user_id` directly and virtual character IDs for traits
+
+### Implementation Pattern for Character Features
+
+```typescript
+// ✅ CORRECT - Use virtual character system
+const loadTraits = async () => {
+  // Use virtual character ID based on user_id
+  const virtualCharacterId = `character-${user.id}`;
+  
+  const { data: traitsData } = await supabase
+    .from('character_traits')
+    .select('*')
+    .eq('character_id', virtualCharacterId);
+};
+
+// ❌ WRONG - Try to access non-existent characters table
+const { data: character } = await supabase
+  .from('characters')  // This table doesn't exist!
+  .select('id')
+  .eq('user_id', user.id);
+```
+
+### Database Schema for Character Features
+```sql
+-- ✅ CORRECT - Use user_id directly
+CREATE TABLE trait_sessions (
+    id uuid PRIMARY KEY,
+    user_id uuid REFERENCES auth.users(id),  -- Direct user reference
+    task_id uuid,
+    -- ... other fields
+);
+
+-- ✅ CORRECT - Use virtual character_id for traits
+CREATE TABLE character_traits (
+    id uuid PRIMARY KEY,
+    character_id text NOT NULL,  -- Virtual ID like 'character-123'
+    name text NOT NULL,
+    value integer NOT NULL,
+    -- ... other fields
+);
+```
+
+### Character XP Calculation
+```typescript
+// Character XP is calculated from goal points history
+export async function getCharacterProgress(userId: string) {
+  const totalPoints = await calculateTotalPoints(userId);
+  const totalXP = totalPoints * XP_PER_POINT;
+  
+  // Calculate level from XP
+  let level = 1;
+  let remainingXP = totalXP;
+  
+  while (remainingXP >= calculateRequiredXP(level)) {
+    remainingXP -= calculateRequiredXP(level);
+    level++;
+  }
+  
+  return { level, xp: remainingXP, requiredXP: calculateRequiredXP(level) };
+}
+```
+
+### Common Mistakes to Avoid
+1. **Don't create a `characters` table** - character data is virtual
+2. **Don't assume character data is stored** - it's calculated on-the-fly
+3. **Don't reference non-existent `characters` table** in migrations
+4. **Don't try to store character XP/level** - it's derived from points history
+5. **Do use virtual character IDs** for trait storage (`character-${user.id}`)
+
+### Remember
+- **Character data is virtual** - calculated from points history, not stored
+- **Use `user_id` directly** for session tracking
+- **Use virtual character IDs** (`character-${user.id}`) for traits
+- **Character XP = Sum of goal points × 10**
+- **No `characters` table exists** - don't reference it in migrations
+
 # ALWAYS CHECK DATABASE MODELS BEFORE IMPLEMENTING FEATURES
 
 ## The Problem: Field Name Assumptions Lead to Broken Features
@@ -1265,3 +1359,111 @@ This aligns with the existing memory: **"ALWAYS check the database models in dat
 - **Follow established patterns** - don't reinvent data transformation
 
 This simple step of checking database models first prevents the majority of data-related bugs and saves hours of debugging time.
+
+# DIALOG SCROLLING ISSUES - ALWAYS ADD OVERFLOW HANDLING
+
+## The Problem: Fixed Height Dialogs with Long Content
+
+### Root Cause
+When creating dialogs with long content (questionnaires, forms, trait classification), the dialog becomes fixed height and users cannot scroll to see all content. This is a recurring UX problem that blocks user interaction.
+
+### Real Example: Trait Classification Dialog
+**Problem**: User can't scroll to see top or bottom of trait classification questionnaire
+**Root Cause**: Dialog content exceeds viewport height with no overflow handling
+**Impact**: Users cannot complete the questionnaire, feature becomes unusable
+
+### Solution: Always Add Overflow Handling to Dialogs
+
+**For Long Content Dialogs:**
+```tsx
+// ✅ CORRECT - Add max-height and overflow
+<DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+  <DialogHeader>
+    <DialogTitle>Long Form Title</DialogTitle>
+  </DialogHeader>
+  
+  {/* Long content here */}
+  <div className="space-y-6">
+    {/* Multiple sections that might exceed viewport */}
+  </div>
+</DialogContent>
+
+// ❌ WRONG - No overflow handling
+<DialogContent className="sm:max-w-[500px]">
+  {/* Long content that gets cut off */}
+</DialogContent>
+```
+
+**Alternative: Break Into Steps**
+```tsx
+// ✅ GOOD ALTERNATIVE - Multi-step approach
+{step === 1 && (
+  <div className="space-y-4">
+    {/* First few questions */}
+  </div>
+)}
+{step === 2 && (
+  <div className="space-y-4">
+    {/* Remaining questions */}
+  </div>
+)}
+```
+
+### Prevention Strategies
+
+1. **Always Test Dialog Height**
+   - Test on different screen sizes (mobile, tablet, desktop)
+   - Test with longest possible content
+   - Verify scrolling works on all devices
+   - Check that buttons at bottom are accessible
+
+2. **Use Consistent Dialog Patterns**
+   ```tsx
+   // Standard pattern for all dialogs with potential long content
+   <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+     <DialogHeader className="flex-shrink-0">
+       {/* Header content - always visible */}
+     </DialogHeader>
+     
+     <div className="flex-1 overflow-y-auto py-4">
+       {/* Scrollable content area */}
+     </div>
+     
+     <div className="flex-shrink-0 border-t pt-4">
+       {/* Footer buttons - always visible */}
+     </div>
+   </DialogContent>
+   ```
+
+3. **Consider Mobile First**
+   - Mobile screens have limited height
+   - Portrait orientation is most restrictive
+   - Test on actual mobile devices when possible
+   - Use `max-h-[90vh]` for mobile-friendly dialogs
+
+### Common Dialog Types That Need This
+
+1. **Forms with many fields** (task creation, user profiles)
+2. **Questionnaires** (trait classification, surveys)
+3. **Lists with many items** (selection dialogs, search results)
+4. **Content viewers** (help text, documentation)
+5. **Multi-section dialogs** (settings, preferences)
+
+### Quick Fix for Existing Dialogs
+
+```tsx
+// Find dialogs with this pattern:
+<DialogContent className="sm:max-w-[500px]">
+
+// Replace with:
+<DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+```
+
+### Remember
+- **Always add overflow handling** to dialogs with dynamic or long content
+- **Test on mobile devices** - they have the most restrictive height
+- **Use `max-h-[80vh] overflow-y-auto`** as the standard pattern
+- **Keep headers and footers fixed** - only make content area scrollable
+- **This is a recurring issue** - check every new dialog for scrolling
+
+This pattern ensures dialogs remain usable regardless of content length or screen size.

@@ -96,6 +96,9 @@ export default function TaskManager({ user }: { user: User }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isTagModalOpen, setIsTagModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [modalStep, setModalStep] = useState<'create' | 'classify'>('create')
+  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null)
+  const [createdTaskTitle, setCreatedTaskTitle] = useState<string>('')
   const [editingTask, setEditingTask] = useState<Task>({
     id: '',
     title: '',
@@ -133,7 +136,7 @@ export default function TaskManager({ user }: { user: User }) {
   const [newTaskForm, setNewTaskForm] = useState<TaskFormData>({
     title: '',
     description: '',
-    priority: 1,
+    priority: 3,
     due_date: new Date().toLocaleString('en-US', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).slice(0, 16),
     tagIds: [],
     project_id: '',
@@ -330,21 +333,53 @@ export default function TaskManager({ user }: { user: User }) {
       }
 
       setTasks([...tasks, newTask]);
+      
+      // Store created task info for trait classification
+      setCreatedTaskId(newTask.id);
+      setCreatedTaskTitle(newTask.title);
+      
+      // Move to trait classification step
+      console.log('[TaskManager] Moving to classification step for task:', newTask.id, newTask.title);
+      setModalStep('classify');
+      
+      // Reset form but keep modal open for classification
       setNewTaskForm({
         title: '',
         description: '',
-        priority: 1,
+        priority: 3,
         due_date: new Date().toLocaleString('en-US', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).slice(0, 16),
         tagIds: [],
         project_id: '',
         status: 'todo',
         reminders: []
       });
-      setIsModalOpen(false);
+      toast.success('Task created successfully!');
     } catch (error) {
       console.error('Error creating task:', error);
+      toast.error('Failed to create task. Please try again.');
     }
   };
+
+  const handleTraitClassificationComplete = () => {
+    console.log('[TaskManager] Trait classification completed');
+    setIsModalOpen(false);
+    setModalStep('create');
+    setCreatedTaskId(null);
+    setCreatedTaskTitle('');
+  };
+
+  const handleSkipClassification = () => {
+    console.log('[TaskManager] Trait classification skipped');
+    setIsModalOpen(false);
+    setModalStep('create');
+    setCreatedTaskId(null);
+    setCreatedTaskTitle('');
+  };
+
+  // Debug step changes
+  useEffect(() => {
+    console.log('[TaskManager] Modal step changed to:', modalStep);
+  }, [modalStep]);
 
   const handleCreateTag = async () => {
     if (!newTag.name.trim()) return
@@ -966,10 +1001,17 @@ export default function TaskManager({ user }: { user: User }) {
       </div>
 
       {/* Create Task Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={() => {
+        setIsModalOpen(false);
+        setModalStep('create');
+        setCreatedTaskId(null);
+        setCreatedTaskTitle('');
+      }}>
         <div className="p-6">
-          <h2 className="text-2xl font-bold mb-4">Create New Task</h2>
-          <div className="space-y-4">
+          {modalStep === 'create' ? (
+            <>
+              <h2 className="text-2xl font-bold mb-4">Create New Task</h2>
+              <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Title</label>
               <input
@@ -1159,20 +1201,164 @@ export default function TaskManager({ user }: { user: User }) {
             </div>
           </div>
 
-          <div className="mt-6 flex justify-end space-x-3">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreateTask}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-            >
-              Create Task
-            </button>
-          </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setModalStep('create');
+                    setCreatedTaskId(null);
+                    setCreatedTaskTitle('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateTask}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Create Task
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Trait Classification Step */}
+              <h2 className="text-2xl font-bold mb-4">Classify Task: {createdTaskTitle}</h2>
+              <p className="text-gray-600 mb-6">
+                Help us understand this task better to track relevant character traits and provide personalized insights.
+              </p>
+              
+              <div className="space-y-6">
+                {/* Task Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    What type of task is this?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'creative', label: 'Creative Work', desc: 'Writing, design, brainstorming, artistic tasks' },
+                      { value: 'analytical', label: 'Analytical Work', desc: 'Research, data analysis, problem-solving' },
+                      { value: 'communication', label: 'Communication', desc: 'Emails, calls, meetings, presentations' },
+                      { value: 'administrative', label: 'Administrative', desc: 'Scheduling, organizing, paperwork' },
+                      { value: 'learning', label: 'Learning', desc: 'Reading, studying, skill development' },
+                      { value: 'physical', label: 'Physical Task', desc: 'Exercise, cleaning, manual work' }
+                    ].map((type) => (
+                      <label key={type.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="taskType"
+                          value={type.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{type.label}</div>
+                          <div className="text-sm text-gray-500">{type.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Friction Level */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    How much friction does this task have?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'low', label: 'Low Friction', desc: 'Easy to start, clear steps, familiar territory' },
+                      { value: 'medium', label: 'Medium Friction', desc: 'Some uncertainty, requires focus or planning' },
+                      { value: 'high', label: 'High Friction', desc: 'Unclear steps, intimidating, requires significant mental energy' }
+                    ].map((friction) => (
+                      <label key={friction.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="frictionLevel"
+                          value={friction.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{friction.label}</div>
+                          <div className="text-sm text-gray-500">{friction.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stakes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    What are the stakes for this task?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'low', label: 'Low Stakes', desc: 'Nice to have, no major consequences if delayed' },
+                      { value: 'medium', label: 'Medium Stakes', desc: 'Important for progress, moderate consequences' },
+                      { value: 'high', label: 'High Stakes', desc: 'Critical, significant consequences if not done' }
+                    ].map((stakes) => (
+                      <label key={stakes.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="stakes"
+                          value={stakes.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{stakes.label}</div>
+                          <div className="text-sm text-gray-500">{stakes.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Discomfort Level */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    How much discomfort does this task cause you?
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'none', label: 'No Discomfort', desc: 'Enjoyable or neutral task' },
+                      { value: 'mild', label: 'Mild Discomfort', desc: 'Slightly unpleasant but manageable' },
+                      { value: 'moderate', label: 'Moderate Discomfort', desc: 'Noticeably unpleasant, requires effort to push through' },
+                      { value: 'high', label: 'High Discomfort', desc: 'Very unpleasant, strong urge to avoid or procrastinate' }
+                    ].map((discomfort) => (
+                      <label key={discomfort.value} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="discomfort"
+                          value={discomfort.value}
+                          className="mt-0.5 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{discomfort.label}</div>
+                          <div className="text-sm text-gray-500">{discomfort.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 flex justify-between">
+                <button
+                  onClick={handleSkipClassification}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Skip for Now
+                </button>
+                <button
+                  onClick={handleTraitClassificationComplete}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  Complete Classification
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
 
