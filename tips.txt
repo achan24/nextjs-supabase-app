@@ -1467,3 +1467,134 @@ When creating dialogs with long content (questionnaires, forms, trait classifica
 - **This is a recurring issue** - check every new dialog for scrolling
 
 This pattern ensures dialogs remain usable regardless of content length or screen size.
+
+# SUPABASE JSONB SYNTAX ERRORS - AVOID JSONB IN MIGRATIONS
+
+## The Problem: "syntax error at or near "->" in SQL Migrations
+
+### Root Cause
+When using JSONB fields in Supabase SQL migrations, the `->` operator and JSONB-specific syntax can cause parsing errors. This is a recurring issue that blocks database migrations.
+
+### Real Example: Token Shop Migration
+**Error**: `ERROR: 42601: syntax error at or near "->" LINE 12: -> ^`
+**Root Cause**: JSONB field with complex JSON structure in INSERT statements
+**Impact**: Migration fails, sophisticated features can't be deployed
+
+### Solution: Use TEXT Instead of JSONB for Complex Data
+
+**Instead of JSONB:**
+```sql
+-- ❌ PROBLEMATIC - JSONB with complex JSON
+CREATE TABLE shop_items (
+  effects jsonb NOT NULL DEFAULT '[]'::jsonb,
+  -- ...
+);
+
+INSERT INTO shop_items (effects) VALUES (
+  '[{"type":"permission","value":"music_time","duration":30}]'
+);
+```
+
+**Use TEXT:**
+```sql
+-- ✅ RELIABLE - TEXT field for JSON data
+CREATE TABLE shop_items (
+  effects text NOT NULL DEFAULT '[]',
+  -- ...
+);
+
+INSERT INTO shop_items (effects) VALUES (
+  '[{"type":"permission","value":"music_time","duration":30}]'
+);
+```
+
+### Prevention Strategies
+
+1. **Always Use TEXT for JSON Data in Migrations**
+   ```sql
+   -- ✅ CORRECT - TEXT field
+   effects text NOT NULL DEFAULT '[]',
+   
+   -- ❌ AVOID - JSONB in migrations
+   effects jsonb NOT NULL DEFAULT '[]'::jsonb,
+   ```
+
+2. **Avoid JSONB-Specific Functions**
+   ```sql
+   -- ✅ CORRECT - String concatenation
+   VALUES (p_user_id, v_item.id, p_qty, v_needed, 
+           '{"item_id": "' || p_item_id || '", "effects": ' || v_item.effects || '}');
+   
+   -- ❌ AVOID - jsonb_build_object
+   VALUES (p_user_id, v_item.id, p_qty, v_needed, 
+           jsonb_build_object('item_id', p_item_id, 'effects', v_item.effects));
+   ```
+
+3. **Parse JSON in Application Code**
+   ```typescript
+   // ✅ CORRECT - Parse JSON in TypeScript
+   const effects = JSON.parse(item.effects || '[]');
+   
+   // ✅ CORRECT - Stringify for storage
+   const effectsJson = JSON.stringify(effects);
+   ```
+
+### When to Use JSONB vs TEXT
+
+**Use TEXT when:**
+- Creating SQL migrations
+- Storing JSON data that will be parsed in application code
+- Avoiding migration syntax errors
+- Working with complex JSON structures
+
+**Use JSONB when:**
+- Querying JSON data directly in SQL
+- Using JSON operators (`->`, `->>`, `@>`)
+- Performance is critical for JSON queries
+- Database-level JSON validation is needed
+
+### Common JSONB Migration Issues
+
+1. **INSERT Statement Errors**
+   - Complex JSON in INSERT values
+   - JSONB operators in migration scripts
+   - Nested JSON structures
+
+2. **Function Parameter Errors**
+   - JSONB parameters in stored functions
+   - JSONB return types in functions
+   - JSONB operators in function bodies
+
+3. **Constraint Errors**
+   - JSONB check constraints
+   - JSONB default values
+   - JSONB index creation
+
+### Best Practices
+
+1. **Start with TEXT**
+   ```sql
+   -- Always start with TEXT for JSON data
+   effects text NOT NULL DEFAULT '[]',
+   ```
+
+2. **Parse in Application**
+   ```typescript
+   // Handle JSON parsing in TypeScript
+   const effects = JSON.parse(item.effects || '[]');
+   ```
+
+3. **Convert to JSONB Later (if needed)**
+   ```sql
+   -- Only convert to JSONB after migration is stable
+   ALTER TABLE shop_items ALTER COLUMN effects TYPE jsonb USING effects::jsonb;
+   ```
+
+### Remember
+- **Always use TEXT for JSON data in migrations** - avoids syntax errors
+- **Parse JSON in application code** - more reliable than SQL parsing
+- **Avoid JSONB-specific operators** in migration scripts
+- **This is a recurring issue** - check every migration with JSON data
+- **Convert to JSONB later** if database-level JSON operations are needed
+
+This pattern prevents the most common cause of SQL migration failures when working with JSON data.

@@ -15,6 +15,7 @@ import HybridEditor from './HybridEditor';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
 import { remarkTimestampLinks } from './remarkTimestampLinks';
 import { rehypeTimestampLinks } from './rehypeTimestampLinks';
+import { useImagePaste } from '../hooks/useImagePaste';
 
 interface MarkdownEditorProps {
   note: Note;
@@ -43,6 +44,20 @@ export default function MarkdownEditor({
   const [lastSavedTitle, setLastSavedTitle] = useState(note.title);
   const [lastSavedTags, setLastSavedTags] = useState(note.tags.join(', '));
   const { getActiveTime, seekTo } = useYouTube();
+
+  // Image paste functionality
+  const { handlePaste, isUploading } = useImagePaste({
+    noteId: note.id,
+    userId: note.user_id,
+    onImageInserted: (markdown) => {
+      // Insert the markdown at the current cursor position or at the end
+      setContent(prevContent => {
+        // For now, just append to the end. In a more advanced implementation,
+        // you could track cursor position and insert at that point
+        return prevContent + '\n\n' + markdown;
+      });
+    }
+  });
 
   // Process content to make timestamps clickable
   const processedContent = content.replace(/\[(\d{1,2}):(\d{2})\]/g, (match, minutes, seconds) => {
@@ -419,12 +434,20 @@ Just paste a YouTube URL and it will be automatically embedded!`;
               {lastSaved ? `Auto-saved at ${new Date(lastSaved).toLocaleTimeString()}` : 'Auto-save enabled'}
             </span>
           )}
-
+          {isUploading && (
+            <span className="text-blue-600 flex items-center gap-1">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+              Uploading image...
+            </span>
+          )}
         </div>
       </div>
 
       {/* Editor */}
-      <div className="flex-1 overflow-hidden">
+      <div 
+        className="flex-1 overflow-hidden"
+        onPaste={handlePaste}
+      >
         {editorState.mode === 'preview' ? (
           <div className="h-full overflow-y-auto">
             <CustomMarkdownPreview
@@ -439,6 +462,8 @@ Just paste a YouTube URL and it will be automatically embedded!`;
             onChange={(value) => setContent(value || '')}
             allNotes={allNotes}
             onNoteSelect={onNoteSelect || (() => {})}
+            noteId={note.id}
+            userId={note.user_id}
           />
         ) : (
           <MDEditor

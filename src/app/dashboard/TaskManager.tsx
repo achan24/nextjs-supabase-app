@@ -1001,17 +1001,24 @@ export default function TaskManager({ user }: { user: User }) {
       </div>
 
       {/* Create Task Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => {
-        setIsModalOpen(false);
-        setModalStep('create');
-        setCreatedTaskId(null);
-        setCreatedTaskTitle('');
-      }}>
-        <div className="p-6">
+      <Dialog 
+        open={isModalOpen} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsModalOpen(false);
+            setModalStep('create');
+            setCreatedTaskId(null);
+            setCreatedTaskTitle('');
+          }
+        }}
+      >
+        <DialogContent className={modalStep === 'classify' ? "sm:max-w-2xl max-h-[90vh] flex flex-col p-0" : "sm:max-w-md"}>
           {modalStep === 'create' ? (
             <>
-              <h2 className="text-2xl font-bold mb-4">Create New Task</h2>
-              <div className="space-y-4">
+              <DialogHeader className="px-6 py-4">
+                <DialogTitle className="text-xl font-semibold">Create New Task</DialogTitle>
+              </DialogHeader>
+              <div className="px-6 pb-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Title</label>
               <input
@@ -1224,12 +1231,15 @@ export default function TaskManager({ user }: { user: User }) {
           ) : (
             <>
               {/* Trait Classification Step */}
-              <h2 className="text-2xl font-bold mb-4">Classify Task: {createdTaskTitle}</h2>
-              <p className="text-gray-600 mb-6">
-                Help us understand this task better to track relevant character traits and provide personalized insights.
-              </p>
+              <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+                <DialogTitle className="text-xl font-semibold">Classify Task: {createdTaskTitle}</DialogTitle>
+                <p className="text-gray-600 text-sm">
+                  Help us understand this task better to track relevant character traits and provide personalized insights.
+                </p>
+              </DialogHeader>
               
-              <div className="space-y-6">
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="space-y-6">
                 {/* Task Type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-900 mb-3">
@@ -1342,25 +1352,26 @@ export default function TaskManager({ user }: { user: User }) {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="mt-8 flex justify-between">
-                <button
-                  onClick={handleSkipClassification}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Skip for Now
-                </button>
-                <button
-                  onClick={handleTraitClassificationComplete}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  Complete Classification
-                </button>
-              </div>
+            <div className="px-6 py-4 border-t flex justify-between flex-shrink-0">
+              <button
+                onClick={handleSkipClassification}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Skip for Now
+              </button>
+              <button
+                onClick={handleTraitClassificationComplete}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                Complete Classification
+              </button>
+            </div>
             </>
           )}
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
 
       {/* Manage Tags Modal */}
       {isTagModalOpen && (

@@ -29,7 +29,9 @@ import { createClient } from '@/lib/supabase/client';
 import { NoteLinkButton } from '@/components/ui/note-link-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import WalletPill from '@/components/WalletPill';
 import { ProcessFlowLinkButton } from '@/components/ui/process-flow-link-button';
+import { awardUnscoredSessionsForTask } from '@/services/traitScoring';
 import StarButton from '@/components/StarButton';
 import TaskCreator from '@/components/TaskCreator';
 
@@ -60,6 +62,12 @@ interface Task {
   is_starred_for_today?: boolean;
   starred_at?: string | null;
   metric_contributions?: TaskContribution[];
+  task_trait_tags?: Array<{
+    id: string;
+    trait_tags: any[]; // JSONB array
+    task_metadata: any; // JSONB object
+    auto_classified: boolean;
+  }>;
 }
 
 interface TaskWithContributions {
@@ -386,10 +394,14 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
 
   const handleCompleteMilestone = async (milestone: LifeGoalMilestone) => {
     try {
+      console.log('[Milestone] Starting completion update for:', milestone.title, 'Current completed:', milestone.completed);
       const now = new Date().toISOString();
+      const newCompleted = !milestone.completed;
+      console.log('[Milestone] Updating to completed:', newCompleted, 'with completed_at:', newCompleted ? now : 'undefined');
+      
       await updateMilestone(milestone.id, {
-        completed: !milestone.completed,
-        completed_at: !milestone.completed ? now : undefined,
+        completed: newCompleted,
+        completed_at: newCompleted ? now : undefined,
       });
 
       // Find the goal this milestone belongs to
@@ -637,7 +649,41 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
       // Find the task to get its name
       const task = tasks.find(t => t.id === taskId);
       if (newStatus === 'completed') {
-        toast.success(`Good job completing "${task?.title}"! 🎉\nOne step closer to ${selectedGoal?.title}`);
+        // On completion: award XP/tokens for unscored sessions tied to this task
+        try {
+          const { data: user } = await supabase.auth.getUser();
+          const userId = user.user?.id;
+          if (userId) {
+            const result = await awardUnscoredSessionsForTask(taskId, userId);
+            if (result && result.totalXp > 0) {
+              const { totalXp, tokens, perTraitTotals } = result as any;
+              const breakdown = perTraitTotals
+                ? ` (Dsc ${perTraitTotals.Discipline || 0}, Adp ${perTraitTotals.Adaptability || 0}, Prs ${perTraitTotals.Perseverance || 0})`
+                : '';
+              toast.success(`Completed "${task?.title}": +${totalXp || 0} XP${breakdown}${tokens ? `, +${tokens} tokens` : ''}`);
+            } else {
+              // No sessions found - award minimal XP for quick completion
+              const quickCompletionXP = 5;
+              const quickCompletionTokens = 1;
+              
+              // Award minimal XP for completing without a session
+              const { data: user } = await supabase.auth.getUser();
+              if (user.user?.id) {
+                const { error: mintErr } = await supabase.rpc('mint_tokens_v1', {
+                  p_user_id: user.user.id,
+                  p_amount: quickCompletionTokens,
+                  p_meta: { task_id: taskId, quick_completion: true, xp: quickCompletionXP }
+                });
+                if (mintErr) console.error('[QuickComplete] Error minting tokens:', mintErr);
+              }
+              
+              toast.success(`Quick completion "${task?.title}": +${quickCompletionXP} XP, +${quickCompletionTokens} token! 💨`);
+            }
+          }
+        } catch (e) {
+          console.error('[TaskComplete] award error:', e);
+          toast.success(`Good job completing "${task?.title}"! 🎉`);
+        }
       } else {
         toast.success(`Task "${task?.title}" reopened`);
       }
@@ -971,7 +1017,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                 {currentSubarea?.name || 'Subarea'}
               </Button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Button
                 variant="outline"
                 size="sm"
@@ -986,6 +1032,7 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               >
                 All Goals
               </Button>
+              <WalletPill />
             </div>
           </div>
 
@@ -1377,9 +1424,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                       return (
                         <div 
                           key={goalTask.id}
-                          className="flex flex-col py-1.5 px-3 rounded-lg border"
+                          className="flex items-center justify-between py-1.5 px-3 rounded-lg border"
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1408,22 +1455,40 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                                 Link to Metric
                               </span>
                             </Button>
-                            <div className="min-w-0">
-                              <span className={`font-medium text-sm ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
-                                {task.title}
-                              </span>
-                              {task.description && (
-                                <p className={`text-xs text-gray-600 truncate ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
-                                  {task.description}
-                                </p>
-                              )}
-                              {task.due_date && (
-                                <p className={`text-xs text-gray-500 flex items-center ${task.status === 'completed' ? 'text-gray-400' : ''}`}>
-                                  <Calendar className="w-3 h-3 mr-1" />
-                                  Due: {new Date(task.due_date).toLocaleDateString()}
-                                </p>
-                              )}
-                              {/* Show trait tags */}
+                            
+                            {/* Task content and timer on same line */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-3">
+                                <div className="min-w-0">
+                                  <span className={`font-medium text-sm ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
+                                    {task.title}
+                                  </span>
+                                  {task.description && (
+                                    <p className={`text-xs text-gray-600 truncate ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
+                                      {task.description}
+                                    </p>
+                                  )}
+                                  {task.due_date && (
+                                    <p className={`text-xs text-gray-500 flex items-center ${task.status === 'completed' ? 'text-gray-400' : ''}`}>
+                                      <Calendar className="w-3 h-3 mr-1" />
+                                      Due: {new Date(task.due_date).toLocaleDateString()}
+                                    </p>
+                                  )}
+                                </div>
+                                
+                                {/* Session Timer inline */}
+                                <SessionTimer
+                                  taskId={task.id}
+                                  taskTitle={task.title}
+                                  taskStatus={task.status === 'completed' ? 'completed' : 'todo'}
+                                  onSessionComplete={(sessionData) => {
+                                    console.log('Session completed:', sessionData);
+                                    // TODO: Calculate trait XP based on session data and task classifications
+                                  }}
+                                />
+                              </div>
+                              
+                              {/* Trait tags below */}
                               {task.task_trait_tags && task.task_trait_tags.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {task.task_trait_tags.map(tag => {
@@ -1455,7 +1520,8 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                                   })}
                                 </div>
                               )}
-                              {/* Show linked metrics */}
+                              
+                              {/* Linked metrics below */}
                               {task.metric_contributions?.map(contribution => (
                                 <div key={contribution.id} className="flex items-center gap-1 mt-1">
                                   <Target className="w-3 h-3 text-gray-500" />
@@ -1474,7 +1540,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                               ))}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          
+                          {/* Right side: Worth, Edit, Delete */}
+                          <div className="flex items-center gap-2 ml-4">
                             <span className="text-xs text-gray-500">
                               Worth: {goalTask.time_worth}x
                             </span>
@@ -1500,18 +1568,6 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
                             >
                               <Trash2 className="w-3 h-3" />
                             </Button>
-                          </div>
-
-                          {/* Session Timer */}
-                          <div className="mt-2">
-                            <SessionTimer
-                              taskId={task.id}
-                              taskTitle={task.title}
-                              onSessionComplete={(sessionData) => {
-                                console.log('Session completed:', sessionData);
-                                // TODO: Calculate trait XP based on session data and task classifications
-                              }}
-                            />
                           </div>
                         </div>
                       );

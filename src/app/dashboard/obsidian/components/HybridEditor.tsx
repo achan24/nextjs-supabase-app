@@ -10,6 +10,7 @@ import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
 import { remarkTimestampLinks } from './remarkTimestampLinks';
 import { rehypeTimestampLinks } from './rehypeTimestampLinks';
 import { useYouTube } from './useYouTube';
+import { useImagePaste } from '../hooks/useImagePaste';
 
 interface HybridEditorProps {
   content: string;
@@ -17,12 +18,24 @@ interface HybridEditorProps {
   allNotes?: Note[];
   onNoteSelect?: (note: Note) => void;
   onGetVideoTime?: () => number | null;
+  noteId?: string;
+  userId?: string;
 }
 
-export default function HybridEditor({ content, onChange, allNotes = [], onNoteSelect, onGetVideoTime }: HybridEditorProps) {
+export default function HybridEditor({ content, onChange, allNotes = [], onNoteSelect, onGetVideoTime, noteId, userId }: HybridEditorProps) {
   const [hasVideo, setHasVideo] = useState(false);
   const [videoHeight, setVideoHeight] = useState(0);
   const { register, seekTo } = useYouTube();
+
+  // Image paste functionality
+  const { handlePaste, isUploading } = useImagePaste({
+    noteId: noteId || '',
+    userId: userId || '',
+    onImageInserted: (markdown) => {
+      // Insert the markdown at the current cursor position or at the end
+      onChange(content + '\n\n' + markdown);
+    }
+  });
 
   // Check if content contains video links
   useEffect(() => {
@@ -101,7 +114,10 @@ export default function HybridEditor({ content, onChange, allNotes = [], onNoteS
   }, [seekTo]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div 
+      className="h-full flex flex-col"
+      onPaste={handlePaste}
+    >
       {/* Video Section - only shown if video is present */}
       {hasVideo && videoContent && (
         <div 

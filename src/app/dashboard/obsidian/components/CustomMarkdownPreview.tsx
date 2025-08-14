@@ -6,6 +6,7 @@ import rehypeRaw from 'rehype-raw';
 import { Note } from '../types';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
 import { useYouTube } from './useYouTube';
+import { ObsidianImage } from './ObsidianImage';
 
 interface CustomMarkdownPreviewProps {
   content: string;
@@ -118,27 +119,13 @@ export default function CustomMarkdownPreview({
             );
           },
           img: ({ src, alt, ...props }) => (
-            <div>
-              <img
-                src={src}
-                alt={alt}
-                className="max-w-full h-auto rounded"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const errorDiv = target.nextElementSibling as HTMLDivElement;
-                  if (errorDiv) {
-                    errorDiv.style.display = 'block';
-                  }
-                }}
+            <div className="my-4">
+              <ObsidianImage
+                src={src || ''}
+                alt={alt || ''}
+                className="max-w-full h-auto"
                 {...props}
               />
-              <div
-                style={{ display: 'none' }}
-                className="p-2 bg-gray-100 border border-gray-300 rounded text-gray-600 text-sm"
-              >
-                Image failed to load: {src}
-              </div>
             </div>
           ),
         }}

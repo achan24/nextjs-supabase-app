@@ -12,6 +12,7 @@ import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calen
 import { createClient } from '@/lib/supabase'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { GuardianAngelAI } from '@/components/GuardianAngelAI'
+import TokenShop from '@/components/TokenShop'
 
 interface CharacterData {
   name: string;
@@ -178,6 +179,7 @@ export default function HomePage({ user }: { user: User }) {
         {/* Feature Cards */}
         <h2 className="text-2xl font-semibold mb-6">Features</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          
           {/* Character Card */}
           <Link href="/dashboard/character" className="group">
             <Card className="hover:shadow-md transition-shadow">
@@ -404,6 +406,8 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
+          {/* ... other feature cards ... */}
+
           {/* Ebook Reader Card */}
           <Link href="/dashboard/ebooks" className="group">
             <Card className="hover:shadow-md transition-shadow border-2 border-emerald-200">
@@ -472,6 +476,23 @@ export default function HomePage({ user }: { user: User }) {
               <CardContent>
                 <p className="text-sm text-gray-600">
                   Time and track your process sequences with focused intervals. Execute your process flows with structured timing and measurement.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Token Shop Card */}
+          <Link href="/dashboard/token-shop" className="group">
+            <Card className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-amber-100 rounded-lg">💰</div>
+                  Token Shop
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Spend your earned tokens on rewards and perks. Redeem tokens for coffee treats, movie nights, and productivity tools.
                 </p>
               </CardContent>
             </Card>

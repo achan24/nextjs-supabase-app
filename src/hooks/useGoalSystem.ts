@@ -360,12 +360,18 @@ export function useGoalSystem() {
   }, [fetchAreas]);
 
   const updateMilestone = useCallback(async (id: string, updates: Partial<LifeGoalMilestone>) => {
-    const { error } = await supabase
+    console.log('[useGoalSystem] updateMilestone called with id:', id, 'updates:', updates);
+    const { data, error } = await supabase
       .from('life_goal_milestones')
       .update(updates)
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[useGoalSystem] updateMilestone error:', error);
+      throw error;
+    }
+    console.log('[useGoalSystem] updateMilestone success, updated data:', data);
     await fetchAreas();
   }, [fetchAreas]);
 

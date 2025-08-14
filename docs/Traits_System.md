@@ -389,6 +389,30 @@ function inferTraits(task, session) {
 * Pre‑start and post‑session flows complete in ≤10 sec each.
 
 ## 11. API Endpoints (example)
+## 12. Current Build Status (Phases)
+
+- Phase 1: Session Tracking — DONE
+  - Timer/session tracker integrated into task cards
+  - Sessions persist across refresh; micro-events: distraction, urge_overcome, approach_change
+  - Sessions saved to trait_sessions
+
+- Phase 2: XP & Character Growth — IN PROGRESS (v1 shipped)
+  - XP engine live; currently computes: Discipline, Adaptability, Perseverance, Endurance, Determination, Resilience (Initiative/Proactiveness/Courage wired via classifiers and post‑session soon)
+  - XP awarded on task completion (aggregates unscored sessions)
+  - Tokens minted from total trait XP; wallet pill with hover history
+  - Character dashboard reads trait_xp_records and shows progress
+  - Next: add post-completion questionnaire; expand scoring to all 9 traits; show per-trait breakdown in all toasts/hover (added in app)
+
+- Phase 3: Quest Text & Motivation — ✅ COMPLETE
+  - ✅ Dynamic quest text generation for all 9 traits
+  - ✅ Motivational feedback system with 3 levels (encouraging, celebratory, inspiring)
+  - ✅ ADHD-friendly immediate reinforcement with animated toasts
+  - ✅ Context-aware messaging (time of day, difficulty, stakes)
+  - ✅ Token bonus calculations and display
+  - ✅ Level-up detection and celebration
+  - ✅ Streak milestone recognition
+  - ✅ Personalized quest text based on trait progress
+
 
 * `POST /tasks` → create task
 * `GET /tasks/:id`

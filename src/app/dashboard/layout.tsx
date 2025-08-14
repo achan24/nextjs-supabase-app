@@ -8,6 +8,7 @@ import { AppNavDropdown } from '@/components/AppNavDropdown';
 import { ActiveSequenceProvider } from '@/contexts/ActiveSequenceContext';
 import { ActiveSequenceIndicator } from '@/components/ActiveSequenceIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import WalletPill from '@/components/WalletPill';
 import Link from 'next/link';
 import { initializeAutoSave } from '@/services/characterProgressService';
 import { useAuth } from '@/hooks/useAuth';
@@ -49,6 +50,7 @@ export default function DashboardLayout({
               </div>
               <div className="flex items-center gap-4">
                 <ActiveSequenceIndicator />
+                <WalletPill />
                 <NotificationBell />
                 <ThemeToggle />
               </div>

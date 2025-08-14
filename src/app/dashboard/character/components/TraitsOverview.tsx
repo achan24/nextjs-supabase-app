@@ -8,6 +8,8 @@ import { ChevronRight, TrendingUp, Award, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { generateLevelUpText } from '@/services/questTextService'
+import { showQuestToast } from '@/components/QuestToast'
 
 interface TraitData {
   id: string
@@ -65,28 +67,79 @@ export default function TraitsOverview() {
 
     try {
       setLoading(true)
-      console.log('[Traits] Loading traits for user:', user.id)
+      console.log('[Traits] Loading from trait_xp_records for user:', user.id)
 
-      // Since character is virtual, use user_id directly for traits
-      // For now, we'll create a virtual character_id based on user_id
-      const virtualCharacterId = `character-${user.id}`
+      // 1) fetch this user's session ids
+      const { data: sessions, error: sessErr } = await supabase
+        .from('trait_sessions')
+        .select('id, updated_at')
+        .eq('user_id', user.id)
 
-      // Get character traits
-      const { data: traitsData, error: traitsError } = await supabase
-        .from('character_traits')
-        .select('*')
-        .eq('character_id', virtualCharacterId)
-        .order('last_updated', { ascending: false })
-
-      if (traitsError) {
-        console.error('[Traits] Traits error:', traitsError)
-        // If no traits exist yet, that's fine - they'll be created when first used
+      if (sessErr) {
+        console.error('[Traits] sessions error:', sessErr)
         setTraits([])
         return
       }
 
-      console.log('[Traits] Loaded traits:', traitsData)
-      setTraits(traitsData || [])
+      const sessionIds = (sessions || []).map(s => s.id)
+      if (sessionIds.length === 0) {
+        setTraits([])
+        return
+      }
+
+      // 2) fetch xp records for those sessions
+      const { data: xpRows, error: xpErr } = await supabase
+        .from('trait_xp_records')
+        .select('trait_name, final_xp, created_at, session_id')
+        .in('session_id', sessionIds)
+
+      if (xpErr) {
+        console.error('[Traits] xp error:', xpErr)
+        setTraits([])
+        return
+      }
+
+      // 3) reduce totals per trait
+      const totals: Record<string, { xp: number; last: string }> = {}
+      ;(xpRows || []).forEach((r: any) => {
+        const key = (r.trait_name || '').toString()
+        if (!key) return
+        if (!totals[key]) totals[key] = { xp: 0, last: r.created_at }
+        totals[key].xp += Number(r.final_xp || 0)
+        if (r.created_at && (!totals[key].last || new Date(r.created_at) > new Date(totals[key].last))) {
+          totals[key].last = r.created_at
+        }
+      })
+
+      // 4) map to UI structure (value 0-100 using simple scaling: value = min(100, floor(xp/50)))
+      const mapped: TraitData[] = Object.entries(totals).map(([name, info]) => ({
+        id: name,
+        name,
+        value: Math.min(100, Math.floor((info.xp || 0) / 50)),
+        last_updated: info.last,
+        calculation_data: { total_xp: info.xp }
+      }))
+
+      // Check for level ups and show quest text
+      const previousTraits = traits;
+      const newTraits = mapped;
+      
+      // Compare and detect level ups
+      newTraits.forEach(newTrait => {
+        const previousTrait = previousTraits.find(t => t.id === newTrait.id);
+        if (previousTrait) {
+          const previousLevel = Math.floor(previousTrait.value / 20); // Rough level calculation
+          const newLevel = Math.floor(newTrait.value / 20);
+          
+          if (newLevel > previousLevel) {
+            // Level up detected!
+            const questText = generateLevelUpText(newTrait.name, newLevel);
+            showQuestToast(questText);
+          }
+        }
+      });
+
+      setTraits(mapped)
     } catch (error) {
       console.error('[Traits] Error loading traits:', error)
       setTraits([])
