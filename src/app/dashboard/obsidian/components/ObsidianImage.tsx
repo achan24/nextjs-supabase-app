@@ -19,16 +19,39 @@ export function ObsidianImage({ src, alt, className = '', style = {} }: Obsidian
   // Get signed URL for Supabase images
   useEffect(() => {
     const getSignedUrl = async () => {
-      if (!src.startsWith('supabase://')) {
-        setSignedUrl(src);
+      console.log('[ObsidianImage] Processing src:', src);
+      
+      // Check if this is a transformed supabase URL
+      if (src.startsWith('data:supabase-url,')) {
+        const actualUrl = decodeURIComponent(src.replace('data:supabase-url,', ''));
+        console.log('[ObsidianImage] Decoded Supabase URL:', actualUrl);
+        
+        if (actualUrl.startsWith('supabase://')) {
+          // Process the actual supabase URL
+          await processSupabaseUrl(actualUrl);
+          return;
+        }
+      }
+      
+      // Check if this is a direct supabase URL
+      if (src.startsWith('supabase://')) {
+        await processSupabaseUrl(src);
         return;
       }
+      
+      // For any other URL (including placeholder), use as-is
+      console.log('[ObsidianImage] Not a Supabase URL, using as-is');
+      setSignedUrl(src);
+    };
 
+    const processSupabaseUrl = async (supabaseUrl: string) => {
       try {
         // Extract the base URL without dimensions
-        const baseUrl = src.split('|')[0];
+        const baseUrl = supabaseUrl.split('|')[0];
         const [bucketName, ...pathParts] = baseUrl.replace('supabase://', '').split('/');
         const filePath = pathParts.join('/');
+        
+        console.log('[ObsidianImage] Extracted bucket:', bucketName, 'filePath:', filePath);
         
         const { data, error } = await supabase.storage
           .from(bucketName)
@@ -41,10 +64,14 @@ export function ObsidianImage({ src, alt, className = '', style = {} }: Obsidian
         }
 
         if (data?.signedUrl) {
+          console.log('[ObsidianImage] Generated signed URL:', data.signedUrl);
           setSignedUrl(data.signedUrl);
+        } else {
+          console.error('[ObsidianImage] No signed URL in response:', data);
+          setHasError(true);
         }
       } catch (error) {
-        console.error('[ObsidianImage] Error processing URL:', src, error);
+        console.error('[ObsidianImage] Error processing URL:', supabaseUrl, error);
         setHasError(true);
       }
     };

@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, Children, isValidElement } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { Note } from '../types';
 import { remarkYoutubeEmbed } from './remarkYoutubeEmbed';
+import { remarkImageFix } from './remarkImageFix';
+import { rehypeSupabaseImages } from './rehypeSupabaseImages';
 import { useYouTube } from './useYouTube';
 import { ObsidianImage } from './ObsidianImage';
 
@@ -24,7 +26,7 @@ export default function CustomMarkdownPreview({
   const containerRef = useRef<HTMLDivElement>(null);
   const { seekTo } = useYouTube();
 
-  // Process double bracket links and timestamps before passing to react-markdown
+  // Process double bracket links, timestamps, and supabase images before passing to react-markdown
   const processedContent = content
     .replace(/\[\[([^\]]+)\]\]/g, (match, noteTitle) => {
       const targetNote = allNotes.find(n => 
@@ -40,8 +42,15 @@ export default function CustomMarkdownPreview({
     .replace(/\[(\d{1,2}):(\d{2})\]/g, (match, minutes, seconds) => {
       // Convert timestamp to clickable link
       return `[${match}](#timestamp-${minutes}-${seconds})`;
+    })
+    .replace(/!\[([^\]]*)\]\(supabase:\/\/([^)]+)\)/g, (match, altText, supabaseUrl) => {
+      // Convert supabase images to a format ReactMarkdown will accept
+      const fullUrl = `supabase://${supabaseUrl}`;
+      console.log('[CustomMarkdownPreview] Converting supabase image:', fullUrl);
+      return `![${altText}](https://placeholder-supabase-image.com/image.png "supabase-url:${fullUrl}")`;
     });
 
+  console.log('[CustomMarkdownPreview] Raw content:', content);
   console.log('[CustomMarkdownPreview] Processed content:', processedContent);
 
   const handleNoteClick = (noteId: string) => {
@@ -62,6 +71,7 @@ export default function CustomMarkdownPreview({
     >
       <ReactMarkdown
         remarkPlugins={[remarkYoutubeEmbed]}
+        rehypePlugins={[rehypeRaw]}
         components={{
           a: ({ href, children, ...props }) => {
             // Handle note links
@@ -118,18 +128,30 @@ export default function CustomMarkdownPreview({
               </a>
             );
           },
-          img: ({ src, alt, ...props }) => (
-            <div className="my-4">
-              <ObsidianImage
-                src={src || ''}
-                alt={alt || ''}
-                className="max-w-full h-auto"
-                {...props}
-              />
-            </div>
-          ),
+          img: ({ src, alt, title, ...props }) => {
+            console.log('[CustomMarkdownPreview] img component called with src:', src, 'alt:', alt, 'title:', title, 'props:', props);
+            
+            // Check for supabase URL in the title attribute
+            let actualSrc = src || '';
+            if (title && title.startsWith('supabase-url:')) {
+              actualSrc = title.replace('supabase-url:', '');
+              console.log('[CustomMarkdownPreview] Found supabase URL in title:', actualSrc);
+            }
+            
+            console.log('[CustomMarkdownPreview] Using actualSrc:', actualSrc);
+            
+            return (
+              <div className="my-4">
+                <ObsidianImage
+                  src={actualSrc}
+                  alt={alt || ''}
+                  className="max-w-full h-auto"
+                  {...props}
+                />
+              </div>
+            );
+          },
         }}
-        rehypePlugins={[rehypeRaw]}
       >
         {processedContent}
       </ReactMarkdown>
