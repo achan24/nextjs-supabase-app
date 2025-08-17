@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import GoalSelector from '@/components/GoalSelector';
 import TraitClassificationDialog from '@/components/TraitClassificationDialog';
+import { isFirstTaskOfDay, calculateFirstTaskMultipliers } from '@/utils/taskUtils';
 
 interface TaskCreatorProps {
   areaId?: string;
@@ -46,11 +47,29 @@ export default function TaskCreator({
   const [isCreating, setIsCreating] = useState(false);
   const [step, setStep] = useState<'create' | 'classify'>('create');
   const [createdTaskId, setCreatedTaskId] = useState<string>('');
+  const [isFirstTask, setIsFirstTask] = useState(false);
+  const [isWorkRelated, setIsWorkRelated] = useState<boolean | undefined>(undefined);
+  const [isOnTime, setIsOnTime] = useState<boolean | undefined>(undefined);
   const supabase = createClient();
 
   useEffect(() => {
     console.log('[TaskCreator] Step changed to:', step);
   }, [step]);
+
+  // Check if this is the first task of the day when dialog opens
+  useEffect(() => {
+    if (isOpen && step === 'create') {
+      const checkFirstTask = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          const firstTask = await isFirstTaskOfDay(session.user.id);
+          setIsFirstTask(firstTask);
+          console.log('[TaskCreator] Is first task of day:', firstTask);
+        }
+      };
+      checkFirstTask();
+    }
+  }, [isOpen, step, supabase]);
 
   const handleCreateTask = async () => {
     if (!title.trim()) {
@@ -93,6 +112,11 @@ export default function TaskCreator({
       // Store task info for trait classification
       setCreatedTaskId(data.id);
       
+      // Re-check if this is the first task, excluding the one we just created
+      const firstTaskCheck = await isFirstTaskOfDay(session.user.id, data.id);
+      setIsFirstTask(firstTaskCheck);
+      console.log('[TaskCreator] Re-checked first task status after creation:', firstTaskCheck);
+      
       // Move to classification step
       setStep('classify');
       
@@ -114,14 +138,52 @@ export default function TaskCreator({
     }
   };
 
-  const handleTraitClassificationComplete = () => {
+  const handleTraitClassificationComplete = async () => {
     console.log('[TaskCreator] Completing trait classification, closing dialog');
+    
+    try {
+      // Save first task multipliers if this is the first task
+      if (isFirstTask && createdTaskId) {
+        const multipliers = calculateFirstTaskMultipliers(isFirstTask, isWorkRelated, isOnTime);
+        
+        // Save to task_trait_tags table with the multiplier information
+        const { error: tagError } = await supabase
+          .from('task_trait_tags')
+          .insert({
+            task_id: createdTaskId,
+            trait_tags: ['Initiative'], // Default trait for any task
+            task_metadata: {
+              isFirstTaskOfDay: isFirstTask,
+              isWorkRelated: isWorkRelated,
+              isOnTime: isOnTime,
+              multipliers: multipliers
+            },
+            auto_classified: false
+          });
+
+        if (tagError) {
+          console.error('[TaskCreator] Error saving first task classification:', tagError);
+          toast.error('Failed to save task classification');
+        } else {
+          console.log('[TaskCreator] First task multipliers saved:', multipliers);
+          if (Object.keys(multipliers).length > 0) {
+            toast.success(`First task bonus activated! ${Object.keys(multipliers).length} multiplier(s) applied.`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[TaskCreator] Error in trait classification completion:', error);
+    }
+    
     // Reset form and close dialog
     setTitle('');
     setDescription('');
     setSelectedGoalId(null);
     setStep('create');
     setCreatedTaskId('');
+    setIsFirstTask(false);
+    setIsWorkRelated(undefined);
+    setIsOnTime(undefined);
     setIsOpen(false);
     
     // Call onTaskCreated callback after a short delay to ensure dialog closes first
@@ -237,10 +299,80 @@ export default function TaskCreator({
                 <p className="text-sm font-medium text-blue-900">Task: {title}</p>
               </div>
               
-              {/* Trait Classification Content - We'll add the full component content here */}
-              <div className="text-center py-8">
-                <p className="text-gray-500">Trait classification form will go here...</p>
-              </div>
+              {/* First Task of the Day Special Questions */}
+              {isFirstTask && (
+                <div className="space-y-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h3 className="text-lg font-semibold text-yellow-800">🌟 First Task of the Day Bonus</h3>
+                  <p className="text-sm text-yellow-700 mb-4">
+                    Answer these questions to unlock special multipliers for your first task!
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium">Is this task work-related? (3x multiplier)</Label>
+                      <div className="flex gap-4 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <input 
+                            type="radio" 
+                            id="work-yes" 
+                            name="workRelated" 
+                            checked={isWorkRelated === true}
+                            onChange={() => setIsWorkRelated(true)}
+                          />
+                          <Label htmlFor="work-yes">Yes - Work/Career related</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input 
+                            type="radio" 
+                            id="work-no" 
+                            name="workRelated" 
+                            checked={isWorkRelated === false}
+                            onChange={() => setIsWorkRelated(false)}
+                          />
+                          <Label htmlFor="work-no">No - Personal/Other</Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label className="text-sm font-medium">Are you starting on time? (2x multiplier)</Label>
+                      <div className="flex gap-4 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <input 
+                            type="radio" 
+                            id="ontime-yes" 
+                            name="onTime" 
+                            checked={isOnTime === true}
+                            onChange={() => setIsOnTime(true)}
+                          />
+                          <Label htmlFor="ontime-yes">Yes - On time as planned</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input 
+                            type="radio" 
+                            id="ontime-no" 
+                            name="onTime" 
+                            checked={isOnTime === false}
+                            onChange={() => setIsOnTime(false)}
+                          />
+                          <Label htmlFor="ontime-no">No - Late or unplanned timing</Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded">
+                      💡 <strong>Potential Bonus:</strong> Work-related (3x) + On-time (2x) = 6x multiplier for your first task!
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Regular trait classification placeholder */}
+              {!isFirstTask && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Regular trait classification form will go here...</p>
+                </div>
+              )}
               
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="outline" onClick={handleSkipClassification}>

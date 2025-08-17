@@ -1598,3 +1598,113 @@ INSERT INTO shop_items (effects) VALUES (
 - **Convert to JSONB later** if database-level JSON operations are needed
 
 This pattern prevents the most common cause of SQL migration failures when working with JSON data.
+
+# SESSIONTIMER STUCK RUNNING - MANUAL DATABASE CLEANUP
+
+## The Problem: Timer Continues Running After Session Should Be Stopped
+
+### Root Cause
+When SessionTimer gets stuck showing a running timer that won't stop with pause/complete buttons, it's usually because:
+1. Multiple active sessions exist in the database for the same task
+2. Browser state is out of sync with database state
+3. Session records have `t_end = NULL` when they should be completed
+
+### Real Example: "Review Slide Deck 5" Timer Issue
+**Problem**: Timer showing 190+ minutes and continuing to run despite clicking stop/pause
+**Root Cause**: Multiple active sessions in `trait_sessions` table with `t_end = NULL`
+**Impact**: Timer unusable, cannot track actual work time
+
+### Diagnosis Steps
+
+1. **Check for Active Sessions**
+   ```sql
+   SELECT id, task_id, t_start, t_end, duration_min, paused_at 
+   FROM trait_sessions 
+   WHERE t_end IS NULL 
+   ORDER BY t_start DESC;
+   ```
+
+2. **Find Sessions for Specific Task**
+   ```sql
+   SELECT ts.id, ts.task_id, t.title, ts.t_start, ts.t_end, ts.duration_min, ts.paused_at 
+   FROM trait_sessions ts
+   JOIN tasks t ON ts.task_id = t.id
+   WHERE t.title LIKE '%Task Name%' 
+   AND ts.t_end IS NULL
+   ORDER BY ts.t_start DESC;
+   ```
+
+### Manual Fix: Stop Active Sessions
+
+**For Each Active Session:**
+```sql
+-- Replace 'session-id-here' with actual session ID
+-- Replace 62 with desired duration in minutes
+UPDATE trait_sessions 
+SET t_end = NOW(), 
+    duration_min = 62, 
+    paused_at = NULL 
+WHERE id = 'session-id-here';
+```
+
+**Alternative: Stop by Task and Timestamp**
+```sql
+-- If session ID doesn't work, use task_id and timestamp
+UPDATE trait_sessions 
+SET t_end = NOW(), 
+    duration_min = 62, 
+    paused_at = NULL 
+WHERE task_id = 'task-id-here' 
+AND t_start = '2025-08-17 12:12:50.019+00'
+AND t_end IS NULL;
+```
+
+### Verification
+
+**Check Session Was Updated:**
+```sql
+SELECT id, task_id, t_start, t_end, duration_min, paused_at 
+FROM trait_sessions 
+WHERE id = 'session-id-here';
+```
+
+**Verify No More Active Sessions:**
+```sql
+SELECT id, task_id, t_start, t_end, duration_min, paused_at 
+FROM trait_sessions 
+WHERE t_end IS NULL 
+ORDER BY t_start DESC;
+```
+
+### After Database Fix
+
+1. **Refresh the browser page** - Timer should now show correct duration
+2. **Verify timer is stopped** - Should not continue incrementing
+3. **Test new session** - Start/pause/stop should work normally
+
+### Prevention
+
+1. **Auto-stop on task completion** - SessionTimer now watches for task status changes
+2. **Proper pause handling** - Pause sets both `paused_at` and stops timer
+3. **Session cleanup** - Active sessions are ended when tasks are completed
+
+### Common Patterns
+
+**Multiple Sessions Same Task:**
+- Often happens when browser crashes or user closes tab during active session
+- Each browser session can create its own active session record
+- Solution: Stop all active sessions for the task
+
+**Timer Shows Huge Time:**
+- Timer calculates from `t_start` to current time
+- If session started hours/days ago and never stopped, timer shows accumulated time
+- Solution: Set appropriate `duration_min` when stopping session
+
+### Remember
+- **Always check database first** when timer behavior is unexpected
+- **Multiple active sessions** are the most common cause of stuck timers
+- **Refresh browser after database fix** to sync UI with database state
+- **Set realistic duration** when manually stopping sessions (don't use calculated time)
+- **This is a manual fix** - use only when SessionTimer UI controls don't work
+
+This pattern provides a reliable way to fix stuck timers when the UI controls fail to stop active sessions.

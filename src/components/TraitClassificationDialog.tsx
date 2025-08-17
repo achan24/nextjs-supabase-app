@@ -19,6 +19,9 @@ interface TraitClassificationData {
   discomfort: 'low' | 'medium' | 'high'
   selectedTraits: string[]
   firstTinyAction?: string
+  // First task of the day special fields
+  isWorkRelated?: boolean
+  isOnTime?: boolean
 }
 
 interface TraitClassificationDialogProps {
@@ -26,6 +29,7 @@ interface TraitClassificationDialogProps {
   onClose: () => void
   taskId: string
   taskTitle: string
+  isFirstTaskOfDay?: boolean
 }
 
 const CORE_TRAITS = [
@@ -56,7 +60,8 @@ export default function TraitClassificationDialog({
   isOpen,
   onClose,
   taskId,
-  taskTitle
+  taskTitle,
+  isFirstTaskOfDay = false
 }: TraitClassificationDialogProps) {
   console.log('[TraitClassificationDialog] Props:', { isOpen, taskId, taskTitle });
   const [classification, setClassification] = useState<TraitClassificationData>({
@@ -135,7 +140,10 @@ export default function TraitClassificationDialog({
             firstTime: classification.firstTime,
             stakes: classification.stakes,
             discomfort: classification.discomfort,
-            firstTinyAction: classification.firstTinyAction
+            firstTinyAction: classification.firstTinyAction,
+            isWorkRelated: classification.isWorkRelated,
+            isOnTime: classification.isOnTime,
+            isFirstTaskOfDay: isFirstTaskOfDay
           },
           auto_classified: false
         })
@@ -279,6 +287,62 @@ export default function TraitClassificationDialog({
                   </RadioGroup>
                 </div>
               </div>
+              
+              {/* First Task of the Day Special Questions */}
+              {isFirstTaskOfDay && (
+                <div className="space-y-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h3 className="text-lg font-semibold text-yellow-800">🌟 First Task of the Day Bonus</h3>
+                  <p className="text-sm text-yellow-700 mb-4">
+                    Answer these questions to unlock special multipliers for your first task!
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium">Is this task work-related? (3x multiplier)</Label>
+                      <RadioGroup
+                        value={classification.isWorkRelated === undefined ? '' : classification.isWorkRelated ? 'yes' : 'no'}
+                        onValueChange={(value) => 
+                          setClassification(prev => ({ ...prev, isWorkRelated: value === 'yes' }))
+                        }
+                        className="flex gap-4 mt-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="yes" id="work-yes" />
+                          <Label htmlFor="work-yes">Yes - Work/Career related</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="no" id="work-no" />
+                          <Label htmlFor="work-no">No - Personal/Other</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                    
+                    <div>
+                      <Label className="text-sm font-medium">Are you starting on time? (2x multiplier)</Label>
+                      <RadioGroup
+                        value={classification.isOnTime === undefined ? '' : classification.isOnTime ? 'yes' : 'no'}
+                        onValueChange={(value) => 
+                          setClassification(prev => ({ ...prev, isOnTime: value === 'yes' }))
+                        }
+                        className="flex gap-4 mt-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="yes" id="ontime-yes" />
+                          <Label htmlFor="ontime-yes">Yes - On time as planned</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="no" id="ontime-no" />
+                          <Label htmlFor="ontime-no">No - Late or unplanned timing</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                    
+                    <div className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded">
+                      💡 <strong>Potential Bonus:</strong> Work-related (3x) + On-time (2x) = 6x multiplier for your first task!
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Trait Selection */}

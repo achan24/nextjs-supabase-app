@@ -21,7 +21,16 @@ interface BookmarkItem {
 
 export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   const router = useRouter();
-  const [zoom, setZoom] = useState<string>('page-width');
+  
+  // Detect file type from storage path
+  const fileExtension = useMemo(() => {
+    const path = storagePath.toLowerCase();
+    if (path.endsWith('.pdf')) return 'pdf';
+    if (path.endsWith('.epub')) return 'epub';
+    return 'pdf'; // default to PDF
+  }, [storagePath]);
+
+  const [zoom, setZoom] = useState<string>(fileExtension === 'epub' ? '16' : 'page-width');
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(true);
   const [notes, setNotes] = useState('');
@@ -80,13 +89,18 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   }, [storagePath, currentPage, zoom]);
 
   // Stable viewer URL – do not include page/zoom to avoid reload loops
-  const viewerBase = '/pdfjs-viewer.html';
-  const viewerSrc = useMemo(() => `${viewerBase}?file=${encodeURIComponent(signedUrl)}`, [signedUrl]);
+  const viewerBase = fileExtension === 'epub' ? '/epub-viewer.html' : '/pdfjs-viewer.html';
+  const fileUrl = useMemo(() => {
+    return signedUrl;
+  }, [signedUrl]);
+  const viewerSrc = useMemo(() => `${viewerBase}?file=${encodeURIComponent(fileUrl)}`, [viewerBase, fileUrl]);
 
-  const externalHref = useMemo(
-    () => `${viewerBase}?file=${encodeURIComponent(signedUrl)}#page=${currentPage}&zoom=${encodeURIComponent(zoom)}`,
-    [signedUrl, currentPage, zoom]
-  );
+  const externalHref = useMemo(() => {
+    const hashParam = fileExtension === 'epub' 
+      ? `chapter=${currentPage}&fontSize=${zoom}` 
+      : `page=${currentPage}&zoom=${encodeURIComponent(zoom)}`;
+    return `${viewerBase}?file=${encodeURIComponent(fileUrl)}#${hashParam}`;
+  }, [viewerBase, fileUrl, currentPage, zoom, fileExtension]);
 
   // Listen to viewer state
   useEffect(() => {
@@ -130,7 +144,7 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   function addBookmark() {
     if (!ebookId) return;
     const n = currentPage;
-    const label = `Page ${n}`;
+    const label = fileExtension === 'epub' ? `Chapter ${n}` : `Page ${n}`;
     addBookmarkSql(ebookId, n, label)
       .then((row) => setBookmarks((prev) => [{ id: row.id, page: row.page, label: row.label, createdAt: Date.parse(row.created_at) }, ...prev]))
       .catch((e) => console.warn('[Ebooks] add bookmark failed', e));
@@ -158,20 +172,33 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
         {isMobile && (<Button onClick={() => window.open(externalHref, '_blank')}>Open Externally</Button>)}
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Zoom</span>
+          <span className="text-sm text-muted-foreground">{fileExtension === 'epub' ? 'Font Size' : 'Zoom'}</span>
           <Select value={zoom} onValueChange={(z) => { setZoom(z); sendToViewer({ type: 'ebook:setZoom', zoom: z }); }}>
-            <SelectTrigger className="w-44"><SelectValue placeholder="Zoom" /></SelectTrigger>
+            <SelectTrigger className="w-44"><SelectValue placeholder={fileExtension === 'epub' ? 'Font Size' : 'Zoom'} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="50">50%</SelectItem>
-              <SelectItem value="67">67%</SelectItem>
-              <SelectItem value="75">75%</SelectItem>
-              <SelectItem value="90">90%</SelectItem>
-              <SelectItem value="100">100%</SelectItem>
-              <SelectItem value="125">125%</SelectItem>
-              <SelectItem value="150">150%</SelectItem>
-              <SelectItem value="200">200%</SelectItem>
-              <SelectItem value="page-width">Fit width</SelectItem>
-              <SelectItem value="page-fit">Fit page</SelectItem>
+              {fileExtension === 'epub' ? (
+                <>
+                  <SelectItem value="12">12px</SelectItem>
+                  <SelectItem value="14">14px</SelectItem>
+                  <SelectItem value="16">16px</SelectItem>
+                  <SelectItem value="18">18px</SelectItem>
+                  <SelectItem value="20">20px</SelectItem>
+                  <SelectItem value="24">24px</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="50">50%</SelectItem>
+                  <SelectItem value="67">67%</SelectItem>
+                  <SelectItem value="75">75%</SelectItem>
+                  <SelectItem value="90">90%</SelectItem>
+                  <SelectItem value="100">100%</SelectItem>
+                  <SelectItem value="125">125%</SelectItem>
+                  <SelectItem value="150">150%</SelectItem>
+                  <SelectItem value="200">200%</SelectItem>
+                  <SelectItem value="page-width">Fit width</SelectItem>
+                  <SelectItem value="page-fit">Fit page</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -195,7 +222,7 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
           </aside>
         )}
 
-        <div ref={containerRef} className="flex-1 border rounded md:h:[80vh] h-[calc(100vh-160px)] overflow-auto" style={{ WebkitOverflowScrolling: 'touch' as any }}>
+        <div ref={containerRef} className="flex-1 border rounded md:h-[80vh] h-[calc(100vh-160px)] overflow-auto" style={{ WebkitOverflowScrolling: 'touch' as any }}>
           <iframe ref={iframeRef} src={viewerSrc} className="w-full md:h-full h-[calc(100vh-160px)]" />
         </div>
 
@@ -236,8 +263,8 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
 
             <div className="flex-1 flex flex-col">
               <div className="text-sm font-medium mb-2">Notes</div>
-              <textarea className="flex-1 w-full resize-none border rounded p-2 text-sm" placeholder="Write notes here. Use [p.123] to jump to a page." value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => { if (ebookId) saveNotesSql(ebookId, notes).catch((err) => console.warn('[Ebooks] save notes failed', err)); }} />
-              <div className="text-xs text-muted-foreground mt-2">Current page: {currentPage} / {totalPages || '...'}</div>
+              <textarea className="flex-1 w-full resize-none border rounded p-2 text-sm" placeholder={`Write notes here. Use [${fileExtension === 'epub' ? 'ch.5' : 'p.123'}] to reference content.`} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => { if (ebookId) saveNotesSql(ebookId, notes).catch((err) => console.warn('[Ebooks] save notes failed', err)); }} />
+              <div className="text-xs text-muted-foreground mt-2">Current {fileExtension === 'epub' ? 'chapter' : 'page'}: {currentPage} / {totalPages || '...'}</div>
             </div>
           </aside>
         )}

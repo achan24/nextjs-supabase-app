@@ -146,6 +146,45 @@ export default function SessionTimer({ taskId, taskTitle, taskStatus = 'todo', o
     };
   }, [isRunning, isPaused]);
 
+  // Watch for task status changes and stop active sessions if task is completed
+  useEffect(() => {
+    if (taskStatus === 'completed' && activeSessionId && isRunning) {
+      console.log('[SessionTimer] Task completed, stopping active session automatically');
+      
+      // Stop the timer immediately
+      setIsRunning(false);
+      setIsPaused(false);
+      
+      // Update the database to end the session
+      const endSession = async () => {
+        const endTime = new Date();
+        const duration = Math.floor(elapsedTime / 60); // Convert to minutes
+
+        try {
+          const { error } = await supabase
+            .from('trait_sessions')
+            .update({
+              t_end: endTime.toISOString(),
+              duration_min: duration,
+              paused_at: null
+            })
+            .eq('id', activeSessionId);
+
+          if (error) {
+            console.error('Error auto-stopping session on task completion:', error);
+          } else {
+            console.log('[SessionTimer] Session auto-stopped on task completion');
+            toast.success('Session saved - task completed!');
+          }
+        } catch (error) {
+          console.error('Error auto-stopping session on task completion:', error);
+        }
+      };
+      
+      endSession();
+    }
+  }, [taskStatus, activeSessionId, isRunning, elapsedTime, supabase]);
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -205,6 +244,7 @@ export default function SessionTimer({ taskId, taskTitle, taskStatus = 'todo', o
       }
 
       setIsPaused(true);
+      setIsRunning(false); // Stop the timer when paused
     } catch (error) {
       console.error('Error pausing session:', error);
     }
@@ -225,6 +265,7 @@ export default function SessionTimer({ taskId, taskTitle, taskStatus = 'todo', o
       }
 
       setIsPaused(false);
+      setIsRunning(true); // Resume the timer when unpaused
     } catch (error) {
       console.error('Error resuming session:', error);
     }

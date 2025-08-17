@@ -55,7 +55,7 @@ export async function middleware(req: NextRequest) {
         path: "/",
       });
     }
-  } else if (!req.nextUrl.pathname.startsWith('/login')) {
+  } else if (!req.nextUrl.pathname.startsWith('/login') && !req.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 

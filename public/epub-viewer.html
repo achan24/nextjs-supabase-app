@@ -1,0 +1,373 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EPUB Viewer</title>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
+    #toolbar { 
+      display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #ddd; 
+      align-items: center; flex-wrap: wrap; background: #f8f9fa;
+    }
+    #viewer { 
+      height: calc(100% - 48px); overflow: hidden; background: #fff; 
+      display: flex; align-items: center; justify-content: center;
+    }
+    #book-container { 
+      width: 100%; height: 100%; max-width: 800px; margin: 0 auto;
+      border: 1px solid #ddd; background: white;
+      overflow-y: auto;
+    }
+    input, select, button { height: 32px; padding: 0 8px; }
+    button { cursor: pointer; border: 1px solid #ddd; background: white; }
+    button:hover { background: #f0f0f0; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #pageHud { 
+      position: fixed; right: 12px; bottom: 12px; padding: 6px 10px; 
+      background: rgba(0,0,0,0.7); color: #fff; border-radius: 8px; 
+      font-size: 12px; z-index: 1000; 
+    }
+    .loading { 
+      display: flex; align-items: center; justify-content: center; 
+      height: 200px; color: #666; 
+    }
+    .error { 
+      display: flex; align-items: center; justify-content: center; 
+      height: 200px; color: #d32f2f; flex-direction: column; gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="prevBtn">← Previous</button>
+    <button id="nextBtn">Next →</button>
+    <span>Chapter</span>
+    <input id="chapterInput" type="number" min="1" value="1" style="width:72px" />
+    <span id="chapterTotal" style="opacity:0.7"></span>
+    <button id="goBtn">Go</button>
+    <span style="margin-left:12px; opacity:0.7">Font Size</span>
+    <select id="fontSizeSelect">
+      <option value="12">12px</option>
+      <option value="14">14px</option>
+      <option value="16" selected>16px</option>
+      <option value="18">18px</option>
+      <option value="20">20px</option>
+      <option value="24">24px</option>
+    </select>
+  </div>
+  <div id="viewer">
+    <div id="book-container">
+      <div class="loading">Loading EPUB...</div>
+    </div>
+  </div>
+  <div id="pageHud" aria-live="polite">Loading...</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(location.search);
+    const fileUrl = urlParams.get('file');
+    const startChapterParam = urlParams.get('startChapter');
+    const startFontSizeParam = urlParams.get('startFontSize');
+    const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+
+    const chapterInput = document.getElementById('chapterInput');
+    const fontSizeSelect = document.getElementById('fontSizeSelect');
+    const bookContainer = document.getElementById('book-container');
+    const chapterTotal = document.getElementById('chapterTotal');
+    const pageHud = document.getElementById('pageHud');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const goBtn = document.getElementById('goBtn');
+
+    let book = null;
+    let rendition = null;
+    let currentChapter = 1;
+    let totalChapters = 0;
+
+    function parseInitial() {
+      const chapter = parseInt(startChapterParam || hashParams.get('chapter') || '1', 10);
+      const fontSize = startFontSizeParam || hashParams.get('fontSize') || '16';
+      chapterInput.value = String(chapter);
+      fontSizeSelect.value = fontSize;
+      currentChapter = chapter;
+    }
+
+    function updateHud() {
+      pageHud.textContent = `Chapter ${currentChapter} / ${totalChapters || '?'}`;
+      notifyParent();
+    }
+
+    function notifyParent() {
+      const payload = { 
+        type: 'ebook:viewer_state', 
+        page: currentChapter, 
+        total: totalChapters, 
+        zoom: fontSizeSelect.value + 'px' 
+      };
+      try { window.parent && window.parent.postMessage(payload, '*'); } catch {}
+    }
+
+    function showError(message) {
+      console.error('[EPUB] Error:', message);
+      bookContainer.innerHTML = `
+        <div class="error">
+          <div>Error loading EPUB</div>
+          <div style="font-size: 12px; opacity: 0.8; margin: 8px 0; max-width: 400px; word-wrap: break-word;">${message}</div>
+          <button onclick="location.reload()" style="margin-top: 8px; padding: 8px 16px; border: 1px solid #ddd; background: white; cursor: pointer;">Retry</button>
+          <div style="font-size: 10px; opacity: 0.6; margin-top: 8px;">
+            If the error persists, the EPUB file may be corrupted or incompatible.
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadEpub() {
+      if (!fileUrl) {
+        console.error('[EPUB] No file URL provided');
+        showError('No file URL provided');
+        return;
+      }
+
+      try {
+        console.log('[EPUB] Starting load process for:', fileUrl);
+        bookContainer.innerHTML = '<div class="loading">Loading EPUB...</div>';
+        
+        // Download and parse EPUB manually
+        console.log('[EPUB] Downloading EPUB file...');
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to download EPUB: ${response.status} ${response.statusText}`);
+        }
+        
+        const arrayBuffer = await response.arrayBuffer();
+        console.log('[EPUB] File downloaded, size:', arrayBuffer.byteLength);
+        
+        // Parse EPUB with JSZip
+        console.log('[EPUB] Parsing EPUB with JSZip...');
+        const zip = new JSZip();
+        const zipData = await zip.loadAsync(arrayBuffer);
+        
+        // Read container.xml to find the OPF file
+        const containerXml = await zipData.file('META-INF/container.xml').async('text');
+        console.log('[EPUB] Container XML:', containerXml);
+        
+        // Extract OPF file path
+        const parser = new DOMParser();
+        const containerDoc = parser.parseFromString(containerXml, 'text/xml');
+        const rootfile = containerDoc.querySelector('rootfile');
+        const opfPath = rootfile.getAttribute('full-path');
+        console.log('[EPUB] OPF path:', opfPath);
+        
+        // Read OPF file
+        const opfContent = await zipData.file(opfPath).async('text');
+        console.log('[EPUB] OPF content length:', opfContent.length);
+        
+        // Parse OPF to get spine
+        const opfDoc = parser.parseFromString(opfContent, 'text/xml');
+        const spine = opfDoc.querySelector('spine');
+        const spineItems = spine.querySelectorAll('itemref');
+        
+        totalChapters = spineItems.length;
+        chapterTotal.textContent = `/ ${totalChapters}`;
+        console.log('[EPUB] Found', totalChapters, 'chapters');
+        
+        // Create simple book object with full spine data
+        book = {
+          spine: {
+            length: totalChapters,
+            get: (index) => ({ href: spineItems[index]?.getAttribute('idref') || 'chapter1' }),
+            items: spineItems
+          },
+          manifest: opfDoc.querySelector('manifest'),
+          zipData: zipData,
+          opfDoc: opfDoc
+        };
+        
+        // Display first chapter content
+        console.log('[EPUB] Displaying first chapter...');
+        bookContainer.innerHTML = '<div style="padding: 20px; font-family: serif; line-height: 1.6; min-height: 100%; font-size: ' + fontSizeSelect.value + 'px !important;">';
+        
+        // Try to find and display first chapter content
+        const firstItemRef = spineItems[0];
+        if (firstItemRef) {
+          const idref = firstItemRef.getAttribute('idref');
+          const manifest = opfDoc.querySelector('manifest');
+          const item = manifest.querySelector(`item[id="${idref}"]`);
+          if (item) {
+            const href = item.getAttribute('href');
+            console.log('[EPUB] First chapter href:', href);
+            
+            // Try multiple possible paths
+            const possiblePaths = [
+              `OPS/${href}`,
+              href,
+              `OPS/xhtml/${href}`,
+              href.replace('xhtml/', '')
+            ];
+            
+            let chapterContent = null;
+            for (const path of possiblePaths) {
+              try {
+                console.log('[EPUB] Trying path:', path);
+                chapterContent = await zipData.file(path).async('text');
+                console.log('[EPUB] Successfully loaded from:', path);
+                break;
+              } catch (err) {
+                console.log('[EPUB] Failed to load from:', path);
+              }
+            }
+            
+            if (chapterContent) {
+              bookContainer.innerHTML += chapterContent;
+            } else {
+              console.warn('[EPUB] Could not load chapter content from any path');
+              bookContainer.innerHTML += '<h1>Chapter 1</h1><p>EPUB loaded successfully! Found ' + totalChapters + ' chapters.</p>';
+            }
+          }
+        }
+        
+        bookContainer.innerHTML += '</div>';
+        console.log('[EPUB] EPUB loaded successfully!');
+
+        // Set up navigation for manual parsing
+        updateHud();
+        console.log('[EPUB] Manual EPUB viewer ready');
+        
+        // Enable keyboard navigation
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            goToChapter(currentChapter - 1);
+          } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            goToChapter(currentChapter + 1);
+          }
+        });
+
+      } catch (error) {
+        console.error('[EPUB] Load error:', error);
+        showError(error.message || 'Unknown error occurred');
+      }
+    }
+
+    async function goToChapter(targetChapter) {
+      const target = typeof targetChapter === 'number' ? targetChapter : parseInt(chapterInput.value || '1', 10);
+      if (target < 1 || target > totalChapters || !book) return;
+      
+      console.log('[EPUB] Going to chapter:', target);
+      currentChapter = target;
+      chapterInput.value = String(currentChapter);
+      
+      const spineItem = book.spine.items[target - 1];
+      if (spineItem) {
+        const idref = spineItem.getAttribute('idref');
+        const item = book.manifest.querySelector(`item[id="${idref}"]`);
+        if (item) {
+          const href = item.getAttribute('href');
+          console.log('[EPUB] Loading chapter href:', href);
+          
+          // Try multiple possible paths
+          const possiblePaths = [
+            `OPS/${href}`,
+            href,
+            `OPS/xhtml/${href}`,
+            href.replace('xhtml/', '')
+          ];
+          
+          let chapterContent = null;
+          for (const path of possiblePaths) {
+            try {
+              console.log('[EPUB] Trying path:', path);
+              chapterContent = await book.zipData.file(path).async('text');
+              console.log('[EPUB] Successfully loaded from:', path);
+              break;
+            } catch (err) {
+              console.log('[EPUB] Failed to load from:', path);
+            }
+          }
+          
+          if (chapterContent) {
+            bookContainer.innerHTML = '<div style="padding: 20px; font-family: serif; line-height: 1.6; min-height: 100%; font-size: ' + fontSizeSelect.value + 'px !important;">' + chapterContent + '</div>';
+            // Apply font size to all text elements after loading
+            const contentDiv = bookContainer.querySelector('div');
+            const textElements = contentDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, span');
+            textElements.forEach(el => {
+              el.style.fontSize = fontSizeSelect.value + 'px !important';
+            });
+          } else {
+            bookContainer.innerHTML = '<div style="padding: 20px; font-family: serif; line-height: 1.6; min-height: 100%; font-size: ' + fontSizeSelect.value + 'px !important;"><h1>Chapter ' + target + '</h1><p>Content could not be loaded.</p></div>';
+          }
+        }
+      }
+      
+      updateHud();
+      location.hash = `chapter=${currentChapter}&fontSize=${fontSizeSelect.value}`;
+    }
+
+    function changeFontSize() {
+      const fontSize = fontSizeSelect.value + 'px';
+      console.log('[EPUB] Changing font size to:', fontSize);
+      
+      // Update the content div's font size and all text elements
+      const contentDiv = bookContainer.querySelector('div');
+      if (contentDiv) {
+        console.log('[EPUB] Found content div, applying font size');
+        contentDiv.style.setProperty('font-size', fontSize, 'important');
+        
+        // Also update all text elements to override EPUB's CSS
+        const textElements = contentDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, span');
+        console.log('[EPUB] Found', textElements.length, 'text elements to update');
+        textElements.forEach(el => {
+          el.style.setProperty('font-size', fontSize, 'important');
+        });
+      } else {
+        console.log('[EPUB] No content div found');
+      }
+      
+      location.hash = `chapter=${currentChapter}&fontSize=${fontSizeSelect.value}`;
+      notifyParent();
+    }
+
+    // Event listeners
+    prevBtn.addEventListener('click', () => {
+      if (currentChapter > 1) {
+        goToChapter(currentChapter - 1);
+      }
+    });
+
+    nextBtn.addEventListener('click', () => {
+      if (currentChapter < totalChapters) {
+        goToChapter(currentChapter + 1);
+      }
+    });
+
+    goBtn.addEventListener('click', () => goToChapter());
+    chapterInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') goToChapter();
+    });
+
+    fontSizeSelect.addEventListener('change', changeFontSize);
+
+    // Handle messages from parent
+    window.addEventListener('message', (e) => {
+      const data = e.data || {};
+      if (data.type === 'ebook:go' && typeof data.page === 'number') {
+        chapterInput.value = String(Math.max(1, Math.min(totalChapters || 1, data.page)));
+        goToChapter();
+      } else if (data.type === 'ebook:setZoom' && typeof data.zoom === 'string') {
+        // For EPUB, we treat zoom as font size
+        const fontSize = data.zoom.replace('px', '');
+        if (!isNaN(parseInt(fontSize))) {
+          fontSizeSelect.value = fontSize;
+          changeFontSize();
+        }
+      }
+    });
+
+    // Initialize
+    parseInitial();
+    loadEpub();
+  </script>
+</body>
+</html>
