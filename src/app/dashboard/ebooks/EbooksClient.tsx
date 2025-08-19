@@ -9,11 +9,16 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { getProgress } from '@/lib/timeline-db';
 
 interface EbookFile {
   path: string;
   name: string;
   size?: number;
+  progress?: {
+    last_page: number;
+    last_zoom: string;
+  };
 }
 
 // Minimal shape to discriminate file vs prefix
@@ -29,6 +34,7 @@ export default function EbooksClient({ user }: { user: User }) {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [files, setFiles] = useState<EbookFile[]>([]);
+  const [loadingProgress, setLoadingProgress] = useState(false);
 
   const userPrefix = useMemo(() => `${user.id}`, [user.id]);
 
@@ -60,7 +66,7 @@ export default function EbooksClient({ user }: { user: User }) {
         if (sub.data) {
           for (const fraw of sub.data as unknown as StorageObjectMinimal[]) {
             if (isFile(fraw)) {
-              fileEntries.push({ path: `${userPrefix}/${raw.name}/${fraw.name}`, name: fraw.name, size: fraw.metadata?.size });
+              fileEntries.push({ path: `${userPrefix}/${raw.name}/${fraw.name}`, name: fraw.name, size: raw.metadata?.size });
             }
           }
         }
@@ -71,10 +77,38 @@ export default function EbooksClient({ user }: { user: User }) {
     setFiles(fileEntries.reverse());
   }
 
+  async function loadProgressForFiles() {
+    setLoadingProgress(true);
+    try {
+      const filesWithProgress = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const progress = await getProgress(file.path);
+            return { ...file, progress: progress || undefined };
+          } catch (e) {
+            console.warn('[Ebooks] Failed to load progress for', file.path, e);
+            return file;
+          }
+        })
+      );
+      setFiles(filesWithProgress);
+    } catch (e) {
+      console.warn('[Ebooks] Failed to load progress', e);
+    } finally {
+      setLoadingProgress(false);
+    }
+  }
+
   useEffect(() => {
     listFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (files.length > 0) {
+      loadProgressForFiles();
+    }
+  }, [files.length]);
 
   async function handleUpload(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0];
@@ -119,31 +153,53 @@ export default function EbooksClient({ user }: { user: User }) {
           <CardContent className="space-y-4">
             <Input type="file" accept=".pdf,.epub,application/pdf,application/epub+zip" onChange={handleUpload} disabled={isUploading} />
             {isUploading && <Progress value={progress} />}
-            <p className="text-sm text-muted-foreground">Files are uploaded to Supabase Storage bucket `ebooks/`. We’ll add metadata extraction and covers next.</p>
+            <p className="text-sm text-muted-foreground">Files are uploaded to Supabase Storage bucket `ebooks/`. We'll add metadata extraction and covers next.</p>
           </CardContent>
         </Card>
 
         <Card className="md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Library</CardTitle>
-            <Button variant="outline" size="sm" onClick={listFiles}>Refresh</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={loadProgressForFiles} disabled={loadingProgress}>
+                {loadingProgress ? 'Loading...' : 'Refresh Progress'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={listFiles}>Refresh</Button>
+            </div>
           </CardHeader>
           <CardContent>
             {files.length === 0 ? (
               <p className="text-sm text-muted-foreground">No books yet. Upload a PDF or EPUB to get started.</p>
             ) : (
               <ul className="divide-y">
-                {files.map((f) => (
-                  <li key={f.path} className="py-3 flex items-center justify-between">
-                    <div>
-                      <div className="font-medium">{f.name}</div>
-                      <div className="text-xs text-muted-foreground break-all">{f.path}</div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/ebooks/view?path=${encodeURIComponent(f.path)}`)}>Open</Button>
-                    </div>
-                  </li>
-                ))}
+                {files.map((f) => {
+                  const hasProgress = f.progress?.last_page;
+                  const isPdf = f.name.toLowerCase().endsWith('.pdf');
+                  const isEpub = f.name.toLowerCase().endsWith('.epub');
+                  
+                  return (
+                    <li key={f.path} className="py-3 flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{f.name}</div>
+                        <div className="text-xs text-muted-foreground break-all">{f.path}</div>
+                        {hasProgress && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            📖 {isPdf ? `Page ${f.progress.last_page}` : `Chapter ${f.progress.last_page}`} • Will resume here
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <Button 
+                          variant="outline"
+                          size="sm" 
+                          onClick={() => router.push(`/dashboard/ebooks/view?path=${encodeURIComponent(f.path)}`)}
+                        >
+                          Open
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>

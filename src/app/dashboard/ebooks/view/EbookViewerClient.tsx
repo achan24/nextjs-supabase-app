@@ -116,6 +116,46 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Only handle shortcuts when not typing in input fields
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Ctrl/Cmd + B for quick bookmark
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        if (ebookId && currentPage) {
+          const n = currentPage;
+          const label = fileExtension === 'epub' ? `Chapter ${n}` : `Page ${n}`;
+          addBookmarkSql(ebookId, n, label)
+            .then((row) => {
+              setBookmarks((prev) => [{ id: row.id, page: row.page, label: row.label, createdAt: Date.parse(row.created_at) }, ...prev]);
+              toast.success(`Bookmarked ${fileExtension === 'epub' ? 'chapter' : 'page'} ${n}`);
+            })
+            .catch((e) => {
+              console.warn('[Ebooks] add bookmark failed', e);
+              toast.error('Failed to add bookmark');
+            });
+        }
+      }
+
+      // Ctrl/Cmd + L for go to last read
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        if (currentPage) {
+          sendToViewer({ type: 'ebook:go', page: currentPage });
+          toast.success(`Jumped to ${fileExtension === 'epub' ? 'chapter' : 'page'} ${currentPage}`);
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [ebookId, currentPage, fileExtension]);
+
   function sendToViewer(msg: any) {
     const win = iframeRef.current?.contentWindow;
     if (win) {
@@ -128,13 +168,14 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
     const iframe = iframeRef.current;
     if (!iframe) return;
     const handleLoad = () => {
+      // Set zoom and navigate to saved position
       sendToViewer({ type: 'ebook:setZoom', zoom });
       sendToViewer({ type: 'ebook:go', page: currentPage });
     };
     iframe.addEventListener('load', handleLoad);
     return () => iframe.removeEventListener('load', handleLoad);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedUrl]);
+  }, [signedUrl, currentPage, zoom]);
 
   function handleFullscreen() {
     const elem = containerRef.current;
@@ -203,15 +244,67 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
           </Select>
         </div>
 
+        {totalPages > 0 && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Progress:</span>
+            <span className="font-medium">
+              {fileExtension === 'epub' ? `Chapter ${currentPage}` : `Page ${currentPage} of ${totalPages}`}
+            </span>
+            {fileExtension === 'pdf' && (
+              <span className="text-xs">
+                ({Math.round((currentPage / totalPages) * 100)}%)
+              </span>
+            )}
+          </div>
+        )}
+
         <Button variant="outline" onClick={addBookmark}>Add Bookmark</Button>
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            if (!ebookId) return;
+            const n = currentPage;
+            const label = fileExtension === 'epub' ? `Chapter ${n}` : `Page ${n}`;
+            addBookmarkSql(ebookId, n, label)
+              .then((row) => {
+                setBookmarks((prev) => [{ id: row.id, page: row.page, label: row.label, createdAt: Date.parse(row.created_at) }, ...prev]);
+                toast.success(`Bookmarked ${fileExtension === 'epub' ? 'chapter' : 'page'} ${n}`);
+              })
+              .catch((e) => {
+                console.warn('[Ebooks] add bookmark failed', e);
+                toast.error('Failed to add bookmark');
+              });
+          }}
+          disabled={!ebookId || !currentPage}
+        >
+          🔖 Quick Bookmark
+        </Button>
         <Button variant="outline" onClick={() => {
           // Manual reload from storage
           const data = window.localStorage.getItem(`ebook-bookmarks:${storagePath}`);
           if (data) { try { setBookmarks(JSON.parse(data)); } catch {} }
         }}>Refresh Bookmarks</Button>
+        <Button 
+          variant="default" 
+          onClick={() => {
+            sendToViewer({ type: 'ebook:go', page: currentPage });
+            toast.success(`Jumped to ${fileExtension === 'epub' ? 'chapter' : 'page'} ${currentPage}`);
+          }}
+          disabled={!currentPage}
+        >
+          📖 Go to Last Read
+        </Button>
         <Button variant="outline" onClick={() => setLeftOpen((v) => !v)} className="hidden md:inline-flex">{leftOpen ? 'Hide TOC' : 'Show TOC'}</Button>
         <Button variant="outline" onClick={() => setRightOpen((v) => !v)} className="hidden md:inline-flex">{rightOpen ? 'Hide Notes' : 'Show Notes'}</Button>
         <Button variant="outline" onClick={handleFullscreen} className="hidden md:inline-flex">Fullscreen</Button>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => toast.info('Keyboard shortcuts: Ctrl+B (bookmark), Ctrl+L (go to last read)')}
+          className="text-xs"
+        >
+          ⌨️
+        </Button>
       </div>
 
       <div className="flex gap-3">

@@ -377,15 +377,49 @@ export async function saveProgress(storagePath: string, lastPage: number, lastZo
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  await supabase.from('ebooks').update({ last_page: lastPage, last_zoom: lastZoom }).eq('user_id', user.id).eq('storage_path', storagePath);
+  
+  try {
+    // First ensure the ebook record exists
+    await upsertEbookByPath(storagePath);
+    
+    // Then update the progress
+    const { error } = await supabase
+      .from('ebooks')
+      .update({ last_page: lastPage, last_zoom: lastZoom })
+      .eq('user_id', user.id)
+      .eq('storage_path', storagePath);
+    
+    if (error) {
+      console.warn('[Ebooks] Failed to save progress:', error);
+    }
+  } catch (e) {
+    console.warn('[Ebooks] Error saving progress:', e);
+  }
 }
 
 export async function getProgress(storagePath: string) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase.from('ebooks').select('last_page,last_zoom').eq('user_id', user.id).eq('storage_path', storagePath).maybeSingle();
-  return data || null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('ebooks')
+      .select('last_page,last_zoom')
+      .eq('user_id', user.id)
+      .eq('storage_path', storagePath)
+      .maybeSingle();
+    
+    if (error) {
+      console.warn('[Ebooks] Failed to get progress:', error);
+      return null;
+    }
+    
+    return data || null;
+  } catch (e) {
+    console.warn('[Ebooks] Error getting progress:', e);
+    return null;
+  }
 }
 
 // Timeline Events Functions
