@@ -344,7 +344,7 @@ function WeeklyPlanView({
           <div className="relative">
             {/* Navigation Buttons */}
             <button 
-              onClick={() => setSelectedDay(prev => Math.max(0, prev - 1))}
+              onClick={() => setSelectedDay(Math.max(0, selectedDay - 1))}
               disabled={selectedDay === 0}
               className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white border border-gray-200 rounded-full p-2 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -352,7 +352,7 @@ function WeeklyPlanView({
             </button>
             
             <button 
-              onClick={() => setSelectedDay(prev => Math.min(6, prev + 1))}
+              onClick={() => setSelectedDay(Math.min(6, selectedDay + 1))}
               disabled={selectedDay === 6}
               className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white border border-gray-200 rounded-full p-2 shadow-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -522,6 +522,8 @@ export default function BudgetPlanner() {
     async function loadPlan() {
       setLoading(true);
       try {
+        if (!user) return;
+        
         // Load plan for selected week
         const { data: planData, error: planError } = await supabase
           .from('budget_plans')

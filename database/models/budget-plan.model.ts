@@ -20,8 +20,7 @@ export const BudgetPlan: TableDefinition = {
     },
     week_start: {
       type: 'date',
-      notNull: true,
-      description: 'Monday of the week being planned'
+      notNull: true
     },
     total_budget: {
       type: 'numeric',

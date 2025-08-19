@@ -30,8 +30,7 @@ export const BudgetPlanItem: TableDefinition = {
     day_of_week: {
       type: 'integer',
       notNull: true,
-      check: 'day_of_week >= 0 and day_of_week <= 6',
-      description: '0=Monday, 1=Tuesday, ..., 6=Sunday'
+      check: 'day_of_week >= 0 and day_of_week <= 6'
     },
     note: {
       type: 'text',
