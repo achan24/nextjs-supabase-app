@@ -25,7 +25,8 @@ import {
   Network,
   Heart,
   Clock,
-  Book
+  Book,
+  DollarSign
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { PostgrestResponse } from '@supabase/supabase-js';
@@ -98,6 +99,12 @@ const apps = [
     icon: Calendar
   },
   { 
+    name: 'Calendar Timeline', 
+    href: '/dashboard/calendar-timeline', 
+    description: 'Manage timeline events and deadlines',
+    icon: Clock
+  },
+  { 
     name: 'Timeline Explorer', 
     href: '/dashboard/timeline-explorer', 
     description: 'Create and explore branching timelines with decision nodes',
@@ -144,6 +151,18 @@ const apps = [
     href: '/dashboard/projects', 
     description: 'Manage your projects and goals',
     icon: FolderKanban
+  },
+  { 
+    name: 'Budget', 
+    href: '/dashboard/budget', 
+    description: 'Track your income and expenses',
+    icon: DollarSign
+  },
+  { 
+    name: 'Budget Planner', 
+    href: '/dashboard/budget-planner', 
+    description: 'Plan your spending before the week starts',
+    icon: Calendar
   },
   { 
     name: 'Overview', 
