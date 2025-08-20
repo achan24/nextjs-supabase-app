@@ -34,6 +34,7 @@ import { ProcessFlowLinkButton } from '@/components/ui/process-flow-link-button'
 import { awardUnscoredSessionsForTask } from '@/services/traitScoring';
 import StarButton from '@/components/StarButton';
 import TaskCreator from '@/components/TaskCreator';
+import { isFirstTaskOfDay, calculateFirstTaskMultipliers } from '@/utils/taskUtils';
 
 interface GoalManagerProps {
   selectedSubareaId: string | null;
@@ -204,6 +205,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
   const [taskDialogStep, setTaskDialogStep] = useState<'create' | 'classify'>('create');
   const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
   const [createdTaskTitle, setCreatedTaskTitle] = useState<string>('');
+  const [isFirstTask, setIsFirstTask] = useState(false);
+  const [isWorkRelated, setIsWorkRelated] = useState<boolean | undefined>(undefined);
+  const [isOnTime, setIsOnTime] = useState<boolean | undefined>(undefined);
   const [isEditingTask, setIsEditingTask] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskTitle, setEditingTaskTitle] = useState('');
@@ -607,6 +611,22 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     }
   }, [isAddingTask]);
 
+  // When entering classification step after creating a new task, check if it is the first task of the day
+  useEffect(() => {
+    const checkFirstTask = async () => {
+      if (taskDialogStep !== 'classify' || !createdTaskId) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        // Exclude the task we just created
+        const first = await isFirstTaskOfDay(session.user.id, createdTaskId);
+        setIsFirstTask(first);
+      } else {
+        setIsFirstTask(false);
+      }
+    };
+    checkFirstTask();
+  }, [taskDialogStep, createdTaskId]);
+
   const handleAddTaskToGoal = async (goalId: string) => {
     if (!selectedTaskId) return;
 
@@ -757,7 +777,12 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
             task_type: taskType,
             friction_level: frictionLevel,
             stakes: stakes,
-            discomfort_level: discomfort
+            discomfort_level: discomfort,
+            // First task of the day metadata
+            isFirstTaskOfDay: isFirstTask,
+            isWorkRelated: isWorkRelated,
+            isOnTime: isOnTime,
+            multipliers: calculateFirstTaskMultipliers(isFirstTask, isWorkRelated, isOnTime)
           },
           trait_tags: [], // Will be populated later by scoring system
           auto_classified: false
@@ -779,6 +804,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
     setTaskDialogStep('create');
     setCreatedTaskId(null);
     setCreatedTaskTitle('');
+    setIsFirstTask(false);
+    setIsWorkRelated(undefined);
+    setIsOnTime(undefined);
   };
 
   const handleSkipTaskClassification = () => {
@@ -1920,6 +1948,9 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
             setTaskDialogStep('create');
             setCreatedTaskId(null);
             setCreatedTaskTitle('');
+            setIsFirstTask(false);
+            setIsWorkRelated(undefined);
+            setIsOnTime(undefined);
           }
         }}
       >
@@ -2034,6 +2065,66 @@ export default function GoalManager({ selectedSubareaId, selectedGoalId }: GoalM
               <p className="text-gray-600 mb-6">
                 Help us understand this task better to track relevant character traits and provide personalized insights.
               </p>
+              {/* First Task of the Day Special Questions */}
+              {isFirstTask && (
+                <div className="space-y-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+                  <h3 className="text-lg font-semibold text-yellow-800">🌟 First Task of the Day Bonus</h3>
+                  <p className="text-sm text-yellow-700 mb-2">
+                    Answer these to unlock multipliers for your first task.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-sm font-medium">Is this task work-related? (3x multiplier)</Label>
+                      <div className="flex gap-4 mt-2">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="goal_work_related"
+                            checked={isWorkRelated === true}
+                            onChange={() => setIsWorkRelated(true)}
+                          />
+                          <span>Yes - Work/Career related</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="goal_work_related"
+                            checked={isWorkRelated === false}
+                            onChange={() => setIsWorkRelated(false)}
+                          />
+                          <span>No - Personal/Other</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Are you starting on time? (2x multiplier)</Label>
+                      <div className="flex gap-4 mt-2">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="goal_on_time"
+                            checked={isOnTime === true}
+                            onChange={() => setIsOnTime(true)}
+                          />
+                          <span>Yes - On time as planned</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="goal_on_time"
+                            checked={isOnTime === false}
+                            onChange={() => setIsOnTime(false)}
+                          />
+                          <span>No - Late or unplanned</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="text-xs text-yellow-600 bg-yellow-100 p-2 rounded">
+                      💡 Potential Bonus: Work-related (3x) + On-time (2x) = up to 6x multiplier
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <form id="trait-classification-form">
                 <div className="space-y-6">

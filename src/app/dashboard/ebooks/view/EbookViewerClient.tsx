@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import { upsertEbookByPath, fetchBookmarks as fetchBookmarksSql, addBookmarkSql, updateBookmarkLabel, removeBookmark, fetchNotes as fetchNotesSql, saveNotes as saveNotesSql, saveProgress, getProgress } from '@/lib/timeline-db';
 
 interface Props {
@@ -17,6 +18,13 @@ interface BookmarkItem {
   page: number;
   label: string;
   createdAt: number;
+}
+
+interface AIMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
 }
 
 export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
@@ -33,6 +41,7 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   const [zoom, setZoom] = useState<string>(fileExtension === 'epub' ? '16' : 'page-width');
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(true);
+  const [aiOpen, setAiOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [editingBookmarkId, setEditingBookmarkId] = useState<string | null>(null);
@@ -43,6 +52,12 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [ebookId, setEbookId] = useState<string | null>(null);
+  
+  // AI Reading Assistant state
+  const [selectedText, setSelectedText] = useState<string>('');
+  const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
+  const [aiInput, setAiInput] = useState<string>('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   useEffect(() => {
     const mq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)') : null;
@@ -114,6 +129,16 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  // Listen for text selection
+  useEffect(() => {
+    function handleSelectionChange() {
+      handleTextSelection();
+    }
+    
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, []);
 
   // Keyboard shortcuts
@@ -205,6 +230,98 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
     setBookmarks((prev) => prev.filter((b) => b.id !== id));
   }
 
+  // AI Reading Assistant functions
+  async function sendAIMessage() {
+    if (!aiInput.trim() || isAiLoading) return;
+
+    const userMessage: AIMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: aiInput,
+      timestamp: new Date(),
+    };
+
+    setAiMessages(prev => [...prev, userMessage]);
+    setAiInput('');
+    setIsAiLoading(true);
+
+    try {
+      // Prepare context with selected text and book info
+      const context = selectedText ? `Selected text from the book: "${selectedText}"\n\n` : '';
+      const bookContext = `Book: ${storagePath.split('/').pop()}\nCurrent page: ${currentPage}\n\n`;
+      
+      const messages = [
+        {
+          role: 'system',
+          content: `You are an AI reading assistant helping the user understand and discuss a book. ${context}${bookContext}Provide thoughtful, helpful responses about the content.`
+        },
+        ...aiMessages.map(msg => ({ role: msg.role, content: msg.content })),
+        { role: 'user', content: aiInput }
+      ];
+
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+      });
+
+      if (!response.ok) throw new Error('Failed to get AI response');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') break;
+              
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.content) {
+                  aiResponse += parsed.content;
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            }
+          }
+        }
+      }
+
+      const assistantMessage: AIMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: aiResponse,
+        timestamp: new Date(),
+      };
+
+      setAiMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('[AI] Error:', error);
+      toast.error('Failed to get AI response');
+    } finally {
+      setIsAiLoading(false);
+    }
+  }
+
+  function handleTextSelection() {
+    // Listen for text selection from the iframe
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim()) {
+      setSelectedText(selection.toString().trim());
+      toast.success('Text selected! You can now discuss it with AI.');
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
@@ -212,37 +329,7 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
         <a href={externalHref} target="_blank" rel="noreferrer"><Button variant="outline">Open in new tab</Button></a>
         {isMobile && (<Button onClick={() => window.open(externalHref, '_blank')}>Open Externally</Button>)}
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{fileExtension === 'epub' ? 'Font Size' : 'Zoom'}</span>
-          <Select value={zoom} onValueChange={(z) => { setZoom(z); sendToViewer({ type: 'ebook:setZoom', zoom: z }); }}>
-            <SelectTrigger className="w-44"><SelectValue placeholder={fileExtension === 'epub' ? 'Font Size' : 'Zoom'} /></SelectTrigger>
-            <SelectContent>
-              {fileExtension === 'epub' ? (
-                <>
-                  <SelectItem value="12">12px</SelectItem>
-                  <SelectItem value="14">14px</SelectItem>
-                  <SelectItem value="16">16px</SelectItem>
-                  <SelectItem value="18">18px</SelectItem>
-                  <SelectItem value="20">20px</SelectItem>
-                  <SelectItem value="24">24px</SelectItem>
-                </>
-              ) : (
-                <>
-                  <SelectItem value="50">50%</SelectItem>
-                  <SelectItem value="67">67%</SelectItem>
-                  <SelectItem value="75">75%</SelectItem>
-                  <SelectItem value="90">90%</SelectItem>
-                  <SelectItem value="100">100%</SelectItem>
-                  <SelectItem value="125">125%</SelectItem>
-                  <SelectItem value="150">150%</SelectItem>
-                  <SelectItem value="200">200%</SelectItem>
-                  <SelectItem value="page-width">Fit width</SelectItem>
-                  <SelectItem value="page-fit">Fit page</SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
+
 
         {totalPages > 0 && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -259,31 +346,7 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
         )}
 
         <Button variant="outline" onClick={addBookmark}>Add Bookmark</Button>
-        <Button 
-          variant="outline" 
-          onClick={() => {
-            if (!ebookId) return;
-            const n = currentPage;
-            const label = fileExtension === 'epub' ? `Chapter ${n}` : `Page ${n}`;
-            addBookmarkSql(ebookId, n, label)
-              .then((row) => {
-                setBookmarks((prev) => [{ id: row.id, page: row.page, label: row.label, createdAt: Date.parse(row.created_at) }, ...prev]);
-                toast.success(`Bookmarked ${fileExtension === 'epub' ? 'chapter' : 'page'} ${n}`);
-              })
-              .catch((e) => {
-                console.warn('[Ebooks] add bookmark failed', e);
-                toast.error('Failed to add bookmark');
-              });
-          }}
-          disabled={!ebookId || !currentPage}
-        >
-          🔖 Quick Bookmark
-        </Button>
-        <Button variant="outline" onClick={() => {
-          // Manual reload from storage
-          const data = window.localStorage.getItem(`ebook-bookmarks:${storagePath}`);
-          if (data) { try { setBookmarks(JSON.parse(data)); } catch {} }
-        }}>Refresh Bookmarks</Button>
+
         <Button 
           variant="default" 
           onClick={() => {
@@ -296,7 +359,8 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
         </Button>
         <Button variant="outline" onClick={() => setLeftOpen((v) => !v)} className="hidden md:inline-flex">{leftOpen ? 'Hide TOC' : 'Show TOC'}</Button>
         <Button variant="outline" onClick={() => setRightOpen((v) => !v)} className="hidden md:inline-flex">{rightOpen ? 'Hide Notes' : 'Show Notes'}</Button>
-        <Button variant="outline" onClick={handleFullscreen} className="hidden md:inline-flex">Fullscreen</Button>
+        <Button variant="outline" onClick={() => setAiOpen((v) => !v)} className="hidden md:inline-flex">{aiOpen ? 'Hide AI' : 'Show AI'}</Button>
+        <Button variant="outline" onClick={handleFullscreen} className="hidden md:inline-flex" title="Fullscreen">⛶</Button>
         <Button 
           variant="ghost" 
           size="sm" 
@@ -358,6 +422,72 @@ export default function EbookViewerClient({ signedUrl, storagePath }: Props) {
               <div className="text-sm font-medium mb-2">Notes</div>
               <textarea className="flex-1 w-full resize-none border rounded p-2 text-sm" placeholder={`Write notes here. Use [${fileExtension === 'epub' ? 'ch.5' : 'p.123'}] to reference content.`} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => { if (ebookId) saveNotesSql(ebookId, notes).catch((err) => console.warn('[Ebooks] save notes failed', err)); }} />
               <div className="text-xs text-muted-foreground mt-2">Current {fileExtension === 'epub' ? 'chapter' : 'page'}: {currentPage} / {totalPages || '...'}</div>
+            </div>
+          </aside>
+        )}
+
+        {aiOpen && (
+          <aside className="w-96 shrink-0 border rounded p-2 h-[80vh] flex-col gap-3 hidden md:flex">
+            <div className="text-sm font-medium mb-2">AI Reading Assistant</div>
+            
+            {selectedText && (
+              <div className="text-xs bg-blue-50 p-2 rounded mb-2">
+                <div className="font-medium text-blue-800">Selected Text:</div>
+                <div className="text-blue-700 mt-1">"{selectedText}"</div>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => setSelectedText('')}
+                  className="mt-2 text-xs"
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            )}
+
+            <div className="flex-1 flex flex-col">
+              <div className="flex-1 overflow-auto space-y-2 mb-2">
+                {aiMessages.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">
+                    Select text from the book and ask me anything about it!
+                  </div>
+                ) : (
+                  aiMessages.map((msg) => (
+                    <div key={msg.id} className={`text-sm p-2 rounded ${msg.role === 'user' ? 'bg-blue-100 ml-4' : 'bg-gray-100 mr-4'}`}>
+                      <div className="font-medium text-xs mb-1">{msg.role === 'user' ? 'You' : 'AI'}</div>
+                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                    </div>
+                  ))
+                )}
+                {isAiLoading && (
+                  <div className="text-sm p-2 rounded bg-gray-100 mr-4">
+                    <div className="font-medium text-xs mb-1">AI</div>
+                    <div className="text-muted-foreground">Thinking...</div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-2">
+                <Input
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  placeholder="Ask about the selected text..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendAIMessage();
+                    }
+                  }}
+                  disabled={isAiLoading}
+                />
+                <Button 
+                  onClick={sendAIMessage} 
+                  disabled={isAiLoading || !aiInput.trim()}
+                  size="sm"
+                >
+                  Send
+                </Button>
+              </div>
             </div>
           </aside>
         )}

@@ -66,7 +66,7 @@ export default function EbooksClient({ user }: { user: User }) {
         if (sub.data) {
           for (const fraw of sub.data as unknown as StorageObjectMinimal[]) {
             if (isFile(fraw)) {
-              fileEntries.push({ path: `${userPrefix}/${raw.name}/${fraw.name}`, name: fraw.name, size: raw.metadata?.size });
+              fileEntries.push({ path: `${userPrefix}/${raw.name}/${fraw.name}`, name: fraw.name, size: fraw.metadata?.size });
             }
           }
         }
@@ -153,7 +153,7 @@ export default function EbooksClient({ user }: { user: User }) {
           <CardContent className="space-y-4">
             <Input type="file" accept=".pdf,.epub,application/pdf,application/epub+zip" onChange={handleUpload} disabled={isUploading} />
             {isUploading && <Progress value={progress} />}
-            <p className="text-sm text-muted-foreground">Files are uploaded to Supabase Storage bucket `ebooks/`. We'll add metadata extraction and covers next.</p>
+            <p className="text-sm text-muted-foreground">Files are uploaded to Supabase Storage bucket `ebooks/`. We’ll add metadata extraction and covers next.</p>
           </CardContent>
         </Card>
 
@@ -182,7 +182,7 @@ export default function EbooksClient({ user }: { user: User }) {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{f.name}</div>
                         <div className="text-xs text-muted-foreground break-all">{f.path}</div>
-                        {hasProgress && (
+                        {hasProgress && f.progress && (
                           <div className="text-xs text-blue-600 mt-1">
                             📖 {isPdf ? `Page ${f.progress.last_page}` : `Chapter ${f.progress.last_page}`} • Will resume here
                           </div>

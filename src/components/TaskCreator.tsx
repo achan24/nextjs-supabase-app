@@ -50,6 +50,9 @@ export default function TaskCreator({
   const [isFirstTask, setIsFirstTask] = useState(false);
   const [isWorkRelated, setIsWorkRelated] = useState<boolean | undefined>(undefined);
   const [isOnTime, setIsOnTime] = useState<boolean | undefined>(undefined);
+  const [frictionLevel, setFrictionLevel] = useState<'low' | 'medium' | 'high'>('low');
+  const [stakes, setStakes] = useState<'low' | 'medium' | 'high'>('low');
+  const [discomfortLevel, setDiscomfortLevel] = useState<'none' | 'mild' | 'moderate' | 'high'>('none');
   const supabase = createClient();
 
   useEffect(() => {
@@ -156,7 +159,12 @@ export default function TaskCreator({
               isFirstTaskOfDay: isFirstTask,
               isWorkRelated: isWorkRelated,
               isOnTime: isOnTime,
-              multipliers: multipliers
+              multipliers: multipliers,
+              // Quick classification fields for tags and scoring
+              task_type: 'general',
+              friction_level: frictionLevel,
+              stakes: stakes,
+              discomfort_level: discomfortLevel
             },
             auto_classified: false
           });
@@ -184,6 +192,9 @@ export default function TaskCreator({
     setIsFirstTask(false);
     setIsWorkRelated(undefined);
     setIsOnTime(undefined);
+    setFrictionLevel('low');
+    setStakes('low');
+    setDiscomfortLevel('none');
     setIsOpen(false);
     
     // Call onTaskCreated callback after a short delay to ensure dialog closes first
@@ -366,6 +377,116 @@ export default function TaskCreator({
                   </div>
                 </div>
               )}
+
+              {/* Quick Classification for Tags */}
+              <div className="space-y-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h3 className="text-sm font-semibold text-gray-800">Quick Classification</h3>
+                <div>
+                  <Label className="text-sm font-medium">Friction Level</Label>
+                  <div className="flex gap-4 mt-2">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="frictionLevel"
+                        checked={frictionLevel === 'low'}
+                        onChange={() => setFrictionLevel('low')}
+                      />
+                      <span>Low</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="frictionLevel"
+                        checked={frictionLevel === 'medium'}
+                        onChange={() => setFrictionLevel('medium')}
+                      />
+                      <span>Medium</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="frictionLevel"
+                        checked={frictionLevel === 'high'}
+                        onChange={() => setFrictionLevel('high')}
+                      />
+                      <span>High</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Stakes</Label>
+                  <div className="flex gap-4 mt-2">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="stakes"
+                        checked={stakes === 'low'}
+                        onChange={() => setStakes('low')}
+                      />
+                      <span>Low</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="stakes"
+                        checked={stakes === 'medium'}
+                        onChange={() => setStakes('medium')}
+                      />
+                      <span>Medium</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="stakes"
+                        checked={stakes === 'high'}
+                        onChange={() => setStakes('high')}
+                      />
+                      <span>High</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Discomfort Level</Label>
+                  <div className="flex gap-4 mt-2">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="discomfort"
+                        checked={discomfortLevel === 'none'}
+                        onChange={() => setDiscomfortLevel('none')}
+                      />
+                      <span>None</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="discomfort"
+                        checked={discomfortLevel === 'mild'}
+                        onChange={() => setDiscomfortLevel('mild')}
+                      />
+                      <span>Mild</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="discomfort"
+                        checked={discomfortLevel === 'moderate'}
+                        onChange={() => setDiscomfortLevel('moderate')}
+                      />
+                      <span>Moderate</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="discomfort"
+                        checked={discomfortLevel === 'high'}
+                        onChange={() => setDiscomfortLevel('high')}
+                      />
+                      <span>High</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
               
               {/* Regular trait classification placeholder */}
               {!isFirstTask && (

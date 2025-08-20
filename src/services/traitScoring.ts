@@ -18,6 +18,11 @@ export interface TaskClassificationMetadata {
   friction_level?: 'low' | 'medium' | 'high';
   stakes?: 'low' | 'medium' | 'high';
   discomfort_level?: 'none' | 'mild' | 'moderate' | 'high';
+  // First task of the day metadata (optional; may be present in task_trait_tags.task_metadata)
+  isFirstTaskOfDay?: boolean;
+  isWorkRelated?: boolean;
+  isOnTime?: boolean;
+  multipliers?: Record<string, number>;
 }
 
 export interface SessionSummary {
@@ -57,6 +62,40 @@ function getMultiplierFromClassification(meta: TaskClassificationMetadata): numb
   return +(frictionMult * stakesMult * discomfortMult).toFixed(2);
 }
 
+// Derive any extra multipliers for first task of the day
+function getFirstTaskExtraMultiplier(meta: Partial<TaskClassificationMetadata> | undefined): { total: number; details: Record<string, number> } {
+  if (!meta) return { total: 1, details: {} };
+
+  let total = 1;
+  const details: Record<string, number> = {};
+
+  // Prefer explicit multipliers object if present
+  const explicit = meta.multipliers;
+  if (explicit && typeof explicit === 'object') {
+    for (const [key, value] of Object.entries(explicit)) {
+      const numeric = typeof value === 'number' ? value : Number(value);
+      if (!Number.isFinite(numeric) || numeric <= 0) continue;
+      total *= numeric;
+      details[`first_task_${key}`] = numeric;
+    }
+    return { total: total === 1 ? 1 : +total.toFixed(2), details };
+  }
+
+  // Otherwise derive from booleans
+  if (meta.isFirstTaskOfDay) {
+    if (meta.isWorkRelated) {
+      total *= 3;
+      details.first_task_work_related = 3;
+    }
+    if (meta.isOnTime) {
+      total *= 2;
+      details.first_task_on_time = 2;
+    }
+  }
+
+  return { total: total === 1 ? 1 : +total.toFixed(2), details };
+}
+
 function countEvents(session: SessionSummary['events']) {
   return session.reduce(
     (acc, e) => {
@@ -74,7 +113,9 @@ function computeXp(
 ): XpResult[] {
   const minutes = Math.max(0, session.durationMinutes);
   const baseXp = Math.floor(minutes / 5); // 1 XP per 5 minutes of focused work
-  const multiplier = getMultiplierFromClassification(classification);
+  const baseMultiplier = getMultiplierFromClassification(classification);
+  const firstTaskExtra = getFirstTaskExtraMultiplier(classification);
+  const multiplier = +(baseMultiplier * firstTaskExtra.total).toFixed(2);
   const eventsCount = countEvents(session.events);
 
   const urge = eventsCount['urge_overcome'] || 0;
@@ -133,6 +174,8 @@ function computeXp(
 
   const multipliers: Record<string, number | string> = {
     multiplier,
+    base_multiplier: baseMultiplier,
+    ...(firstTaskExtra.details || {}),
     friction_level: classification.friction_level || 'low',
     stakes: classification.stakes || 'low',
     discomfort_level: classification.discomfort_level || 'none',
