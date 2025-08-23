@@ -29,8 +29,7 @@ interface TimelineProps {
   onRepositionEvent: (eventId: string, newDate: Date) => void;
 }
 
-interface DragItem {
-  id: string;
+interface DragItem extends TimelineEventData {
   type: string;
   isRepositioning?: boolean;
 }
