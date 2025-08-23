@@ -52,26 +52,26 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
       
       {/* Diamond Shape - FORCED UPDATE */}
       <div className={`
-        relative w-24 h-24 transform rotate-45 border-4 border-red-500 transition-all duration-300
+        relative w-20 h-20 sm:w-24 sm:h-24 transform rotate-45 border-4 border-red-500 transition-all duration-300
         bg-red-100
         ${selected ? 'ring-4 ring-yellow-400' : ''}
         shadow-xl
       `}>
         {/* Content inside diamond (rotated back) */}
-        <div className="absolute inset-4 transform -rotate-45 flex items-center justify-center bg-white rounded">
+        <div className="absolute inset-3 sm:inset-4 transform -rotate-45 flex items-center justify-center bg-white rounded">
           {getStatusIcon()}
         </div>
       </div>
       
       {/* Decision Label */}
-      <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 min-w-max">
-        <span className="text-sm font-medium text-gray-900 bg-white px-2 py-1 rounded shadow-sm border whitespace-nowrap">
+      <div className="absolute -top-8 sm:-top-10 left-1/2 transform -translate-x-1/2 min-w-max">
+        <span className="text-xs sm:text-sm font-medium text-gray-900 bg-white px-2 py-1 rounded shadow-sm border whitespace-nowrap">
           {decisionPoint.name}
         </span>
       </div>
       
       {/* Options count */}
-      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 bg-white px-1 rounded">
+      <div className="absolute -bottom-6 sm:-bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 bg-white px-1 rounded">
         {decisionPoint.options.length} option{decisionPoint.options.length !== 1 ? 's' : ''}
       </div>
       
@@ -84,18 +84,20 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
       
       {/* Edit buttons when selected and timeline is not running */}
       {selected && !isTimelineRunning && (
-        <div className="absolute -top-12 right-0 flex gap-1">
+        <div className="absolute -top-10 sm:-top-12 right-0 flex gap-1">
           <button
             onClick={() => onEdit(decisionPoint)}
-            className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 border"
+            className="text-xs px-1 sm:px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 border"
           >
-            Edit
+            <span className="hidden sm:inline">Edit</span>
+            <span className="sm:hidden">✏️</span>
           </button>
           <button
             onClick={() => onDelete(decisionPoint.id)}
-            className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 border"
+            className="text-xs px-1 sm:px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 border"
           >
-            Delete
+            <span className="hidden sm:inline">Delete</span>
+            <span className="sm:hidden">🗑️</span>
           </button>
         </div>
       )}

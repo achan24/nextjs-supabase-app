@@ -82,23 +82,23 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
   if (!node) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] sm:max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">
             Edit {node.type === 'action' ? 'Action' : 'Decision Point'}
           </h2>
           <button
             onClick={onCancel}
             className="text-gray-400 hover:text-gray-600"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
           <div>
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name" className="text-sm sm:text-base">Name</Label>
             <Input
               id="name"
               type="text"
@@ -106,23 +106,25 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="Enter name"
               required
+              className="text-sm sm:text-base"
             />
           </div>
 
           <div>
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description" className="text-sm sm:text-base">Description</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
               placeholder="Enter description"
+              className="text-sm sm:text-base"
             />
           </div>
 
           {node.type === 'action' && (
             <div>
-              <Label htmlFor="duration">Duration</Label>
+              <Label htmlFor="duration" className="text-sm sm:text-base">Duration</Label>
               <Input
                 id="duration"
                 type="text"
@@ -130,6 +132,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
                 onChange={(e) => setFormData(prev => ({ ...prev, duration: e.target.value }))}
                 placeholder="e.g., 5s, 2m 30s, 1h 15m"
                 required
+                className="text-sm sm:text-base"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Format: 1h 30m 45s (hours, minutes, seconds)
@@ -140,20 +143,20 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
           {node.type === 'decision' && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label>Options</Label>
+                <Label className="text-sm sm:text-base">Options</Label>
                 <Button
                   type="button"
                   onClick={handleAddOption}
                   variant="outline"
                   size="sm"
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1 text-xs sm:text-sm"
                 >
                   <Plus className="w-3 h-3" />
                   Add
                 </Button>
               </div>
               
-              <div className="space-y-2 max-h-40 overflow-y-auto">
+              <div className="space-y-2 max-h-32 sm:max-h-40 overflow-y-auto">
                 {formData.options.map((option, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <Input
@@ -161,7 +164,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
                       value={option.label}
                       onChange={(e) => handleOptionChange(index, 'label', e.target.value)}
                       placeholder={`Option ${index + 1} label`}
-                      className="flex-1"
+                      className="flex-1 text-sm sm:text-base"
                     />
                     <Button
                       type="button"
@@ -170,14 +173,14 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
                       size="sm"
                       className="text-red-500 hover:text-red-700"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                     </Button>
                   </div>
                 ))}
               </div>
               
               {formData.options.length === 0 && (
-                <p className="text-sm text-gray-500 italic">
+                <p className="text-xs sm:text-sm text-gray-500 italic">
                   No options yet. Add options to connect to other actions.
                 </p>
               )}
@@ -189,13 +192,13 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
               type="button"
               onClick={onCancel}
               variant="outline"
-              className="flex-1"
+              className="flex-1 text-sm sm:text-base"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              className="flex-1"
+              className="flex-1 text-sm sm:text-base"
             >
               Save
             </Button>

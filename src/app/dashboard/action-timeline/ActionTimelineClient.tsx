@@ -157,25 +157,26 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
       case 'timeline':
         return 'grid-cols-1';
       default:
-        return 'grid-cols-2';
+        return 'grid-cols-1 lg:grid-cols-2';
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="mb-4 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/dashboard">
               <Button variant="outline" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Button>
             </Link>
-            <div className="flex items-center gap-3">
-              <Layout className="w-6 h-6 text-blue-500" />
-              <h1 className="text-2xl font-bold text-gray-900">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Layout className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-900">
                 Action Timeline Designer
               </h1>
             </div>
@@ -183,16 +184,16 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
         </div>
 
         {/* Description Card */}
-        <Card className="mb-6">
+        <Card className="mb-4 sm:mb-6">
           <CardHeader>
             <CardTitle>About Action Timelines</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-700 mb-4">
+            <p className="text-sm sm:text-base text-gray-700 mb-4">
               Design and execute structured action sequences with decision points. Create workflows that guide you through 
               complex processes step-by-step, with built-in timing and progress tracking.
             </p>
-            <p className="text-gray-700">
+            <p className="text-sm sm:text-base text-gray-700">
               Perfect for morning routines, work processes, learning sequences, and any structured activity where timing and 
               decision-making matter.
             </p>
@@ -200,25 +201,27 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
         </Card>
 
         {/* Controls */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+        <Card className="mb-4 sm:mb-6">
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center justify-center sm:justify-start">
                 {/* View Toggle */}
                 <div className="flex bg-gray-100 rounded-lg p-1">
                   <Button
                     variant={activeView === 'graph' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setActiveView('graph')}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
                   >
-                    <GitBranch className="w-4 h-4" />
-                    Graph
+                    <GitBranch className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Graph</span>
+                    <span className="sm:hidden">G</span>
                   </Button>
                   <Button
                     variant={activeView === 'both' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setActiveView('both')}
+                    className="text-xs sm:text-sm"
                   >
                     Both
                   </Button>
@@ -226,21 +229,22 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
                     variant={activeView === 'timeline' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setActiveView('timeline')}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
                   >
-                    <Clock className="w-4 h-4" />
-                    Timeline
+                    <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Timeline</span>
+                    <span className="sm:hidden">T</span>
                   </Button>
                 </div>
               </div>
 
               {/* File Operations */}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-center sm:justify-end gap-2">
                 <Button
                   onClick={handleLoadDemo}
                   variant="outline"
                   size="sm"
-                  className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                  className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 text-xs sm:text-sm"
                 >
                   📋 Demo
                 </Button>
@@ -249,7 +253,7 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
                   onClick={handleClearAll}
                   variant="outline"
                   size="sm"
-                  className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                  className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100 text-xs sm:text-sm"
                 >
                   🗑️ Clear
                 </Button>
@@ -258,15 +262,17 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
                   onClick={handleSaveTimeline}
                   variant="outline"
                   size="sm"
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
                 >
-                  <Save className="w-4 h-4" />
-                  Save
+                  <Save className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Save</span>
+                  <span className="sm:hidden">💾</span>
                 </Button>
                 
-                <label className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                  Load
+                <label className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-xs sm:text-sm bg-gray-500 text-white rounded hover:bg-gray-600 cursor-pointer">
+                  <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Load</span>
+                  <span className="sm:hidden">📁</span>
                   <input
                     type="file"
                     accept=".json"
@@ -287,7 +293,7 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
                 <CardTitle>Graph Editor</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="h-[600px]">
+                <div className="h-[400px] sm:h-[500px] lg:h-[600px]">
                   <ReactFlowProvider>
                     <GraphEditor
                       timelineEngine={timelineEngine}
@@ -305,7 +311,7 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
                 <CardTitle>Timeline View</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="h-[600px]">
+                <div className="h-[400px] sm:h-[500px] lg:h-[600px]">
                   <TimelineView
                     key={updateCounter} // Force re-render on updates
                     timelineEngine={timelineEngine}

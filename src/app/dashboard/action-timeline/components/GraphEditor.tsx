@@ -275,78 +275,85 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         selectNodesOnDrag={!timelineEngine.isRunning}
       >
         <Panel position="top-left">
-          <div className="flex flex-col gap-2 bg-white p-3 rounded-lg shadow-lg border">
-            <div className="text-sm font-medium text-gray-700 mb-2">Add Node:</div>
-            <div className="flex gap-2">
+          <div className="flex flex-col gap-2 bg-white p-2 sm:p-3 rounded-lg shadow-lg border">
+            <div className="text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Add Node:</div>
+            <div className="flex gap-1 sm:gap-2">
               <Button
                 variant={selectedNodeType === 'action' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedNodeType('action')}
-                className="text-xs"
+                className="text-xs px-2 sm:px-3"
               >
-                Action
+                <span className="hidden sm:inline">Action</span>
+                <span className="sm:hidden">A</span>
               </Button>
               <Button
                 variant={selectedNodeType === 'decision' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedNodeType('decision')}
-                className="text-xs"
+                className="text-xs px-2 sm:px-3"
               >
-                Decision
+                <span className="hidden sm:inline">Decision</span>
+                <span className="sm:hidden">D</span>
               </Button>
             </div>
             <Button
               onClick={handleAddNode}
-              className="flex items-center gap-2 text-sm"
+              className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
               size="sm"
             >
-              <Plus className="w-4 h-4" />
-              Add {selectedNodeType}
+              <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Add {selectedNodeType}</span>
+              <span className="sm:hidden">+</span>
             </Button>
           </div>
         </Panel>
 
         <Panel position="top-right">
-          <div className="flex gap-2 bg-white p-3 rounded-lg shadow-lg border">
+          <div className="flex gap-1 sm:gap-2 bg-white p-2 sm:p-3 rounded-lg shadow-lg border">
             {!timelineEngine.isRunning ? (
               <Button
                 onClick={handleStart}
-                className="flex items-center gap-2 text-sm"
+                className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
                 size="sm"
                 disabled={timelineEngine.getAllNodes().length === 0}
               >
-                <Play className="w-4 h-4" />
-                Start
+                <Play className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Start</span>
+                <span className="sm:hidden">▶️</span>
               </Button>
             ) : (
               <Button
                 onClick={handlePause}
-                className="flex items-center gap-2 text-sm bg-yellow-500 hover:bg-yellow-600"
+                className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm bg-yellow-500 hover:bg-yellow-600"
                 size="sm"
               >
-                <Pause className="w-4 h-4" />
-                Pause
+                <Pause className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Pause</span>
+                <span className="sm:hidden">⏸️</span>
               </Button>
             )}
             
             {timelineEngine.isRunning && (
               <Button
                 onClick={handleStop}
-                className="flex items-center gap-2 text-sm bg-red-500 hover:bg-red-600"
+                className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm bg-red-500 hover:bg-red-600"
                 size="sm"
               >
-                <Square className="w-4 h-4" />
-                Stop
+                <Square className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Stop</span>
+                <span className="sm:hidden">⏹️</span>
               </Button>
             )}
             
             <Button
               onClick={handleReset}
-              className="flex items-center gap-2 text-sm bg-gray-500 hover:bg-gray-600"
+              className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm bg-gray-500 hover:bg-gray-600"
               size="sm"
             >
-              <RotateCcw className="w-4 h-4" />
-              Reset
+              <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Reset</span>
+              <span className="sm:hidden">🔄</span>
             </Button>
           </div>
         </Panel>

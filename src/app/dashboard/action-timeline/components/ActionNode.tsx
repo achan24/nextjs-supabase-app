@@ -3,8 +3,8 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { CheckCircle } from 'lucide-react';
 import { formatDuration, Action } from '../types';
 
-const LINE_WIDTH = 120;
-const BAR_HEIGHT = 12;
+const LINE_WIDTH = 100; // Reduced for mobile
+const BAR_HEIGHT = 10; // Reduced for mobile
 
 interface ActionNodeData {
   action: Action;
@@ -60,7 +60,7 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
         <div className="flex items-center gap-2">
           {statusIcon}
           <span
-            className="text-sm font-medium text-gray-900"
+            className="text-xs sm:text-sm font-medium text-gray-900"
             title={action.description || ''}
           >
             {action.name}
@@ -71,15 +71,17 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
           <div className="flex gap-1">
             <button
               onClick={() => onEdit(action)}
-              className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
+              className="text-xs px-1 sm:px-2 py-0.5 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
             >
-              Edit
+              <span className="hidden sm:inline">Edit</span>
+              <span className="sm:hidden">✏️</span>
             </button>
             <button
               onClick={() => onDelete(action.id)}
-              className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded border hover:bg-red-200"
+              className="text-xs px-1 sm:px-2 py-0.5 bg-red-100 text-red-700 rounded border hover:bg-red-200"
             >
-              Delete
+              <span className="hidden sm:inline">Delete</span>
+              <span className="sm:hidden">🗑️</span>
             </button>
           </div>
         )}
@@ -97,19 +99,19 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
 
       {/* Footer: duration | progress | speed */}
       <div className="mt-1 grid grid-cols-3 items-center text-xs">
-        <span className="justify-self-start text-gray-700">
+        <span className="justify-self-start text-gray-700 text-xs">
           {formatDuration(action.duration)}
         </span>
 
         {action.status === 'running' && action.progress > 0 ? (
-          <span className="justify-self-center font-medium text-blue-600">
+          <span className="justify-self-center font-medium text-blue-600 text-xs">
             {Math.round(action.progress)}%
           </span>
         ) : (
           <span />
         )}
 
-        <span className="justify-self-end text-base">
+        <span className="justify-self-end text-sm sm:text-base">
           {action.status === 'running' ? speedEmoji : null}
         </span>
       </div>
