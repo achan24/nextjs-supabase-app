@@ -35,7 +35,7 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
   const getStatusIcon = () => {
     switch (decisionPoint.status) {
       case 'active':
-        return <div className="w-4 h-4 bg-orange-500 rounded-sm animate-pulse" />;
+        return <div className="w-4 h-4 bg-orange-500 rounded-sm ring-2 ring-orange-300 ring-opacity-50" />;
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       default:

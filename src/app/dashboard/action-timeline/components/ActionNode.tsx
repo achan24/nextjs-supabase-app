@@ -20,7 +20,7 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
   const statusIcon = (() => {
     switch (action.status) {
       case 'running':
-        return <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />;
+        return <div className="w-3 h-3 bg-blue-500 rounded-full ring-2 ring-blue-300 ring-opacity-50" />;
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'paused':
