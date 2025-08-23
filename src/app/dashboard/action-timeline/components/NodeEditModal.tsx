@@ -1,0 +1,209 @@
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Trash2 } from 'lucide-react';
+import { parseDuration, formatDuration, Action, DecisionPoint } from '../types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+
+interface NodeEditModalProps {
+  node: Action | DecisionPoint | null;
+  onSave: (nodeData: any) => void;
+  onCancel: () => void;
+}
+
+interface FormData {
+  name: string;
+  description: string;
+  duration: string;
+  options: Array<{actionId: string, label: string}>;
+}
+
+const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel }) => {
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    description: '',
+    duration: '',
+    options: []
+  });
+
+  useEffect(() => {
+    if (node) {
+      setFormData({
+        name: node.name || '',
+        description: node.description || '',
+        duration: node.type === 'action' ? formatDuration((node as Action).duration) : '',
+        options: node.type === 'decision' ? [...(node as DecisionPoint).options] : []
+      });
+    }
+  }, [node]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const updatedNode = {
+      ...node,
+      name: formData.name,
+      description: formData.description,
+    };
+
+    if (node?.type === 'action') {
+      (updatedNode as Action).duration = parseDuration(formData.duration) || 5000;
+    } else if (node?.type === 'decision') {
+      (updatedNode as DecisionPoint).options = formData.options;
+    }
+
+    onSave(updatedNode);
+  };
+
+  const handleAddOption = () => {
+    setFormData(prev => ({
+      ...prev,
+      options: [...prev.options, { actionId: '', label: `Option ${prev.options.length + 1}` }]
+    }));
+  };
+
+  const handleRemoveOption = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      options: prev.options.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleOptionChange = (index: number, field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      options: prev.options.map((option, i) => 
+        i === index ? { ...option, [field]: value } : option
+      )
+    }));
+  };
+
+  if (!node) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Edit {node.type === 'action' ? 'Action' : 'Decision Point'}
+          </h2>
+          <button
+            onClick={onCancel}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Enter name"
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              rows={3}
+              placeholder="Enter description"
+            />
+          </div>
+
+          {node.type === 'action' && (
+            <div>
+              <Label htmlFor="duration">Duration</Label>
+              <Input
+                id="duration"
+                type="text"
+                value={formData.duration}
+                onChange={(e) => setFormData(prev => ({ ...prev, duration: e.target.value }))}
+                placeholder="e.g., 5s, 2m 30s, 1h 15m"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Format: 1h 30m 45s (hours, minutes, seconds)
+              </p>
+            </div>
+          )}
+
+          {node.type === 'decision' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label>Options</Label>
+                <Button
+                  type="button"
+                  onClick={handleAddOption}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add
+                </Button>
+              </div>
+              
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {formData.options.map((option, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      type="text"
+                      value={option.label}
+                      onChange={(e) => handleOptionChange(index, 'label', e.target.value)}
+                      placeholder={`Option ${index + 1} label`}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => handleRemoveOption(index)}
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              
+              {formData.options.length === 0 && (
+                <p className="text-sm text-gray-500 italic">
+                  No options yet. Add options to connect to other actions.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              type="button"
+              onClick={onCancel}
+              variant="outline"
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+            >
+              Save
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default NodeEditModal;

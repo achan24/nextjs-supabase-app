@@ -8,7 +8,7 @@ import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain, DollarSign, GitBranch, Clock } from 'lucide-react'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain, DollarSign, GitBranch, Clock, Layout } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { GuardianAngelAI } from '@/components/GuardianAngelAI'
@@ -821,6 +821,30 @@ export default function HomePage({ user }: { user: User }) {
                   <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded">Decision Trees</span>
                   <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded">Outcome Tracking</span>
                   <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded">Learning History</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Action Timeline Card */}
+          <Link href="/dashboard/action-timeline" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-purple-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Layout className="h-6 w-6 text-purple-600" />
+                  </div>
+                  Action Timeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Design and execute structured action sequences with decision points. Create workflows that guide you through complex processes step-by-step with built-in timing and progress tracking.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Visual Editor</span>
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Real-time Execution</span>
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Progress Tracking</span>
                 </div>
               </CardContent>
             </Card>

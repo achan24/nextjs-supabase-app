@@ -1,0 +1,138 @@
+import React from 'react';
+import { Handle, Position, NodeProps } from 'reactflow';
+import { CheckCircle } from 'lucide-react';
+import { DecisionPoint } from '../types';
+
+interface DecisionNodeData {
+  decisionPoint: DecisionPoint;
+  onEdit: (decisionPoint: DecisionPoint) => void;
+  onDelete: (id: string) => void;
+  onMakeDecision: (decisionPoint: DecisionPoint, actionId: string) => void;
+  isTimelineRunning: boolean;
+}
+
+const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected }) => {
+  const { decisionPoint, onEdit, onDelete, onMakeDecision, isTimelineRunning } = data;
+  
+  // Add null check to prevent errors
+  if (!decisionPoint) {
+    return <div className="text-red-500 p-2">Invalid decision point</div>;
+  }
+  
+  const getStatusIcon = () => {
+    switch (decisionPoint.status) {
+      case 'active':
+        return <div className="w-4 h-4 bg-orange-500 rounded-sm animate-pulse" />;
+      case 'completed':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      default:
+        return <div className="w-3 h-3 bg-gray-400 rounded-sm" />;
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (decisionPoint.status) {
+      case 'active':
+        return 'border-orange-500 bg-orange-50';
+      case 'completed':
+        return 'border-green-500 bg-green-50';
+      default:
+        return 'border-gray-300 bg-white';
+    }
+  };
+
+  return (
+    <div className="decision-node relative">
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="w-3 h-3 !bg-gray-400"
+        style={{ top: '-8px' }}
+      />
+      
+      {/* Diamond Shape - FORCED UPDATE */}
+      <div className={`
+        relative w-24 h-24 transform rotate-45 border-4 border-red-500 transition-all duration-300
+        bg-red-100
+        ${selected ? 'ring-4 ring-yellow-400' : ''}
+        shadow-xl
+      `}>
+        {/* Content inside diamond (rotated back) */}
+        <div className="absolute inset-4 transform -rotate-45 flex items-center justify-center bg-white rounded">
+          {getStatusIcon()}
+        </div>
+      </div>
+      
+      {/* Decision Label */}
+      <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 min-w-max">
+        <span className="text-sm font-medium text-gray-900 bg-white px-2 py-1 rounded shadow-sm border whitespace-nowrap">
+          {decisionPoint.name}
+        </span>
+      </div>
+      
+      {/* Options count */}
+      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 bg-white px-1 rounded">
+        {decisionPoint.options.length} option{decisionPoint.options.length !== 1 ? 's' : ''}
+      </div>
+      
+      {/* Description tooltip on hover */}
+      {decisionPoint.description && (
+        <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 opacity-0 hover:opacity-100 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
+          {decisionPoint.description}
+        </div>
+      )}
+      
+      {/* Edit buttons when selected and timeline is not running */}
+      {selected && !isTimelineRunning && (
+        <div className="absolute -top-12 right-0 flex gap-1">
+          <button
+            onClick={() => onEdit(decisionPoint)}
+            className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 border"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => onDelete(decisionPoint.id)}
+            className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 border"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+      
+      {/* Decision Selection Modal - shows when active */}
+      {decisionPoint.status === 'active' && (
+        <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-white border-2 border-orange-500 rounded-lg shadow-xl p-4 z-50 min-w-48">
+          <div className="text-sm font-medium text-gray-700 mb-3 text-center">Choose an option:</div>
+          <div className="space-y-2">
+            {decisionPoint.options.map((option, index) => (
+              <button
+                key={option.actionId}
+                onClick={() => onMakeDecision(decisionPoint, option.actionId)}
+                className="w-full text-left text-sm px-3 py-2 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 hover:border-orange-300 transition-colors"
+              >
+                {option.label || `Option ${index + 1}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Completed selection indicator */}
+      {decisionPoint.status === 'completed' && decisionPoint.selectedOption && (
+        <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-green-50 border border-green-200 rounded px-2 py-1 text-xs text-green-700">
+          Selected: {decisionPoint.options.find(opt => opt.actionId === decisionPoint.selectedOption)?.label || 'Option'}
+        </div>
+      )}
+      
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="w-3 h-3 !bg-gray-400"
+        style={{ bottom: '-8px' }}
+      />
+    </div>
+  );
+};
+
+export default DecisionNode;
