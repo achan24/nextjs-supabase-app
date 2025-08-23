@@ -8,7 +8,7 @@ import SignOutButton from '@/components/SignOutButton'
 import ProjectManager from './ProjectManager'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain, DollarSign, GitBranch } from 'lucide-react'
+import { BarChart3, FolderKanban, CheckSquare, StickyNote, GitFork, Timer, Calendar, LineChart, Bot, Users, Repeat, Lightbulb, User as UserIcon, Star, Brain, DollarSign, GitBranch, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useGoalSystem } from '@/hooks/useGoalSystem'
 import { GuardianAngelAI } from '@/components/GuardianAngelAI'
@@ -53,11 +53,16 @@ export default function HomePage({ user }: { user: User }) {
   })
 
   useEffect(() => {
-    fetchTopStarredTask()
-  }, [])
+    // Only fetch starred task if user is available
+    if (user?.id) {
+      fetchTopStarredTask()
+    }
+  }, [user?.id])
 
   // Listen for task starring events and refresh data
   useEffect(() => {
+    if (!user?.id) return; // Only add listener if user is authenticated
+
     const handleTaskStarred = () => {
       console.log('[Guardian Angel] Task starred event received, refreshing starred task...')
       fetchTopStarredTask()
@@ -65,7 +70,7 @@ export default function HomePage({ user }: { user: User }) {
 
     window.addEventListener('task-starred', handleTaskStarred)
     return () => window.removeEventListener('task-starred', handleTaskStarred)
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     // Find the top daily progress from areas
@@ -89,6 +94,13 @@ export default function HomePage({ user }: { user: User }) {
 
   const fetchTopStarredTask = async () => {
     try {
+      // Check if user is authenticated before making API call
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        console.log('[Guardian Angel] User not authenticated, skipping starred task fetch');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -532,6 +544,30 @@ export default function HomePage({ user }: { user: User }) {
                 <p className="text-sm text-gray-600">
                   View and manage your schedule in a clear, organized way. Keep track of important dates, deadlines, and recurring events.
                 </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Calendar Timeline Card */}
+          <Link href="/dashboard/calendar-timeline" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-blue-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Clock className="h-6 w-6 text-blue-600" />
+                  </div>
+                  Calendar Timeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Interactive timeline with drag-and-drop events. Zoom from hours to years, create events with custom durations, and visualize your schedule across different time scales.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Interactive</span>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Drag & Drop</span>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Multi-scale</span>
+                </div>
               </CardContent>
             </Card>
           </Link>

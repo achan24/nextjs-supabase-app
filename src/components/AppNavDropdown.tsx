@@ -99,12 +99,6 @@ const apps = [
     icon: Calendar
   },
   { 
-    name: 'Calendar Timeline', 
-    href: '/dashboard/calendar-timeline', 
-    description: 'Manage timeline events and deadlines',
-    icon: Clock
-  },
-  { 
     name: 'Timeline Explorer', 
     href: '/dashboard/timeline-explorer', 
     description: 'Create and explore branching timelines with decision nodes',

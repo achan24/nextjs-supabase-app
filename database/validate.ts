@@ -45,6 +45,7 @@ import { NoteLink } from './models/note-link.model';
 import { Problem } from './models/problem.model';
 import { BudgetTransaction } from './models/budget-transaction.model';
 import { BudgetTarget } from './models/budget-target.model';
+import { calendarTimelineEventsModel } from './models/calendar-timeline-events.model';
 
 
 // Load environment variables from root .env.local
@@ -106,6 +107,7 @@ async function validateDatabase() {
     Problem,
     BudgetTransaction,
     BudgetTarget,
+    calendarTimelineEventsModel,
 
   ];
 

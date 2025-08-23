@@ -4,8 +4,9 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import CalendarTimelineClient from './CalendarTimelineClient';
+import { CalendarTimelineEvent } from '@/lib/calendar-timeline-db';
 
-async function getTimelineData() {
+async function getTimelineData(): Promise<CalendarTimelineEvent[]> {
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,23 +32,34 @@ async function getTimelineData() {
     redirect('/login');
   }
 
-  // Get timeline events for the next 30 days
-  const startDate = new Date().toISOString();
-  const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    // Use hardcoded user ID (you)
+    const HARDCODED_USER_ID = '875d44ba-8794-4d12-ba86-48e5e90dc796';
+    
+    console.log('📄 [Page] Fetching events for user:', HARDCODED_USER_ID);
+    
+    const { data: events, error: eventsError } = await supabase
+      .from('calendar_timeline_events')
+      .select('*')
+      .eq('user_id', HARDCODED_USER_ID)
+      .order('event_date', { ascending: true });
 
-  const { data: events, error: eventsError } = await supabase
-    .from('timeline_events')
-    .select('*')
-    .eq('user_id', user.id)
-    .gte('event_date', startDate)
-    .lte('event_date', endDate)
-    .order('event_date', { ascending: true });
+    if (eventsError) {
+      console.error('❌ [Page] Error fetching calendar timeline events:', eventsError);
+      return [];
+    }
 
-  if (eventsError) {
-    console.error('Error fetching timeline events:', eventsError);
+    console.log('✅ [Page] Fetched events:', events?.length || 0);
+
+    // Add computed date field to each event
+    return (events || []).map(event => ({
+      ...event,
+      date: new Date(event.event_date)
+    }));
+  } catch (error) {
+    console.error('❌ [Page] Error loading timeline events:', error);
+    return [];
   }
-
-  return events || [];
 }
 
 export default async function CalendarTimelinePage() {

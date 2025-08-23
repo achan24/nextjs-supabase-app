@@ -24,15 +24,15 @@ export default function WalletPill() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) return;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
 
       const [walletRes, mintsRes] = await Promise.all([
-        supabase.from('wallets').select('balance').eq('user_id', user.user.id).maybeSingle(),
+        supabase.from('wallets').select('balance').eq('user_id', authUser.id).maybeSingle(),
         supabase
           .from('token_mints')
           .select('id, amount, meta, created_at')
-          .eq('user_id', user.user.id)
+          .eq('user_id', authUser.id)
           .order('created_at', { ascending: false })
           .limit(10),
       ]);
@@ -45,13 +45,23 @@ export default function WalletPill() {
         .map((m: any) => m.meta?.task_id)
         .filter(Boolean);
       if (ids.length > 0) {
-        const { data: tasks } = await supabase
-          .from('tasks')
-          .select('id, title')
-          .in('id', Array.from(new Set(ids)));
-        const map: Record<string, string> = {};
-        (tasks || []).forEach((t: any) => (map[t.id] = t.title));
-        setTaskTitles(map);
+        try {
+          const { data: tasks, error } = await supabase
+            .from('tasks')
+            .select('id, title')
+            .in('id', Array.from(new Set(ids)));
+          
+          if (error) {
+            console.error('[WalletPill] Error fetching task titles:', error);
+            return;
+          }
+          
+          const map: Record<string, string> = {};
+          (tasks || []).forEach((t: any) => (map[t.id] = t.title));
+          setTaskTitles(map);
+        } catch (error) {
+          console.error('[WalletPill] Error in task title resolution:', error);
+        }
       }
     };
 
