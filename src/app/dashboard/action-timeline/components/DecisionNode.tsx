@@ -74,9 +74,8 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
     <div className="decision-node relative">
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         className="w-3 h-3 !bg-gray-400"
-        style={{ top: '-8px' }}
       />
       
       {/* Diamond Shape - FORCED UPDATE */}
@@ -126,25 +125,7 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
         </div>
       )}
       
-      {/* Edit buttons when selected and timeline is not running */}
-      {selected && !isTimelineRunning && (
-        <div className="absolute -top-10 sm:-top-12 right-0 flex gap-1">
-          <button
-            onClick={() => onEdit(decisionPoint)}
-            className="text-xs px-1 sm:px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 border"
-          >
-            <span className="hidden sm:inline">Edit</span>
-            <span className="sm:hidden">✏️</span>
-          </button>
-          <button
-            onClick={() => onDelete(decisionPoint.id)}
-            className="text-xs px-1 sm:px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 border"
-          >
-            <span className="hidden sm:inline">Delete</span>
-            <span className="sm:hidden">🗑️</span>
-          </button>
-        </div>
-      )}
+
       
       {/* Decision Selection Modal - shows when active and options are toggled */}
       {decisionPoint.status === 'active' && (
@@ -179,10 +160,29 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
       
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         className="w-3 h-3 !bg-gray-400"
-        style={{ bottom: '-8px' }}
       />
+      
+      {/* Edit/Delete buttons below node */}
+      {selected && !isTimelineRunning && (
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 flex gap-1">
+          <button
+            onClick={() => onEdit(decisionPoint)}
+            className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 border"
+          >
+            <span className="hidden sm:inline">Edit</span>
+            <span className="sm:hidden">✏️</span>
+          </button>
+          <button
+            onClick={() => onDelete(decisionPoint.id)}
+            className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 border"
+          >
+            <span className="hidden sm:inline">Delete</span>
+            <span className="sm:hidden">🗑️</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

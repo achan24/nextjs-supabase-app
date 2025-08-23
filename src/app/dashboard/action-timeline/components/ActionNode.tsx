@@ -47,12 +47,11 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
       className="relative w-fit select-none"
       style={{ width: LINE_WIDTH }}
     >
-      {/* Top connector */}
+      {/* Left connector */}
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         className="w-3 h-3 !bg-gray-400"
-        style={{ left: 8 }}
       />
 
       {/* Header: status + name (no absolute positioning) */}
@@ -67,24 +66,7 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
           </span>
         </div>
 
-        {selected && !isTimelineRunning && (
-          <div className="flex gap-1">
-            <button
-              onClick={() => onEdit(action)}
-              className="text-xs px-1 sm:px-2 py-0.5 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
-            >
-              <span className="hidden sm:inline">Edit</span>
-              <span className="sm:hidden">✏️</span>
-            </button>
-            <button
-              onClick={() => onDelete(action.id)}
-              className="text-xs px-1 sm:px-2 py-0.5 bg-red-100 text-red-700 rounded border hover:bg-red-200"
-            >
-              <span className="hidden sm:inline">Delete</span>
-              <span className="sm:hidden">🗑️</span>
-            </button>
-          </div>
-        )}
+
       </div>
 
       {/* Bar */}
@@ -116,13 +98,32 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
         </span>
       </div>
 
-      {/* Bottom connector */}
+      {/* Right connector */}
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         className="w-3 h-3 !bg-gray-400"
-        style={{ left: LINE_WIDTH - 10 }}
       />
+      
+      {/* Edit/Delete buttons below node */}
+      {selected && !isTimelineRunning && (
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 flex gap-1">
+          <button
+            onClick={() => onEdit(action)}
+            className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
+          >
+            <span className="hidden sm:inline">Edit</span>
+            <span className="sm:hidden">✏️</span>
+          </button>
+          <button
+            onClick={() => onDelete(action.id)}
+            className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded border hover:bg-red-200"
+          >
+            <span className="hidden sm:inline">Delete</span>
+            <span className="sm:hidden">🗑️</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -75,7 +75,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
               id: `${node.id}-${targetId}`,
               source: node.id,
               target: targetId,
-              type: 'default',
+              type: 'bezier',
               animated: node.status === 'running',
               style: { 
                 stroke: node.status === 'completed' ? '#10b981' : '#6b7280',
@@ -89,7 +89,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
               id: `${node.id}-${option.actionId}`,
               source: node.id,
               target: option.actionId,
-              type: 'default',
+              type: 'bezier',
               label: option.label,
               animated: node.status === 'active',
               style: { 
