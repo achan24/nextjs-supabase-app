@@ -271,7 +271,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         attributionPosition="top-right"
         nodesDraggable={!timelineEngine.isRunning}
         nodesConnectable={!timelineEngine.isRunning}
-        elementsSelectable={!timelineEngine.isRunning}
+        elementsSelectable={true}
         selectNodesOnDrag={!timelineEngine.isRunning}
       >
         <Panel position="top-left">

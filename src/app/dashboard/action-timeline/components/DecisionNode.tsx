@@ -13,6 +13,19 @@ interface DecisionNodeData {
 
 const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected }) => {
   const { decisionPoint, onEdit, onDelete, onMakeDecision, isTimelineRunning } = data;
+  const [showOptions, setShowOptions] = React.useState(false);
+  
+  // Reset showOptions when decision point status changes
+  React.useEffect(() => {
+    if (decisionPoint.status !== 'active') {
+      setShowOptions(false);
+    }
+  }, [decisionPoint.status]);
+  
+  // Add null check to prevent errors
+  if (!decisionPoint) {
+    return <div className="text-red-500 p-2">Invalid decision point</div>;
+  }
   
   // Add null check to prevent errors
   if (!decisionPoint) {
@@ -41,6 +54,22 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
     }
   };
 
+  const getDiamondClasses = () => {
+    const baseClasses = `
+      relative w-20 h-20 sm:w-24 sm:h-24 transform rotate-45 border-4 transition-all duration-300
+      shadow-xl
+    `;
+    
+    switch (decisionPoint.status) {
+      case 'active':
+        return `${baseClasses} border-orange-500 bg-orange-100 cursor-pointer hover:bg-orange-200 hover:border-orange-600 hover:shadow-2xl`;
+      case 'completed':
+        return `${baseClasses} border-green-500 bg-green-100 cursor-default`;
+      default:
+        return `${baseClasses} border-red-500 bg-red-100 cursor-default`;
+    }
+  };
+
   return (
     <div className="decision-node relative">
       <Handle
@@ -51,12 +80,27 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
       />
       
       {/* Diamond Shape - FORCED UPDATE */}
-      <div className={`
-        relative w-20 h-20 sm:w-24 sm:h-24 transform rotate-45 border-4 border-red-500 transition-all duration-300
-        bg-red-100
-        ${selected ? 'ring-4 ring-yellow-400' : ''}
-        shadow-xl
-      `}>
+      <div 
+        className={`${getDiamondClasses()} ${selected ? 'ring-4 ring-yellow-400' : ''}`}
+        onClick={() => {
+          console.log('[DecisionNode] Clicked decision point:', {
+            status: decisionPoint.status,
+            optionsCount: decisionPoint.options.length,
+            options: decisionPoint.options
+          });
+          
+          if (decisionPoint.status === 'active' && decisionPoint.options.length > 0) {
+            // If there's only one option, auto-select it
+            if (decisionPoint.options.length === 1) {
+              onMakeDecision(decisionPoint, decisionPoint.options[0].actionId);
+            } else {
+              // If multiple options, show the modal
+              setShowOptions(!showOptions);
+              console.log('[DecisionNode] Toggled showOptions to:', !showOptions);
+            }
+          }
+        }}
+      >
         {/* Content inside diamond (rotated back) */}
         <div className="absolute inset-3 sm:inset-4 transform -rotate-45 flex items-center justify-center bg-white rounded">
           {getStatusIcon()}
@@ -72,7 +116,7 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
       
       {/* Options count */}
       <div className="absolute -bottom-6 sm:-bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-gray-500 bg-white px-1 rounded">
-        {decisionPoint.options.length} option{decisionPoint.options.length !== 1 ? 's' : ''}
+        {decisionPoint.options.length} option{decisionPoint.options.length !== 1 ? 's' : ''} ({decisionPoint.status})
       </div>
       
       {/* Description tooltip on hover */}
@@ -102,16 +146,22 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
         </div>
       )}
       
-      {/* Decision Selection Modal - shows when active */}
+      {/* Decision Selection Modal - shows when active and options are toggled */}
       {decisionPoint.status === 'active' && (
         <div className="absolute top-24 left-1/2 transform -translate-x-1/2 bg-white border-2 border-orange-500 rounded-lg shadow-xl p-4 z-50 min-w-48">
-          <div className="text-sm font-medium text-gray-700 mb-3 text-center">Choose an option:</div>
+          <div className="text-sm font-medium text-gray-700 mb-3 text-center flex items-center gap-2">
+            <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+            Choose an option:
+          </div>
           <div className="space-y-2">
             {decisionPoint.options.map((option, index) => (
               <button
                 key={option.actionId}
-                onClick={() => onMakeDecision(decisionPoint, option.actionId)}
-                className="w-full text-left text-sm px-3 py-2 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 hover:border-orange-300 transition-colors"
+                onClick={() => {
+                  onMakeDecision(decisionPoint, option.actionId);
+                  setShowOptions(false); // Close modal after selection
+                }}
+                className="w-full text-left text-sm px-3 py-2 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 hover:border-orange-300 transition-all duration-200 cursor-pointer hover:shadow-md"
               >
                 {option.label || `Option ${index + 1}`}
               </button>

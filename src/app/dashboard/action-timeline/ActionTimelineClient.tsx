@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ReactFlowProvider } from 'reactflow';
 import GraphEditor from './components/GraphEditor';
 import TimelineView from './components/TimelineView';
@@ -9,6 +9,23 @@ import { Layout, GitBranch, Clock, Save, Upload, ArrowLeft } from 'lucide-react'
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { TimelineSelector, useTimelineAutoSave } from './components/TimelineSelector';
+// Define the ActionTimeline type locally to avoid import issues
+interface ActionTimeline {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  data: any;
+  is_public: boolean;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  last_executed_at?: string;
+  execution_count: number;
+  total_execution_time: number;
+  favorite: boolean;
+}
 
 // Create a demo workflow
 function createDemo(timelineEngine: TimelineEngine) {
@@ -91,18 +108,47 @@ interface ActionTimelineClientProps {
 }
 
 export default function ActionTimelineClient({ user }: ActionTimelineClientProps) {
-  const [timelineEngine] = useState(() => {
-    const engine = new TimelineEngine();
-    // Create demo data
-    createDemo(engine);
-    return engine;
-  });
+  const [timelineEngine, setTimelineEngine] = useState(() => new TimelineEngine());
+  const [currentTimeline, setCurrentTimeline] = useState<ActionTimeline | null>(null);
   const [activeView, setActiveView] = useState('both'); // 'graph', 'timeline', 'both'
   const [updateCounter, setUpdateCounter] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | 'saving' | null; message: string }>({ type: null, message: '' });
 
   const handleTimelineUpdate = useCallback(() => {
     setUpdateCounter(prev => prev + 1);
   }, []);
+
+  const handleTimelineChange = useCallback((timeline: ActionTimeline | null, engine: TimelineEngine) => {
+    setCurrentTimeline(timeline);
+    setTimelineEngine(engine);
+    handleTimelineUpdate();
+  }, [handleTimelineUpdate]);
+
+  // Auto-save functionality
+  const autoSave = useTimelineAutoSave(currentTimeline, timelineEngine, setSaveStatus);
+
+  // Auto-save on changes (2 seconds after last change)
+  useEffect(() => {
+    if (!currentTimeline) return;
+
+    const debounceTimer = setTimeout(() => {
+      if (timelineEngine.getAllNodes().length > 0) {
+        autoSave(false); // Silent auto-save
+      }
+    }, 2000);
+
+    return () => clearTimeout(debounceTimer);
+  }, [timelineEngine, currentTimeline, autoSave, updateCounter]);
+
+  // Auto-hide save status after 3 seconds
+  useEffect(() => {
+    if (saveStatus.type) {
+      const timer = setTimeout(() => {
+        setSaveStatus({ type: null, message: '' });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [saveStatus]);
 
   const handleSaveTimeline = useCallback(() => {
     const data = timelineEngine.toJSON();
@@ -122,7 +168,9 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
       reader.onload = (e) => {
         try {
           const data = JSON.parse(e.target?.result as string);
-          timelineEngine.fromJSON(data);
+          const newTimelineEngine = new TimelineEngine();
+          newTimelineEngine.fromJSON(data);
+          setTimelineEngine(newTimelineEngine);
           handleTimelineUpdate();
         } catch (error) {
           alert('Error loading timeline: ' + (error as Error).message);
@@ -130,25 +178,20 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
       };
       reader.readAsText(file);
     }
-  }, [timelineEngine, handleTimelineUpdate]);
+  }, [handleTimelineUpdate]);
 
   const handleLoadDemo = useCallback(() => {
-    // Clear existing data
-    timelineEngine.actions.clear();
-    timelineEngine.decisionPoints.clear();
-    timelineEngine.reset();
-    
-    // Load demo
-    createDemo(timelineEngine);
+    const newTimelineEngine = new TimelineEngine();
+    createDemo(newTimelineEngine);
+    setTimelineEngine(newTimelineEngine);
     handleTimelineUpdate();
-  }, [timelineEngine, handleTimelineUpdate]);
+  }, [handleTimelineUpdate]);
 
   const handleClearAll = useCallback(() => {
-    timelineEngine.actions.clear();
-    timelineEngine.decisionPoints.clear();
-    timelineEngine.reset();
+    const newTimelineEngine = new TimelineEngine();
+    setTimelineEngine(newTimelineEngine);
     handleTimelineUpdate();
-  }, [timelineEngine, handleTimelineUpdate]);
+  }, [handleTimelineUpdate]);
 
   const getViewClasses = () => {
     switch (activeView) {
@@ -159,6 +202,27 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
       default:
         return 'grid-cols-1 lg:grid-cols-2';
     }
+  };
+
+  // Render save status
+  const renderSaveStatus = () => {
+    if (!saveStatus.type) return null;
+
+    const statusColors = {
+      saving: 'bg-blue-100 text-blue-800 border-blue-400',
+      success: 'bg-green-100 text-green-800 border-green-400',
+      error: 'bg-red-100 text-red-800 border-red-400'
+    };
+
+    return (
+      <div className={`p-3 mb-4 rounded-md border ${statusColors[saveStatus.type]}`}>
+        <div className="flex items-center">
+          <div className="text-sm font-medium">
+            {saveStatus.message}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -200,86 +264,107 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
           </CardContent>
         </Card>
 
-        {/* Controls */}
-        <Card className="mb-4 sm:mb-6">
-          <CardContent className="pt-4 sm:pt-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center justify-center sm:justify-start">
-                {/* View Toggle */}
-                <div className="flex bg-gray-100 rounded-lg p-1">
-                  <Button
-                    variant={activeView === 'graph' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setActiveView('graph')}
-                    className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-                  >
-                    <GitBranch className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Graph</span>
-                    <span className="sm:hidden">G</span>
-                  </Button>
-                  <Button
-                    variant={activeView === 'both' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setActiveView('both')}
-                    className="text-xs sm:text-sm"
-                  >
-                    Both
-                  </Button>
-                  <Button
-                    variant={activeView === 'timeline' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setActiveView('timeline')}
-                    className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-                  >
-                    <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Timeline</span>
-                    <span className="sm:hidden">T</span>
-                  </Button>
-                </div>
-              </div>
+        {/* Save Status */}
+        {renderSaveStatus()}
 
-              {/* File Operations */}
-              <div className="flex flex-wrap justify-center sm:justify-end gap-2">
-                <Button
-                  onClick={handleLoadDemo}
-                  variant="outline"
-                  size="sm"
-                  className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 text-xs sm:text-sm"
-                >
-                  📋 Demo
-                </Button>
-                
-                <Button
-                  onClick={handleClearAll}
-                  variant="outline"
-                  size="sm"
-                  className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100 text-xs sm:text-sm"
-                >
-                  🗑️ Clear
-                </Button>
-                
-                <Button
-                  onClick={handleSaveTimeline}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-                >
-                  <Save className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">Save</span>
-                  <span className="sm:hidden">💾</span>
-                </Button>
-                
-                <label className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-xs sm:text-sm bg-gray-500 text-white rounded hover:bg-gray-600 cursor-pointer">
-                  <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">Load</span>
-                  <span className="sm:hidden">📁</span>
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleLoadTimeline}
-                    className="hidden"
-                  />
-                </label>
+        {/* Timeline Management & Controls */}
+        <Card className="mb-4 sm:mb-6">
+          <CardHeader>
+            <CardTitle>Timeline Management</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Timeline Selector */}
+              <TimelineSelector
+                currentTimeline={currentTimeline}
+                timelineEngine={timelineEngine}
+                onTimelineChange={handleTimelineChange}
+                onSaveStatusChange={setSaveStatus}
+              />
+
+              {/* View Controls & Utilities */}
+              <div className="space-y-4">
+                {/* View Toggle */}
+                <div className="flex flex-col space-y-2">
+                  <label className="text-sm font-medium">View Mode</label>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <Button
+                      variant={activeView === 'graph' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setActiveView('graph')}
+                      className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+                    >
+                      <GitBranch className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Graph</span>
+                      <span className="sm:hidden">G</span>
+                    </Button>
+                    <Button
+                      variant={activeView === 'both' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setActiveView('both')}
+                      className="text-xs sm:text-sm"
+                    >
+                      Both
+                    </Button>
+                    <Button
+                      variant={activeView === 'timeline' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setActiveView('timeline')}
+                      className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+                    >
+                      <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Timeline</span>
+                      <span className="sm:hidden">T</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Utilities */}
+                <div className="flex flex-col space-y-2">
+                  <label className="text-sm font-medium">Utilities</label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={handleLoadDemo}
+                      variant="outline"
+                      size="sm"
+                      className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 text-xs sm:text-sm"
+                    >
+                      📋 Demo
+                    </Button>
+                    
+                    <Button
+                      onClick={handleClearAll}
+                      variant="outline"
+                      size="sm"
+                      className="bg-red-50 text-red-700 border-red-200 hover:bg-red-100 text-xs sm:text-sm"
+                    >
+                      🗑️ Clear
+                    </Button>
+                    
+                    <Button
+                      onClick={handleSaveTimeline}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+                    >
+                      <Save className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Export</span>
+                      <span className="sm:hidden">📤</span>
+                    </Button>
+                    
+                    <label className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-xs sm:text-sm bg-gray-500 text-white rounded hover:bg-gray-600 cursor-pointer">
+                      <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Import</span>
+                      <span className="sm:hidden">📥</span>
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={handleLoadTimeline}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
