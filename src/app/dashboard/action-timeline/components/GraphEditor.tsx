@@ -30,6 +30,25 @@ const nodeTypes = {
   decision: DecisionNode,
 };
 
+// Calculate ETA for timeline completion
+const calculateTimelineETA = (timelineEngine: TimelineEngine): { eta: Date | null; totalDuration: number; actionCount: number } => {
+  const allNodes = timelineEngine.getAllNodes();
+  if (allNodes.length === 0) {
+    return { eta: null, totalDuration: 0, actionCount: 0 };
+  }
+
+  // Find all actions and their durations
+  const actions = Array.from(timelineEngine.actions.values());
+  const totalDuration = actions.reduce((sum, action) => sum + action.duration, 0);
+  const actionCount = actions.length;
+
+  // Calculate ETA from now
+  const now = new Date();
+  const eta = new Date(now.getTime() + totalDuration);
+
+  return { eta, totalDuration, actionCount };
+};
+
 interface GraphEditorProps {
   timelineEngine: TimelineEngine;
   onTimelineUpdate: () => void;
@@ -76,6 +95,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
           onEdit: handleEditNode,
           onDelete: handleDeleteNode,
           onMakeDecision: handleMakeDecision,
+          onStartFromHere: handleStartFromHere,
           isTimelineRunning: timelineEngine.isRunning, // Pass timeline state
           isManualMode: timelineEngine.isManualMode, // Pass manual mode state
           timelineComplete: timelineEngine.timelineComplete, // Pass timeline completion state
@@ -154,16 +174,59 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
       sourceNode.addOption(params.target, label);
     }
 
+    // Notify listeners to update the UI immediately
+    timelineEngine.notifyListeners();
     onTimelineUpdate();
+    
+    // Force immediate edge update
+    const allNodes = timelineEngine.getAllNodes();
+    const flowEdges: Edge[] = [];
+    allNodes.forEach(node => {
+      if (node.type === 'action' && node.connections) {
+        node.connections.forEach(targetId => {
+          flowEdges.push({
+            id: `${node.id}-${targetId}`,
+            source: node.id,
+            target: targetId,
+            type: 'bezier',
+            animated: node.status === 'running',
+            style: { 
+              stroke: node.status === 'completed' ? '#10b981' : '#6b7280',
+              strokeWidth: 2 
+            },
+          });
+        });
+      } else if (node.type === 'decision' && node.options) {
+        node.options.forEach(option => {
+          flowEdges.push({
+            id: `${node.id}-${option.actionId}`,
+            source: node.id,
+            target: option.actionId,
+            type: 'bezier',
+            label: option.label,
+            animated: node.status === 'active',
+            style: { 
+              stroke: node.selectedOption === option.actionId ? '#10b981' : '#6b7280',
+              strokeWidth: node.selectedOption === option.actionId ? 3 : 2 
+            },
+          });
+        });
+      }
+    });
+    setEdges(flowEdges);
   }, [timelineEngine, onTimelineUpdate]);
 
   const handleAddNode = useCallback((event: React.MouseEvent) => {
     if (!reactFlowInstance || !reactFlowWrapper.current) return;
 
+    // Get the center of the current viewport
     const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+    const centerX = reactFlowBounds.width / 2;
+    const centerY = reactFlowBounds.height / 2;
+    
     const position = project({
-      x: event.clientX - reactFlowBounds.left - 100,
-      y: event.clientY - reactFlowBounds.top - 50,
+      x: centerX,
+      y: centerY,
     });
 
     const id = generateId();
@@ -198,6 +261,38 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     timelineEngine.removeNode(nodeId);
+    onTimelineUpdate();
+  }, [timelineEngine, onTimelineUpdate]);
+
+  const handleStartFromHere = useCallback((actionId: string) => {
+    // Check if this is a manual mode start
+    if (actionId.startsWith('manual:')) {
+      const actualActionId = actionId.replace('manual:', '');
+      // If timeline is already running, just move to the new action
+      if (timelineEngine.isRunning) {
+        timelineEngine.currentNodeId = actualActionId;
+        timelineEngine.executionHistory.push(actualActionId);
+        timelineEngine.executeCurrentNodeManual();
+      } else {
+        // Start manual mode from the specific action
+        timelineEngine.currentNodeId = actualActionId;
+        timelineEngine.isRunning = true;
+        timelineEngine.isManualMode = true;
+        timelineEngine.sessionStartTime = Date.now();
+        timelineEngine.executionHistory = [actualActionId];
+        timelineEngine.executeCurrentNodeManual();
+      }
+    } else {
+      // If timeline is already running, just move to the new action
+      if (timelineEngine.isRunning) {
+        timelineEngine.currentNodeId = actionId;
+        timelineEngine.executionHistory.push(actionId);
+        timelineEngine.executeCurrentNode();
+      } else {
+        timelineEngine.start(actionId);
+      }
+    }
+    
     onTimelineUpdate();
   }, [timelineEngine, onTimelineUpdate]);
 
@@ -295,7 +390,13 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
     const stats = timelineEngine.getSessionStats();
     if (stats) {
       console.log('Session Stats:', stats);
-      alert(`Session Complete!\n\nTotal Time: ${formatDuration(stats.totalDuration)}\nSteps: ${stats.executionHistory.length}\n\nCheck console for detailed stats.`);
+      
+      // Build a detailed summary
+      const actionDetails = stats.completedActions.map(action => 
+        `${action.name}: ${formatDuration(action.actualDuration || 0)} (expected: ${formatDuration(action.expectedDuration)})`
+      ).join('\n');
+      
+      alert(`Session Complete!\n\nTotal Time: ${formatDuration(stats.totalTime)}\nActions Completed: ${stats.completedCount}\n\nAction Details:\n${actionDetails}\n\nCheck console for detailed stats.`);
     }
     timelineEngine.endManualMode();
     onTimelineUpdate();
@@ -326,38 +427,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         elementsSelectable={true}
         selectNodesOnDrag={!timelineEngine.isRunning}
       >
-                 <Panel position="top-left">
-           <div className="flex gap-1 bg-white p-1 rounded-lg shadow-lg border">
-             <Button
-               variant={selectedNodeType === 'action' ? 'default' : 'outline'}
-               size="sm"
-               onClick={() => setSelectedNodeType('action')}
-               className="text-xs px-2 py-1 h-7"
-               title="Action"
-             >
-               A
-             </Button>
-             <Button
-               variant={selectedNodeType === 'decision' ? 'default' : 'outline'}
-               size="sm"
-               onClick={() => setSelectedNodeType('decision')}
-               className="text-xs px-2 py-1 h-7"
-               title="Decision"
-             >
-               D
-             </Button>
-             <Button
-               onClick={handleAddNode}
-               className="text-xs px-2 py-1 h-7"
-               size="sm"
-               title={`Add ${selectedNodeType}`}
-             >
-               +
-             </Button>
-           </div>
-         </Panel>
-
-        <Panel position="top-right">
+                         <Panel position="top-left">
           <div className="flex flex-col gap-2">
             {/* Session Info Panel */}
             {timelineEngine.isManualMode && (
@@ -369,8 +439,18 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                   <div>• Current Step: {timelineEngine.currentNodeId ? timelineEngine.getNode(timelineEngine.currentNodeId)?.name : 'N/A'}</div>
                   <div>• Steps Completed: {timelineEngine.executionHistory.length - 1}</div>
                   {timelineEngine.sessionStartTime && (
-                    <div>• Elapsed: {formatDuration(currentTime - timelineEngine.sessionStartTime)}</div>
+                    <div>• Session Time: {formatDuration(currentTime - timelineEngine.sessionStartTime)}</div>
                   )}
+                  {/* Show captured time for completed actions */}
+                  {(() => {
+                    const completedActions = Array.from(timelineEngine.actions.values()).filter(action => 
+                      action.actualDuration !== null && action.actualDuration > 0
+                    );
+                    const totalCaptured = completedActions.reduce((sum, action) => sum + (action.actualDuration || 0), 0);
+                    return totalCaptured > 0 ? (
+                      <div>• Total Time: {formatDuration(totalCaptured)} ({completedActions.length} actions)</div>
+                    ) : null;
+                  })()}
                   {timelineEngine.timelineComplete && (
                     <div className="text-orange-600 font-medium">• Timeline Complete - Last task timer running</div>
                   )}
@@ -381,7 +461,64 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
               </div>
             )}
 
-                         {/* Auto mode controls */}
+                        {/* Node Type Selector */}
+            <div className="flex gap-1 bg-white p-1 rounded-lg shadow-lg border">
+              <Button
+                variant={selectedNodeType === 'action' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedNodeType('action')}
+                className="text-xs px-2 py-1 h-7"
+                title="Action"
+              >
+                A
+              </Button>
+              <Button
+                variant={selectedNodeType === 'decision' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedNodeType('decision')}
+                className="text-xs px-2 py-1 h-7"
+                title="Decision"
+              >
+                D
+              </Button>
+              <Button
+                onClick={handleAddNode}
+                className="text-xs px-2 py-1 h-7"
+                size="sm"
+                title={`Add ${selectedNodeType}`}
+              >
+                +
+              </Button>
+            </div>
+
+            {/* ETA Information Card */}
+            {(() => {
+              const { eta, totalDuration, actionCount } = calculateTimelineETA(timelineEngine);
+              if (actionCount === 0) return null;
+              
+              return (
+                <div className="bg-white p-2 rounded-lg shadow-lg border max-w-xs">
+                  <div className="space-y-1 text-xs text-gray-600">
+                    <div>• Duration: {formatDuration(totalDuration)}</div>
+                    <div>• Actions: {actionCount}</div>
+                    {eta && (
+                      <div className="font-medium text-blue-600">
+                        • ETA: {eta.toLocaleTimeString()}
+                      </div>
+                    )}
+                    <div className="text-gray-500 italic">
+                      If you start now
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </Panel>
+
+        <Panel position="top-right">
+          <div className="flex flex-col gap-2">
+            {/* Auto mode controls */}
              <div className="flex gap-0.5 bg-white p-1 rounded-lg shadow-lg border">
                {!timelineEngine.isRunning ? (
                  <Button

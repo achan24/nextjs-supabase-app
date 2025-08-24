@@ -10,13 +10,14 @@ interface ActionNodeData {
   action: Action;
   onEdit: (action: Action) => void;
   onDelete: (id: string) => void;
+  onStartFromHere?: (actionId: string) => void;
   isTimelineRunning: boolean;
   isManualMode?: boolean;
   timelineComplete?: boolean;
 }
 
 const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => {
-  const { action, onEdit, onDelete, isTimelineRunning, isManualMode, timelineComplete } = data || {};
+  const { action, onEdit, onDelete, onStartFromHere, isTimelineRunning, isManualMode, timelineComplete } = data || {};
   const [currentTime, setCurrentTime] = React.useState(Date.now());
   
   if (!action) return <div className="text-red-500 p-2">Invalid action</div>;
@@ -79,36 +80,44 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
       className="relative w-fit select-none"
       style={{ width: LINE_WIDTH }}
     >
-      {/* Left connector */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="w-3 h-3 !bg-gray-400"
-      />
-
-      {/* Header: status + name (no absolute positioning) */}
-      <div className="mb-1 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      {/* Bar with connectors positioned on it */}
+      <div className="relative" style={{ width: LINE_WIDTH, height: BAR_HEIGHT }}>
+        {/* Text label floating above the bar */}
+        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 flex items-center gap-2">
           {statusIcon}
           <span
-            className="text-xs sm:text-sm font-medium text-gray-900"
+            className="text-xs sm:text-sm font-medium text-gray-900 text-center whitespace-nowrap"
             title={action.description || ''}
           >
             {action.name}
           </span>
         </div>
 
+        {/* Left connector */}
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="w-3 h-3 !bg-gray-400"
+          style={{ top: '50%', transform: 'translateY(-50%)' }}
+        />
 
-      </div>
+        {/* Progress bar */}
+        <div className={barClasses} style={{ width: LINE_WIDTH, height: BAR_HEIGHT }}>
+          {action.status === 'running' && action.progress > 0 && (
+            <div
+              className="absolute inset-y-0 left-0 bg-white/40 border-r border-white transition-all duration-300"
+              style={{ width: `${action.progress}%` }}
+            />
+          )}
+        </div>
 
-      {/* Bar */}
-      <div className={barClasses} style={{ width: LINE_WIDTH, height: BAR_HEIGHT }}>
-        {action.status === 'running' && action.progress > 0 && (
-          <div
-            className="absolute inset-y-0 left-0 bg-white/40 border-r border-white transition-all duration-300"
-            style={{ width: `${action.progress}%` }}
-          />
-        )}
+        {/* Right connector */}
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="w-3 h-3 !bg-gray-400"
+          style={{ top: '50%', transform: 'translateY(-50%)' }}
+        />
       </div>
 
       {/* Footer: duration | progress | speed */}
@@ -142,31 +151,46 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
           {action.status === 'running' ? speedEmoji : null}
         </span>
       </div>
-
-      {/* Right connector */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-3 h-3 !bg-gray-400"
-      />
       
-      {/* Edit/Delete buttons below node */}
-      {selected && !isTimelineRunning && (
+      {/* Edit/Delete/Start buttons below node */}
+      {selected && (
         <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 flex gap-0.5">
-          <button
-            onClick={() => onEdit(action)}
-            className="text-xs px-1 py-0.5 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
-            title="Edit"
-          >
-            ✏️
-          </button>
-          <button
-            onClick={() => onDelete(action.id)}
-            className="text-xs px-1 py-0.5 bg-red-100 text-red-700 rounded border hover:bg-red-200"
-            title="Delete"
-          >
-            🗑️
-          </button>
+          {!isTimelineRunning && (
+            <>
+              <button
+                onClick={() => onEdit(action)}
+                className="text-xs px-1 py-0.5 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
+                title="Edit"
+              >
+                ✏️
+              </button>
+              <button
+                onClick={() => onDelete(action.id)}
+                className="text-xs px-1 py-0.5 bg-red-100 text-red-700 rounded border hover:bg-red-200"
+                title="Delete"
+              >
+                🗑️
+              </button>
+            </>
+          )}
+          {onStartFromHere && (
+            <>
+              <button
+                onClick={() => onStartFromHere(action.id)}
+                className="text-xs px-1 py-0.5 bg-green-100 text-green-700 rounded border hover:bg-green-200"
+                title="Start from here"
+              >
+                ▶️
+              </button>
+              <button
+                onClick={() => onStartFromHere(`manual:${action.id}`)}
+                className="text-xs px-1 py-0.5 bg-orange-100 text-orange-700 rounded border hover:bg-orange-200"
+                title="Start manual from here"
+              >
+                ⏱️
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

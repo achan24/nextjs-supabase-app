@@ -446,22 +446,33 @@ export class TimelineEngine {
   }
 
   getSessionStats() {
-    if (!this.sessionStartTime || !this.sessionEndTime) {
-      return null;
-    }
+    // Simply look at all completed actions and sum their actual durations
+    const completedActions = Array.from(this.actions.values()).filter(action => 
+      action.actualDuration !== null && action.actualDuration > 0
+    );
+    
+    const totalTime = completedActions.reduce((sum, action) => 
+      sum + (action.actualDuration || 0), 0
+    );
 
-    const totalDuration = this.sessionEndTime - this.sessionStartTime;
-    const actionStats = Array.from(this.actions.values()).map(action => ({
+    const actionStats = completedActions.map(action => ({
       id: action.id,
       name: action.name,
       actualDuration: action.actualDuration,
+      expectedDuration: action.duration,
+      startTime: action.startTime,
+      endTime: action.endTime,
       executionHistory: action.executionHistory
     }));
 
     return {
-      totalDuration,
-      actionStats,
-      executionHistory: this.executionHistory
+      totalTime,
+      completedActions: actionStats,
+      completedCount: completedActions.length,
+      sessionStartTime: this.sessionStartTime,
+      sessionEndTime: this.sessionEndTime,
+      executionHistory: this.executionHistory,
+      isManualMode: this.isManualMode
     };
   }
 
