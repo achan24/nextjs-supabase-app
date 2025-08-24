@@ -429,8 +429,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
       >
                          <Panel position="top-left">
           <div className="flex flex-col gap-2">
-            {/* Session Info Panel */}
-            {timelineEngine.isManualMode && (
+            {/* Session Info Panel - Only show when not running */}
+            {timelineEngine.isManualMode && !timelineEngine.isRunning && (
               <div className="bg-white p-3 rounded-lg shadow-lg border max-w-xs">
                 <div className="text-xs font-medium text-gray-700 mb-2">Session Data:</div>
                 <div className="space-y-1 text-xs text-gray-600">
@@ -494,21 +494,38 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
             {/* ETA Information Card */}
             {(() => {
               const { eta, totalDuration, actionCount } = calculateTimelineETA(timelineEngine);
-              if (actionCount === 0) return null;
+              if (actionCount === 0 || timelineEngine.isRunning) return null;
               
               return (
                 <div className="bg-white p-2 rounded-lg shadow-lg border max-w-xs">
                   <div className="space-y-1 text-xs text-gray-600">
-                    <div>• Duration: {formatDuration(totalDuration)}</div>
-                    <div>• Actions: {actionCount}</div>
-                    {eta && (
-                      <div className="font-medium text-blue-600">
-                        • ETA: {eta.toLocaleTimeString()}
-                      </div>
+                    {timelineEngine.isManualMode ? (
+                      // When in manual mode, show only ETA
+                      <>
+                        {eta && (
+                          <div className="font-medium text-blue-600">
+                            • ETA: {eta.toLocaleTimeString()}
+                          </div>
+                        )}
+                        <div className="text-gray-500 italic">
+                          If you start now
+                        </div>
+                      </>
+                    ) : (
+                      // When not in manual mode, show full info
+                      <>
+                        <div>• Duration: {formatDuration(totalDuration)}</div>
+                        <div>• Actions: {actionCount}</div>
+                        {eta && (
+                          <div className="font-medium text-blue-600">
+                            • ETA: {eta.toLocaleTimeString()}
+                          </div>
+                        )}
+                        <div className="text-gray-500 italic">
+                          If you start now
+                        </div>
+                      </>
                     )}
-                    <div className="text-gray-500 italic">
-                      If you start now
-                    </div>
                   </div>
                 </div>
               );
@@ -615,6 +632,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
           style={{ width: 100, height: 75 }}
           nodeColor="#6b7280"
           maskColor="rgba(0, 0, 0, 0.1)"
+          className="hidden md:block"
         />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
       </ReactFlow>
