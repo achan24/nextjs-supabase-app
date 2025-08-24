@@ -429,9 +429,9 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
       >
                          <Panel position="top-left">
           <div className="flex flex-col gap-2">
-            {/* Session Info Panel - Only show when not running */}
+            {/* Session Info Panel - Only show when not running, hidden on mobile */}
             {timelineEngine.isManualMode && !timelineEngine.isRunning && (
-              <div className="bg-white p-3 rounded-lg shadow-lg border max-w-xs">
+              <div className="hidden md:block bg-white p-3 rounded-lg shadow-lg border max-w-xs">
                 <div className="text-xs font-medium text-gray-700 mb-2">Session Data:</div>
                 <div className="space-y-1 text-xs text-gray-600">
                   <div>• Session #{timelineEngine.executionHistory.length}</div>
@@ -491,13 +491,13 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
               </Button>
             </div>
 
-            {/* ETA Information Card */}
+            {/* ETA Information Card - Hidden on mobile */}
             {(() => {
               const { eta, totalDuration, actionCount } = calculateTimelineETA(timelineEngine);
               if (actionCount === 0 || timelineEngine.isRunning) return null;
               
               return (
-                <div className="bg-white p-2 rounded-lg shadow-lg border max-w-xs">
+                <div className="hidden md:block bg-white p-2 rounded-lg shadow-lg border max-w-xs">
                   <div className="space-y-1 text-xs text-gray-600">
                     {timelineEngine.isManualMode ? (
                       // When in manual mode, show only ETA
@@ -536,11 +536,11 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         <Panel position="top-right">
           <div className="flex flex-col gap-2">
             {/* Auto mode controls */}
-             <div className="flex gap-0.5 bg-white p-1 rounded-lg shadow-lg border">
+             <div className="flex gap-1 bg-white p-2 rounded-lg shadow-lg border">
                {!timelineEngine.isRunning ? (
                  <Button
                    onClick={handleStart}
-                   className="text-xs px-1 py-0.5 h-6"
+                   className="text-sm px-2 py-1 h-8 touch-manipulation"
                    size="sm"
                    disabled={timelineEngine.getAllNodes().length === 0}
                    title="Auto"
@@ -550,7 +550,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                ) : (
                  <Button
                    onClick={handlePause}
-                   className="text-xs px-1 py-0.5 h-6 bg-yellow-500 hover:bg-yellow-600"
+                   className="text-sm px-2 py-1 h-8 bg-yellow-500 hover:bg-yellow-600 touch-manipulation"
                    size="sm"
                    title="Pause"
                  >
@@ -561,7 +561,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                {timelineEngine.isRunning && (
                  <Button
                    onClick={handleStop}
-                   className="text-xs px-1 py-0.5 h-6 bg-red-500 hover:bg-red-600"
+                   className="text-sm px-2 py-1 h-8 bg-red-500 hover:bg-red-600 touch-manipulation"
                    size="sm"
                    title="Stop"
                  >
@@ -571,7 +571,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                
                <Button
                  onClick={handleReset}
-                 className="text-xs px-1 py-0.5 h-6 bg-gray-500 hover:bg-gray-600"
+                 className="text-sm px-2 py-1 h-8 bg-gray-500 hover:bg-gray-600 touch-manipulation"
                  size="sm"
                  title="Reset"
                >
@@ -580,7 +580,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                
                <Button
                  onClick={() => setShowHistory(true)}
-                 className="text-xs px-1 py-0.5 h-6 bg-blue-500 hover:bg-blue-600"
+                 className="text-sm px-2 py-1 h-8 bg-blue-500 hover:bg-blue-600 touch-manipulation"
                  size="sm"
                  disabled={timelineEngine.actions.size === 0}
                  title="History"
@@ -590,36 +590,36 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
              </div>
 
                          {/* Manual mode controls */}
-             <div className="flex gap-0.5 bg-white p-1 rounded-lg shadow-lg border">
+             <div className="flex gap-1 bg-white p-2 rounded-lg shadow-lg border">
                {!timelineEngine.isRunning ? (
                  <Button
                    onClick={handleStartManualMode}
-                   className="text-xs px-1 py-0.5 h-6 bg-green-600 hover:bg-green-700"
+                   className="text-sm px-3 py-2 h-10 bg-green-600 hover:bg-green-700 touch-manipulation"
                    size="sm"
                    disabled={timelineEngine.getAllNodes().length === 0}
                    title="Manual"
                  >
-                   ⏱️
+                   ⏱️ Manual
                  </Button>
                ) : timelineEngine.isManualMode ? (
                  <>
                    {!timelineEngine.timelineComplete && (
                      <Button
                        onClick={handleNextStep}
-                       className="text-xs px-1 py-0.5 h-6 bg-blue-600 hover:bg-blue-700"
+                       className="text-sm px-3 py-2 h-10 bg-blue-600 hover:bg-blue-700 touch-manipulation"
                        size="sm"
                        title="Next"
                      >
-                       ⏭️
+                       ⏭️ Next
                      </Button>
                    )}
                    <Button
                      onClick={handleEndManualMode}
-                     className="text-xs px-1 py-0.5 h-6 bg-orange-600 hover:bg-orange-700"
+                     className="text-sm px-3 py-2 h-10 bg-orange-600 hover:bg-orange-700 touch-manipulation"
                      size="sm"
                      title={timelineEngine.timelineComplete ? "End Session" : "End"}
                    >
-                     {timelineEngine.timelineComplete ? "🏁" : "🏁"}
+                     {timelineEngine.timelineComplete ? "🏁 End" : "🏁 End"}
                    </Button>
                  </>
                ) : null}
