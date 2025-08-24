@@ -166,20 +166,20 @@ const DecisionNode: React.FC<NodeProps<DecisionNodeData>> = ({ data, selected })
       
       {/* Edit/Delete buttons below node */}
       {selected && !isTimelineRunning && (
-        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 flex gap-1">
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 flex gap-0.5">
           <button
             onClick={() => onEdit(decisionPoint)}
-            className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 border"
+            className="text-xs px-1 py-0.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 border"
+            title="Edit"
           >
-            <span className="hidden sm:inline">Edit</span>
-            <span className="sm:hidden">✏️</span>
+            ✏️
           </button>
           <button
             onClick={() => onDelete(decisionPoint.id)}
-            className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 border"
+            className="text-xs px-1 py-0.5 bg-red-100 text-red-600 rounded hover:bg-red-200 border"
+            title="Delete"
           >
-            <span className="hidden sm:inline">Delete</span>
-            <span className="sm:hidden">🗑️</span>
+            🗑️
           </button>
         </div>
       )}

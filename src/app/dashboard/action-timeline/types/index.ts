@@ -16,6 +16,13 @@ export class Action {
   startTime: number | null;
   endTime: number | null;
   progress: number; // 0-100
+  actualDuration: number | null; // actual time taken in milliseconds
+  executionHistory: Array<{
+    startTime: number;
+    endTime: number;
+    duration: number;
+    timestamp: string;
+  }> = [];
 
   constructor({
     id,
@@ -46,6 +53,7 @@ export class Action {
     this.startTime = null;
     this.endTime = null;
     this.progress = 0;
+    this.actualDuration = null;
   }
 
   start() {
@@ -57,18 +65,28 @@ export class Action {
   complete() {
     this.status = 'completed';
     this.progress = 100;
+    if (this.startTime) {
+      this.actualDuration = Date.now() - this.startTime;
+      this.executionHistory.push({
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: this.actualDuration,
+        timestamp: new Date().toISOString()
+      });
+    }
   }
 
   pause() {
     this.status = 'paused';
   }
 
-  updateProgress() {
+  updateProgress(isManualMode = false) {
     if (this.status === 'running' && this.startTime) {
       const elapsed = Date.now() - this.startTime;
       this.progress = Math.min(100, (elapsed / this.duration) * 100);
       
-      if (this.progress >= 100) {
+      // Only auto-complete if not in manual mode
+      if (this.progress >= 100 && !isManualMode) {
         this.complete();
       }
     }
@@ -149,7 +167,12 @@ export class TimelineEngine {
   currentNodeId: string | null;
   executionHistory: string[];
   isRunning: boolean;
+  isManualMode: boolean;
+  sessionStartTime: number | null;
+  sessionEndTime: number | null;
+  timelineComplete: boolean; // Track if timeline is complete but session still running
   listeners: Set<() => void>;
+  private progressInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.actions = new Map();
@@ -157,6 +180,10 @@ export class TimelineEngine {
     this.currentNodeId = null;
     this.executionHistory = [];
     this.isRunning = false;
+    this.isManualMode = false;
+    this.sessionStartTime = null;
+    this.sessionEndTime = null;
+    this.timelineComplete = false;
     this.listeners = new Set();
   }
 
@@ -225,13 +252,21 @@ export class TimelineEngine {
     action.start();
     this.notifyListeners();
 
+    // Clear any existing interval
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+    }
+
     // Set up timer to track progress
-    const interval = setInterval(() => {
-      action.updateProgress();
+    this.progressInterval = setInterval(() => {
+      action.updateProgress(this.isManualMode);
       this.notifyListeners();
 
       if (action.status === 'completed') {
-        clearInterval(interval);
+        if (this.progressInterval) {
+          clearInterval(this.progressInterval);
+          this.progressInterval = null;
+        }
         this.onActionComplete(action);
       }
     }, 100); // Update every 100ms
@@ -293,21 +328,159 @@ export class TimelineEngine {
   }
 
   stop() {
+    // Clear any existing interval
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+    
     this.isRunning = false;
     this.currentNodeId = null;
     this.notifyListeners();
   }
 
+  // Manual step mode methods
+  startManualMode(startNodeId: string) {
+    if (!startNodeId || !this.getNode(startNodeId)) {
+      throw new Error('Invalid start node');
+    }
+    
+    this.currentNodeId = startNodeId;
+    this.isRunning = true;
+    this.isManualMode = true;
+    this.sessionStartTime = Date.now();
+    this.executionHistory = [startNodeId];
+    
+    this.executeCurrentNodeManual();
+  }
+
+  executeCurrentNodeManual() {
+    const currentNode = this.getNode(this.currentNodeId!);
+    if (!currentNode) return;
+
+    if (currentNode.type === 'action') {
+      currentNode.start();
+      this.notifyListeners();
+
+      // Clear any existing interval
+      if (this.progressInterval) {
+        clearInterval(this.progressInterval);
+      }
+
+      // Set up timer to track progress (but don't auto-complete in manual mode)
+      this.progressInterval = setInterval(() => {
+        currentNode.updateProgress(true); // Pass true for manual mode
+        this.notifyListeners();
+      }, 100); // Update every 100ms
+    } else if (currentNode.type === 'decision') {
+      currentNode.activate();
+      this.notifyListeners();
+    }
+  }
+
+  nextStep() {
+    const currentNode = this.getNode(this.currentNodeId!);
+    if (!currentNode) return;
+
+    // Find next node first to check if this is the last task
+    const nextNodeId = this.getNextNodeId();
+    
+    if (nextNodeId) {
+      // Complete the current node and move to next
+      if (currentNode.type === 'action') {
+        currentNode.complete();
+      } else if (currentNode.type === 'decision') {
+        // For decisions, we need a selected option to proceed
+        if (!currentNode.selectedOption) {
+          console.warn('Cannot proceed: no option selected for decision');
+          return;
+        }
+      }
+      this.moveToNodeManual(nextNodeId);
+    } else {
+      // This is the last task - don't complete it, just mark timeline as complete
+      // Keep the current task running so the timer continues
+      this.timelineComplete = true;
+      console.log('Reached end of timeline - last task continues running. Press End to complete session.');
+    }
+  }
+
+  getNextNodeId(): string | null {
+    const currentNode = this.getNode(this.currentNodeId!);
+    if (!currentNode) return null;
+
+    if (currentNode.type === 'action') {
+      const nextNodes = currentNode.connections;
+      return nextNodes.length > 0 ? nextNodes[0] : null;
+    } else if (currentNode.type === 'decision') {
+      return currentNode.selectedOption || null;
+    }
+
+    return null;
+  }
+
+  moveToNodeManual(nodeId: string) {
+    this.currentNodeId = nodeId;
+    this.executionHistory.push(nodeId);
+    this.executeCurrentNodeManual();
+  }
+
+  endManualMode() {
+    // Clear any existing interval
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+    
+    // Complete the current task if it's still running
+    const currentNode = this.getNode(this.currentNodeId!);
+    if (currentNode && currentNode.type === 'action' && currentNode.status === 'running') {
+      currentNode.complete();
+    }
+    
+    this.isRunning = false;
+    this.isManualMode = false;
+    this.timelineComplete = false;
+    this.sessionEndTime = Date.now();
+    this.notifyListeners();
+  }
+
+  getSessionStats() {
+    if (!this.sessionStartTime || !this.sessionEndTime) {
+      return null;
+    }
+
+    const totalDuration = this.sessionEndTime - this.sessionStartTime;
+    const actionStats = Array.from(this.actions.values()).map(action => ({
+      id: action.id,
+      name: action.name,
+      actualDuration: action.actualDuration,
+      executionHistory: action.executionHistory
+    }));
+
+    return {
+      totalDuration,
+      actionStats,
+      executionHistory: this.executionHistory
+    };
+  }
+
   reset() {
     this.stop();
     this.executionHistory = [];
+    this.sessionStartTime = null;
+    this.sessionEndTime = null;
+    this.isManualMode = false;
+    this.timelineComplete = false;
     
-    // Reset all nodes
+    // Reset all nodes and clear their execution history
     this.actions.forEach(action => {
       action.status = 'pending';
       action.progress = 0;
       action.startTime = null;
       action.endTime = null;
+      action.actualDuration = null;
+      action.executionHistory = [];
     });
     
     this.decisionPoints.forEach(dp => {

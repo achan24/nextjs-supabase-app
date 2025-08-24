@@ -11,16 +11,48 @@ interface ActionNodeData {
   onEdit: (action: Action) => void;
   onDelete: (id: string) => void;
   isTimelineRunning: boolean;
+  isManualMode?: boolean;
+  timelineComplete?: boolean;
 }
 
 const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => {
-  const { action, onEdit, onDelete, isTimelineRunning } = data || {};
+  const { action, onEdit, onDelete, isTimelineRunning, isManualMode, timelineComplete } = data || {};
+  const [currentTime, setCurrentTime] = React.useState(Date.now());
+  
   if (!action) return <div className="text-red-500 p-2">Invalid action</div>;
+
+  // Update timer for manual mode
+  React.useEffect(() => {
+    if (isManualMode && action.startTime) {
+      const interval = setInterval(() => {
+        setCurrentTime(Date.now());
+      }, 100); // Update every 100ms
+
+      return () => clearInterval(interval);
+    }
+  }, [isManualMode, action.startTime]);
+
+  const getElapsedTime = () => {
+    if (isManualMode && action.startTime) {
+      if (action.status === 'running') {
+        return currentTime - action.startTime;
+      } else if (action.status === 'completed' && action.actualDuration) {
+        return action.actualDuration;
+      }
+    }
+    return 0;
+  };
 
   const statusIcon = (() => {
     switch (action.status) {
       case 'running':
-        return <div className="w-3 h-3 bg-blue-500 rounded-full ring-2 ring-blue-300 ring-opacity-50" />;
+        return (
+          <div className={`w-3 h-3 rounded-full ring-2 ring-opacity-50 ${
+            timelineComplete 
+              ? 'bg-purple-500 ring-purple-300' 
+              : 'bg-blue-500 ring-blue-300'
+          }`} />
+        );
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'paused':
@@ -34,7 +66,7 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
 
   const barClasses = [
     'relative rounded-sm border shadow-sm transition-all duration-300',
-    action.status === 'running' ? 'bg-blue-600 border-blue-700' :
+    action.status === 'running' ? (timelineComplete ? 'bg-purple-600 border-purple-700' : 'bg-blue-600 border-blue-700') :
     action.status === 'completed' ? 'bg-green-500 border-green-600' :
     action.status === 'paused' ? 'bg-yellow-500 border-yellow-600' :
     'bg-blue-500 border-blue-600',
@@ -82,10 +114,23 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
       {/* Footer: duration | progress | speed */}
       <div className="mt-1 grid grid-cols-3 items-center text-xs">
         <span className="justify-self-start text-gray-700 text-xs">
-          {formatDuration(action.duration)}
+          {isManualMode && action.status === 'running' ? 
+            `${formatDuration(getElapsedTime())} (${formatDuration(action.duration)})` :
+            action.actualDuration ? 
+              `${formatDuration(action.actualDuration)} (${formatDuration(action.duration)})` : 
+              formatDuration(action.duration)
+          }
         </span>
 
-        {action.status === 'running' && action.progress > 0 ? (
+        {isManualMode && action.status === 'running' ? (
+          <span className={`justify-self-center font-medium text-xs ${timelineComplete ? 'text-purple-600' : 'text-orange-600'} ${timelineComplete ? '' : 'animate-pulse'}`}>
+            {timelineComplete ? '🏁 ' : '⏱️ '}{formatDuration(getElapsedTime())}
+          </span>
+        ) : isManualMode && action.status === 'completed' && action.startTime ? (
+          <span className="justify-self-center font-medium text-green-600 text-xs">
+            ⏱️ {formatDuration(getElapsedTime())}
+          </span>
+        ) : action.status === 'running' && action.progress > 0 ? (
           <span className="justify-self-center font-medium text-blue-600 text-xs">
             {Math.round(action.progress)}%
           </span>
@@ -107,20 +152,20 @@ const ActionNode: React.FC<NodeProps<ActionNodeData>> = ({ data, selected }) => 
       
       {/* Edit/Delete buttons below node */}
       {selected && !isTimelineRunning && (
-        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 flex gap-1">
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 flex gap-0.5">
           <button
             onClick={() => onEdit(action)}
-            className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
+            className="text-xs px-1 py-0.5 bg-blue-100 text-blue-700 rounded border hover:bg-blue-200"
+            title="Edit"
           >
-            <span className="hidden sm:inline">Edit</span>
-            <span className="sm:hidden">✏️</span>
+            ✏️
           </button>
           <button
             onClick={() => onDelete(action.id)}
-            className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded border hover:bg-red-200"
+            className="text-xs px-1 py-0.5 bg-red-100 text-red-700 rounded border hover:bg-red-200"
+            title="Delete"
           >
-            <span className="hidden sm:inline">Delete</span>
-            <span className="sm:hidden">🗑️</span>
+            🗑️
           </button>
         </div>
       )}

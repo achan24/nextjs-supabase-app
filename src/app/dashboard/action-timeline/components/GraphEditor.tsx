@@ -19,9 +19,10 @@ import 'reactflow/dist/style.css';
 import ActionNode from './ActionNode';
 import DecisionNode from './DecisionNode';
 import NodeEditModal from './NodeEditModal';
-import { Action, DecisionPoint, generateId, TimelineEngine } from '../types';
-import { Plus, Play, Pause, Square, RotateCcw } from 'lucide-react';
+import { Action, DecisionPoint, generateId, TimelineEngine, formatDuration } from '../types';
+import { Plus, Play, Pause, Square, RotateCcw, StepForward, Clock, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // Define nodeTypes outside component to prevent React Flow warnings
 const nodeTypes = {
@@ -41,6 +42,19 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [editingNode, setEditingNode] = useState<any>(null);
   const [selectedNodeType, setSelectedNodeType] = useState<'action' | 'decision'>('action');
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Update session timer
+  React.useEffect(() => {
+    if (timelineEngine.isManualMode && timelineEngine.sessionStartTime) {
+      const interval = setInterval(() => {
+        setCurrentTime(Date.now());
+      }, 1000); // Update every second
+
+      return () => clearInterval(interval);
+    }
+  }, [timelineEngine.isManualMode, timelineEngine.sessionStartTime]);
   
   const { project } = useReactFlow();
 
@@ -63,6 +77,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
           onDelete: handleDeleteNode,
           onMakeDecision: handleMakeDecision,
           isTimelineRunning: timelineEngine.isRunning, // Pass timeline state
+          isManualMode: timelineEngine.isManualMode, // Pass manual mode state
+          timelineComplete: timelineEngine.timelineComplete, // Pass timeline completion state
         },
       }));
 
@@ -249,6 +265,42 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
     onTimelineUpdate();
   }, [timelineEngine, onTimelineUpdate]);
 
+  const handleStartManualMode = useCallback(() => {
+    const startNodes = timelineEngine.getAllNodes().filter(node => {
+      // Find nodes with no incoming connections
+      const allNodes = timelineEngine.getAllNodes();
+      const hasIncoming = allNodes.some(n => {
+        if (n.type === 'action') {
+          return n.connections.includes(node.id);
+        } else if (n.type === 'decision') {
+          return n.options.some(opt => opt.actionId === node.id);
+        }
+        return false;
+      });
+      return !hasIncoming;
+    });
+
+    if (startNodes.length > 0) {
+      timelineEngine.startManualMode(startNodes[0].id);
+      onTimelineUpdate();
+    }
+  }, [timelineEngine, onTimelineUpdate]);
+
+  const handleNextStep = useCallback(() => {
+    timelineEngine.nextStep();
+    onTimelineUpdate();
+  }, [timelineEngine, onTimelineUpdate]);
+
+  const handleEndManualMode = useCallback(() => {
+    const stats = timelineEngine.getSessionStats();
+    if (stats) {
+      console.log('Session Stats:', stats);
+      alert(`Session Complete!\n\nTotal Time: ${formatDuration(stats.totalDuration)}\nSteps: ${stats.executionHistory.length}\n\nCheck console for detailed stats.`);
+    }
+    timelineEngine.endManualMode();
+    onTimelineUpdate();
+  }, [timelineEngine, onTimelineUpdate]);
+
   return (
     <div className="w-full h-full" ref={reactFlowWrapper}>
       {/* Execution Mode Overlay */}
@@ -274,92 +326,159 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         elementsSelectable={true}
         selectNodesOnDrag={!timelineEngine.isRunning}
       >
-        <Panel position="top-left">
-          <div className="flex flex-col gap-2 bg-white p-2 sm:p-3 rounded-lg shadow-lg border">
-            <div className="text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Add Node:</div>
-            <div className="flex gap-1 sm:gap-2">
-              <Button
-                variant={selectedNodeType === 'action' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedNodeType('action')}
-                className="text-xs px-2 sm:px-3"
-              >
-                <span className="hidden sm:inline">Action</span>
-                <span className="sm:hidden">A</span>
-              </Button>
-              <Button
-                variant={selectedNodeType === 'decision' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedNodeType('decision')}
-                className="text-xs px-2 sm:px-3"
-              >
-                <span className="hidden sm:inline">Decision</span>
-                <span className="sm:hidden">D</span>
-              </Button>
-            </div>
-            <Button
-              onClick={handleAddNode}
-              className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-              size="sm"
-            >
-              <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Add {selectedNodeType}</span>
-              <span className="sm:hidden">+</span>
-            </Button>
-          </div>
-        </Panel>
+                 <Panel position="top-left">
+           <div className="flex gap-1 bg-white p-1 rounded-lg shadow-lg border">
+             <Button
+               variant={selectedNodeType === 'action' ? 'default' : 'outline'}
+               size="sm"
+               onClick={() => setSelectedNodeType('action')}
+               className="text-xs px-2 py-1 h-7"
+               title="Action"
+             >
+               A
+             </Button>
+             <Button
+               variant={selectedNodeType === 'decision' ? 'default' : 'outline'}
+               size="sm"
+               onClick={() => setSelectedNodeType('decision')}
+               className="text-xs px-2 py-1 h-7"
+               title="Decision"
+             >
+               D
+             </Button>
+             <Button
+               onClick={handleAddNode}
+               className="text-xs px-2 py-1 h-7"
+               size="sm"
+               title={`Add ${selectedNodeType}`}
+             >
+               +
+             </Button>
+           </div>
+         </Panel>
 
         <Panel position="top-right">
-          <div className="flex gap-1 sm:gap-2 bg-white p-2 sm:p-3 rounded-lg shadow-lg border">
-            {!timelineEngine.isRunning ? (
-              <Button
-                onClick={handleStart}
-                className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-                size="sm"
-                disabled={timelineEngine.getAllNodes().length === 0}
-              >
-                <Play className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Start</span>
-                <span className="sm:hidden">▶️</span>
-              </Button>
-            ) : (
-              <Button
-                onClick={handlePause}
-                className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm bg-yellow-500 hover:bg-yellow-600"
-                size="sm"
-              >
-                <Pause className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Pause</span>
-                <span className="sm:hidden">⏸️</span>
-              </Button>
+          <div className="flex flex-col gap-2">
+            {/* Session Info Panel */}
+            {timelineEngine.isManualMode && (
+              <div className="bg-white p-3 rounded-lg shadow-lg border max-w-xs">
+                <div className="text-xs font-medium text-gray-700 mb-2">Session Data:</div>
+                <div className="space-y-1 text-xs text-gray-600">
+                  <div>• Session #{timelineEngine.executionHistory.length}</div>
+                  <div>• Start: {timelineEngine.sessionStartTime ? new Date(timelineEngine.sessionStartTime).toLocaleTimeString() : 'N/A'}</div>
+                  <div>• Current Step: {timelineEngine.currentNodeId ? timelineEngine.getNode(timelineEngine.currentNodeId)?.name : 'N/A'}</div>
+                  <div>• Steps Completed: {timelineEngine.executionHistory.length - 1}</div>
+                  {timelineEngine.sessionStartTime && (
+                    <div>• Elapsed: {formatDuration(currentTime - timelineEngine.sessionStartTime)}</div>
+                  )}
+                  {timelineEngine.timelineComplete && (
+                    <div className="text-orange-600 font-medium">• Timeline Complete - Last task timer running</div>
+                  )}
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  Data saved: timestamps, durations, performance metrics
+                </div>
+              </div>
             )}
-            
-            {timelineEngine.isRunning && (
-              <Button
-                onClick={handleStop}
-                className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm bg-red-500 hover:bg-red-600"
-                size="sm"
-              >
-                <Square className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Stop</span>
-                <span className="sm:hidden">⏹️</span>
-              </Button>
-            )}
-            
-            <Button
-              onClick={handleReset}
-              className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm bg-gray-500 hover:bg-gray-600"
-              size="sm"
-            >
-              <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Reset</span>
-              <span className="sm:hidden">🔄</span>
-            </Button>
+
+                         {/* Auto mode controls */}
+             <div className="flex gap-0.5 bg-white p-1 rounded-lg shadow-lg border">
+               {!timelineEngine.isRunning ? (
+                 <Button
+                   onClick={handleStart}
+                   className="text-xs px-1 py-0.5 h-6"
+                   size="sm"
+                   disabled={timelineEngine.getAllNodes().length === 0}
+                   title="Auto"
+                 >
+                   ▶️
+                 </Button>
+               ) : (
+                 <Button
+                   onClick={handlePause}
+                   className="text-xs px-1 py-0.5 h-6 bg-yellow-500 hover:bg-yellow-600"
+                   size="sm"
+                   title="Pause"
+                 >
+                   ⏸️
+                 </Button>
+               )}
+               
+               {timelineEngine.isRunning && (
+                 <Button
+                   onClick={handleStop}
+                   className="text-xs px-1 py-0.5 h-6 bg-red-500 hover:bg-red-600"
+                   size="sm"
+                   title="Stop"
+                 >
+                   ⏹️
+                 </Button>
+               )}
+               
+               <Button
+                 onClick={handleReset}
+                 className="text-xs px-1 py-0.5 h-6 bg-gray-500 hover:bg-gray-600"
+                 size="sm"
+                 title="Reset"
+               >
+                 🔄
+               </Button>
+               
+               <Button
+                 onClick={() => setShowHistory(true)}
+                 className="text-xs px-1 py-0.5 h-6 bg-blue-500 hover:bg-blue-600"
+                 size="sm"
+                 disabled={timelineEngine.actions.size === 0}
+                 title="History"
+               >
+                 📊
+               </Button>
+             </div>
+
+                         {/* Manual mode controls */}
+             <div className="flex gap-0.5 bg-white p-1 rounded-lg shadow-lg border">
+               {!timelineEngine.isRunning ? (
+                 <Button
+                   onClick={handleStartManualMode}
+                   className="text-xs px-1 py-0.5 h-6 bg-green-600 hover:bg-green-700"
+                   size="sm"
+                   disabled={timelineEngine.getAllNodes().length === 0}
+                   title="Manual"
+                 >
+                   ⏱️
+                 </Button>
+               ) : timelineEngine.isManualMode ? (
+                 <>
+                   {!timelineEngine.timelineComplete && (
+                     <Button
+                       onClick={handleNextStep}
+                       className="text-xs px-1 py-0.5 h-6 bg-blue-600 hover:bg-blue-700"
+                       size="sm"
+                       title="Next"
+                     >
+                       ⏭️
+                     </Button>
+                   )}
+                   <Button
+                     onClick={handleEndManualMode}
+                     className="text-xs px-1 py-0.5 h-6 bg-orange-600 hover:bg-orange-700"
+                     size="sm"
+                     title={timelineEngine.timelineComplete ? "End Session" : "End"}
+                   >
+                     {timelineEngine.timelineComplete ? "🏁" : "🏁"}
+                   </Button>
+                 </>
+               ) : null}
+             </div>
           </div>
         </Panel>
 
         <Controls />
-        <MiniMap />
+        <MiniMap 
+          style={{ width: 100, height: 75 }}
+          nodeColor="#6b7280"
+          maskColor="rgba(0, 0, 0, 0.1)"
+        />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
       </ReactFlow>
 
@@ -370,6 +489,84 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
           onCancel={() => setEditingNode(null)}
         />
       )}
+
+      {/* History Dialog */}
+      <Dialog open={showHistory} onOpenChange={setShowHistory}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Execution History</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Overall Stats */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-medium text-gray-900 mb-2">Timeline Overview</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Total Actions:</span>
+                  <span className="ml-2 font-medium">{timelineEngine.actions.size}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Sessions Run:</span>
+                  <span className="ml-2 font-medium">
+                    {Math.max(...Array.from(timelineEngine.actions.values()).map(a => a.executionHistory.length), 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Performance History */}
+            <div>
+              <h3 className="font-medium text-gray-900 mb-3">Action Performance</h3>
+              <div className="space-y-3">
+                {Array.from(timelineEngine.actions.values()).map(action => (
+                  <div key={action.id} className="border rounded-lg p-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-medium text-gray-900">{action.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          Planned: {formatDuration(action.duration)}
+                          {action.actualDuration && (
+                            <span className="ml-2">
+                              | Last: {formatDuration(action.actualDuration)}
+                              <span className={action.actualDuration > action.duration ? 'text-red-600 ml-1' : 'text-green-600 ml-1'}>
+                                ({action.actualDuration > action.duration ? '+' : ''}{formatDuration(action.actualDuration - action.duration)})
+                              </span>
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {action.executionHistory.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-medium text-gray-700 mb-1">
+                          Execution History ({action.executionHistory.length} runs):
+                        </h5>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {action.executionHistory.slice(-5).map((execution, index) => (
+                            <div key={index} className="text-xs text-gray-600 flex justify-between">
+                              <span>{new Date(execution.timestamp).toLocaleString()}</span>
+                              <span className={execution.duration > action.duration ? 'text-red-600' : 'text-green-600'}>
+                                {formatDuration(execution.duration)}
+                              </span>
+                            </div>
+                          ))}
+                          {action.executionHistory.length > 5 && (
+                            <div className="text-xs text-gray-500 italic">
+                              ... and {action.executionHistory.length - 5} more runs
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
