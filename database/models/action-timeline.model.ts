@@ -35,6 +35,14 @@ export const ActionTimelineSchema = z.object({
       status: z.enum(['pending', 'active', 'completed']),
       selectedOption: z.string().nullable()
     })),
+    notes: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      content: z.string().optional().default(''),
+      x: z.number(),
+      y: z.number(),
+      type: z.literal('note')
+    })).default([]),
     currentNodeId: z.string().nullable(),
     executionHistory: z.array(z.string()),
     isRunning: z.boolean()

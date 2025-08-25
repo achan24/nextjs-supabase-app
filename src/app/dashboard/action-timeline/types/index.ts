@@ -164,6 +164,7 @@ export class DecisionPoint {
 export class TimelineEngine {
   actions: Map<string, Action>;
   decisionPoints: Map<string, DecisionPoint>;
+  notes: Map<string, TimelineNote>;
   currentNodeId: string | null;
   executionHistory: string[];
   isRunning: boolean;
@@ -177,6 +178,7 @@ export class TimelineEngine {
   constructor() {
     this.actions = new Map();
     this.decisionPoints = new Map();
+    this.notes = new Map();
     this.currentNodeId = null;
     this.executionHistory = [];
     this.isRunning = false;
@@ -198,9 +200,15 @@ export class TimelineEngine {
     this.notifyListeners();
   }
 
+  addNote(note: TimelineNote) {
+    this.notes.set(note.id, note);
+    this.notifyListeners();
+  }
+
   removeNode(nodeId: string) {
     this.actions.delete(nodeId);
     this.decisionPoints.delete(nodeId);
+    this.notes.delete(nodeId);
     
     // Remove connections to this node
     this.actions.forEach(action => {
@@ -214,13 +222,14 @@ export class TimelineEngine {
   }
 
   getNode(nodeId: string) {
-    return this.actions.get(nodeId) || this.decisionPoints.get(nodeId);
+    return this.actions.get(nodeId) || this.decisionPoints.get(nodeId) || this.notes.get(nodeId);
   }
 
   getAllNodes() {
     return [
       ...Array.from(this.actions.values()),
-      ...Array.from(this.decisionPoints.values())
+      ...Array.from(this.decisionPoints.values()),
+      ...Array.from(this.notes.values())
     ];
   }
 
@@ -520,6 +529,7 @@ export class TimelineEngine {
     return {
       actions: Array.from(this.actions.values()),
       decisionPoints: Array.from(this.decisionPoints.values()),
+      notes: Array.from(this.notes.values()),
       currentNodeId: this.currentNodeId,
       executionHistory: this.executionHistory,
       isRunning: this.isRunning
@@ -529,6 +539,7 @@ export class TimelineEngine {
   fromJSON(data: any) {
     this.actions.clear();
     this.decisionPoints.clear();
+    this.notes.clear();
     
     data.actions.forEach((actionData: any) => {
       const action = new Action(actionData);
@@ -541,6 +552,14 @@ export class TimelineEngine {
       Object.assign(dp, dpData); // Restore all properties
       this.decisionPoints.set(dp.id, dp);
     });
+    
+    if (Array.isArray(data.notes)) {
+      data.notes.forEach((noteData: any) => {
+        const note = new TimelineNote(noteData);
+        Object.assign(note, noteData);
+        this.notes.set(note.id, note);
+      });
+    }
     
     this.currentNodeId = data.currentNodeId;
     this.executionHistory = data.executionHistory || [];
@@ -581,4 +600,35 @@ export function parseDuration(durationString: string) {
   const seconds = parseInt(matches[3] || '0');
   
   return (hours * 3600 + minutes * 60 + seconds) * 1000;
+}
+
+// New: Non-executable note node type for timelines
+export class TimelineNote {
+  id: string;
+  name: string; // short title shown in graph
+  content: string; // longer text shown on hover or edit
+  x: number;
+  y: number;
+  type: 'note';
+
+  constructor({
+    id,
+    name,
+    content = '',
+    x = 0,
+    y = 0,
+  }: {
+    id: string;
+    name: string;
+    content?: string;
+    x?: number;
+    y?: number;
+  }) {
+    this.id = id;
+    this.name = name;
+    this.content = content;
+    this.x = x;
+    this.y = y;
+    this.type = 'note';
+  }
 }

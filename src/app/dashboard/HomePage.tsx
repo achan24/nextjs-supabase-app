@@ -242,32 +242,7 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Tasks Card */}
-          <Link href="/dashboard/tasks" className="group">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <CheckSquare className="h-6 w-6 text-green-600" />
-                  </div>
-                  Tasks
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600 mb-3">
-                  Create, organize, and track your daily tasks with priority levels and due dates. Stay on top of your to-do list and boost productivity.
-                </p>
-                {topStarredTask && (
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                    <span className="text-sm">{topStarredTask.title}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Skills Explorer Card */}
+          {/* Skills Explorer Card (moved up) */}
           <Card className="p-4 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/dashboard/skills')}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Skills Explorer</h3>
@@ -298,6 +273,30 @@ export default function HomePage({ user }: { user: User }) {
             </div>
           </Card>
 
+          {/* Action Timeline Card (moved up) */}
+          <Link href="/dashboard/action-timeline" className="group">
+            <Card className="hover:shadow-md transition-shadow border-2 border-purple-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Layout className="h-6 w-6 text-purple-600" />
+                  </div>
+                  Action Timeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  Design and execute structured action sequences with decision points. Create workflows that guide you through complex processes step-by-step with built-in timing and progress tracking.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Visual Editor</span>
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Real-time Execution</span>
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Progress Tracking</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
           {/* GOAL System Card */}
           <Link href="/dashboard/goal" className="group">
             <Card className="hover:shadow-md transition-shadow border-2 border-blue-100">
@@ -327,35 +326,27 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Process Mapper Card */}
-          <Link href="/dashboard/process-mapper" className="group">
+          {/* Tasks Card (moved down) */}
+          <Link href="/dashboard/tasks" className="group">
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-teal-100 rounded-lg">
-                    <svg 
-                      className="h-6 w-6 text-teal-600"
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2"
-                    >
-                      <path d="M9 12l2 2 4-4" />
-                      <path d="M21 12c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
-                      <path d="M3 12c1 0 2-1 2-2s-1-2-2-2-2 1-2 2 1 2 2 2z" />
-                      <path d="M12 3c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z" />
-                      <path d="M12 21c0-1 1-2 2-2s2 1 2 2-1 2-2 2-2-1-2-2z" />
-                      <path d="M12 9c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
-                      <path d="M12 15c1 0 2 1 2 2s-1 2-2 2-2-1-2-2 1-2 2-2z" />
-                    </svg>
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CheckSquare className="h-6 w-6 text-green-600" />
                   </div>
-                  Process Mapper
+                  Tasks
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-gray-600">
-                  Create sequences on the fly as you work. Capture real-time process steps, decision points, and timing data to build optimized workflows.
+                <p className="text-sm text-gray-600 mb-3">
+                  Create, organize, and track your daily tasks with priority levels and due dates. Stay on top of your to-do list and boost productivity.
                 </p>
+                {topStarredTask && (
+                  <div className="flex items-center gap-2">
+                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    <span className="text-sm">{topStarredTask.title}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </Link>
@@ -826,26 +817,35 @@ export default function HomePage({ user }: { user: User }) {
             </Card>
           </Link>
 
-          {/* Action Timeline Card */}
-          <Link href="/dashboard/action-timeline" className="group">
-            <Card className="hover:shadow-md transition-shadow border-2 border-purple-200">
+          {/* Process Mapper Card (moved down) */}
+          <Link href="/dashboard/process-mapper" className="group">
+            <Card className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <Layout className="h-6 w-6 text-purple-600" />
+                  <div className="p-2 bg-teal-100 rounded-lg">
+                    <svg 
+                      className="h-6 w-6 text-teal-600"
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2"
+                    >
+                      <path d="M9 12l2 2 4-4" />
+                      <path d="M21 12c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
+                      <path d="M3 12c1 0 2-1 2-2s-1-2-2-2-2 1-2 2 1 2 2 2z" />
+                      <path d="M12 3c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z" />
+                      <path d="M12 21c0-1 1-2 2-2s2 1 2 2-1 2-2 2-2-1-2-2z" />
+                      <path d="M12 9c-1 0-2-1-2-2s1-2 2-2 2 1 2 2-1 2-2 2z" />
+                      <path d="M12 15c1 0 2 1 2 2s-1 2-2 2-2-1-2-2 1-2 2-2z" />
+                    </svg>
                   </div>
-                  Action Timeline
+                  Process Mapper
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600">
-                  Design and execute structured action sequences with decision points. Create workflows that guide you through complex processes step-by-step with built-in timing and progress tracking.
+                  Create sequences on the fly as you work. Capture real-time process steps, decision points, and timing data to build optimized workflows.
                 </p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Visual Editor</span>
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Real-time Execution</span>
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Progress Tracking</span>
-                </div>
               </CardContent>
             </Card>
           </Link>

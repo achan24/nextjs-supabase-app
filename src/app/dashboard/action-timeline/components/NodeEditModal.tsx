@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-import { parseDuration, formatDuration, Action, DecisionPoint } from '../types';
+import { parseDuration, formatDuration, Action, DecisionPoint, TimelineNote } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
 interface NodeEditModalProps {
-  node: Action | DecisionPoint | null;
+  node: Action | DecisionPoint | TimelineNote | null;
   onSave: (nodeData: any) => void;
   onCancel: () => void;
 }
@@ -17,6 +17,7 @@ interface FormData {
   description: string;
   duration: string;
   options: Array<{actionId: string, label: string}>;
+  content: string;
 }
 
 const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel }) => {
@@ -24,7 +25,8 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
     name: '',
     description: '',
     duration: '',
-    options: []
+    options: [],
+    content: ''
   });
 
   useEffect(() => {
@@ -33,7 +35,8 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
         name: node.name || '',
         description: node.description || '',
         duration: node.type === 'action' ? formatDuration((node as Action).duration) : '',
-        options: node.type === 'decision' ? [...(node as DecisionPoint).options] : []
+        options: node.type === 'decision' ? [...(node as DecisionPoint).options] : [],
+        content: (node as TimelineNote).type === 'note' ? ((node as TimelineNote).content || '') : ''
       });
     }
   }, [node]);
@@ -51,6 +54,8 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
       (updatedNode as Action).duration = parseDuration(formData.duration) || 5000;
     } else if (node?.type === 'decision') {
       (updatedNode as DecisionPoint).options = formData.options;
+    } else if (node?.type === 'note') {
+      (updatedNode as TimelineNote).content = formData.content;
     }
 
     onSave(updatedNode);
@@ -86,7 +91,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
       <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] sm:max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900">
-            Edit {node.type === 'action' ? 'Action' : 'Decision Point'}
+            Edit {node.type === 'action' ? 'Action' : node.type === 'decision' ? 'Decision Point' : 'Note'}
           </h2>
           <button
             onClick={onCancel}
@@ -184,6 +189,20 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
                   No options yet. Add options to connect to other actions.
                 </p>
               )}
+            </div>
+          )}
+
+          {node.type === 'note' && (
+            <div>
+              <Label htmlFor="content" className="text-sm sm:text-base">Content</Label>
+              <Textarea
+                id="content"
+                value={formData.content}
+                onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                rows={6}
+                placeholder="Add details for this note"
+                className="text-sm sm:text-base"
+              />
             </div>
           )}
 

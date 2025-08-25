@@ -18,8 +18,9 @@ import 'reactflow/dist/style.css';
 
 import ActionNode from './ActionNode';
 import DecisionNode from './DecisionNode';
+import NoteNode from './NoteNode';
 import NodeEditModal from './NodeEditModal';
-import { Action, DecisionPoint, generateId, TimelineEngine, formatDuration } from '../types';
+import { Action, DecisionPoint, TimelineNote, generateId, TimelineEngine, formatDuration } from '../types';
 import { Plus, Play, Pause, Square, RotateCcw, StepForward, Clock, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -28,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 const nodeTypes = {
   action: ActionNode,
   decision: DecisionNode,
+  note: NoteNode,
 };
 
 // Calculate ETA for timeline completion
@@ -60,9 +62,10 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [editingNode, setEditingNode] = useState<any>(null);
-  const [selectedNodeType, setSelectedNodeType] = useState<'action' | 'decision'>('action');
+  const [selectedNodeType, setSelectedNodeType] = useState<'action' | 'decision' | 'note'>('action');
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [showHistory, setShowHistory] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
 
   // Update session timer
   React.useEffect(() => {
@@ -74,6 +77,29 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
       return () => clearInterval(interval);
     }
   }, [timelineEngine.isManualMode, timelineEngine.sessionStartTime]);
+
+  // Handle device visibility changes (sleep/wake)
+  React.useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && reactFlowInstance) {
+        // Force React Flow to re-render when app becomes visible
+        setTimeout(() => {
+          reactFlowInstance.fitView({ padding: 0.1 });
+          // Force a re-render of nodes and edges
+          setNodes(prevNodes => [...prevNodes]);
+          setEdges(prevEdges => [...prevEdges]);
+          // Force component re-render
+          setForceUpdate(prev => prev + 1);
+        }, 100);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [reactFlowInstance, setNodes, setEdges]);
   
   const { project } = useReactFlow();
 
@@ -91,7 +117,11 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         position: { x: node.x, y: node.y },
         data: {
           // Use the correct property name based on node type
-          ...(node.type === 'action' ? { action: node } : { decisionPoint: node }),
+          ...(node.type === 'action'
+            ? { action: node }
+            : node.type === 'decision'
+              ? { decisionPoint: node }
+              : { note: node }),
           onEdit: handleEditNode,
           onDelete: handleDeleteNode,
           onMakeDecision: handleMakeDecision,
@@ -164,6 +194,11 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
     const targetNode = timelineEngine.getNode(params.target);
     
     if (!sourceNode || !targetNode) return;
+
+    // Disallow any connections to/from notes (non-executable)
+    if (sourceNode.type === 'note' || targetNode.type === 'note') {
+      return;
+    }
 
     if (sourceNode.type === 'action') {
       // Add connection from action to target
@@ -241,7 +276,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         y: position.y,
       });
       timelineEngine.addAction(action);
-    } else {
+    } else if (selectedNodeType === 'decision') {
       const decisionPoint = new DecisionPoint({
         id,
         name: `Decision ${timelineEngine.decisionPoints.size + 1}`,
@@ -250,6 +285,15 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
         y: position.y,
       });
       timelineEngine.addDecisionPoint(decisionPoint);
+    } else if (selectedNodeType === 'note') {
+      const note = new TimelineNote({
+        id,
+        name: `Note ${timelineEngine.notes.size + 1}`,
+        content: '',
+        x: position.x,
+        y: position.y,
+      });
+      timelineEngine.addNote(note);
     }
 
     onTimelineUpdate();
@@ -402,6 +446,18 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
     onTimelineUpdate();
   }, [timelineEngine, onTimelineUpdate]);
 
+  const handleRefreshView = useCallback(() => {
+    if (reactFlowInstance) {
+      // Force React Flow to re-render
+      reactFlowInstance.fitView({ padding: 0.1 });
+      // Force a re-render of nodes and edges
+      setNodes(prevNodes => [...prevNodes]);
+      setEdges(prevEdges => [...prevEdges]);
+      // Force component re-render
+      setForceUpdate(prev => prev + 1);
+    }
+  }, [reactFlowInstance, setNodes, setEdges]);
+
   return (
     <div className="w-full h-full" ref={reactFlowWrapper}>
       {/* Execution Mode Overlay */}
@@ -412,6 +468,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
       )}
       
       <ReactFlow
+        key={forceUpdate}
         nodes={nodes}
         edges={edges}
         onNodesChange={handleNodesChange}
@@ -480,6 +537,15 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                 title="Decision"
               >
                 D
+              </Button>
+              <Button
+                variant={selectedNodeType === 'note' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedNodeType('note')}
+                className="text-xs px-2 py-1 h-7"
+                title="Note"
+              >
+                N
               </Button>
               <Button
                 onClick={handleAddNode}
@@ -586,6 +652,15 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                  title="History"
                >
                  📊
+               </Button>
+               
+               <Button
+                 onClick={handleRefreshView}
+                 className="text-sm px-2 py-1 h-8 bg-purple-500 hover:bg-purple-600 touch-manipulation"
+                 size="sm"
+                 title="Refresh View"
+               >
+                 🔄
                </Button>
              </div>
 
