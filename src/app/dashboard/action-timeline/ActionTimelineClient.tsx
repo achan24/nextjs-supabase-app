@@ -5,6 +5,7 @@ import { ReactFlowProvider } from 'reactflow';
 import GraphEditor from './components/GraphEditor';
 import TimelineView from './components/TimelineView';
 import { TimelineEngine, Action, DecisionPoint } from './types';
+import { useTimelineEngine } from '@/contexts/TimelineEngineContext';
 import { Layout, GitBranch, Clock, Save, Upload, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -108,9 +109,10 @@ interface ActionTimelineClientProps {
 }
 
 export default function ActionTimelineClient({ user }: ActionTimelineClientProps) {
-  const [timelineEngine, setTimelineEngine] = useState(() => new TimelineEngine());
+  const { engine: timelineEngine, loadFromJSON, resetEngine } = useTimelineEngine();
+  const [_, setEngineVersion] = useState(0);
   const [currentTimeline, setCurrentTimeline] = useState<ActionTimeline | null>(null);
-  const [activeView, setActiveView] = useState('both'); // 'graph', 'timeline', 'both'
+  const [activeView, setActiveView] = useState('graph'); // 'graph', 'timeline', 'both'
   const [updateCounter, setUpdateCounter] = useState(0);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | 'saving' | null; message: string }>({ type: null, message: '' });
 
@@ -120,9 +122,13 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
 
   const handleTimelineChange = useCallback((timeline: ActionTimeline | null, engine: TimelineEngine) => {
     setCurrentTimeline(timeline);
-    setTimelineEngine(engine);
+    // Ensure our shared engine reflects any incoming state
+    if (engine !== timelineEngine) {
+      loadFromJSON(engine.toJSON());
+      setEngineVersion(v => v + 1);
+    }
     handleTimelineUpdate();
-  }, [handleTimelineUpdate]);
+  }, [handleTimelineUpdate, loadFromJSON, timelineEngine]);
 
   // Auto-save functionality
   const autoSave = useTimelineAutoSave(currentTimeline, timelineEngine, setSaveStatus);
@@ -168,9 +174,7 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
       reader.onload = (e) => {
         try {
           const data = JSON.parse(e.target?.result as string);
-          const newTimelineEngine = new TimelineEngine();
-          newTimelineEngine.fromJSON(data);
-          setTimelineEngine(newTimelineEngine);
+          loadFromJSON(data);
           handleTimelineUpdate();
         } catch (error) {
           alert('Error loading timeline: ' + (error as Error).message);
@@ -178,20 +182,18 @@ export default function ActionTimelineClient({ user }: ActionTimelineClientProps
       };
       reader.readAsText(file);
     }
-  }, [handleTimelineUpdate]);
+  }, [handleTimelineUpdate, loadFromJSON]);
 
   const handleLoadDemo = useCallback(() => {
-    const newTimelineEngine = new TimelineEngine();
-    createDemo(newTimelineEngine);
-    setTimelineEngine(newTimelineEngine);
+    resetEngine();
+    createDemo(timelineEngine);
     handleTimelineUpdate();
-  }, [handleTimelineUpdate]);
+  }, [handleTimelineUpdate, resetEngine, timelineEngine]);
 
   const handleClearAll = useCallback(() => {
-    const newTimelineEngine = new TimelineEngine();
-    setTimelineEngine(newTimelineEngine);
+    resetEngine();
     handleTimelineUpdate();
-  }, [handleTimelineUpdate]);
+  }, [handleTimelineUpdate, resetEngine]);
 
   const getViewClasses = () => {
     switch (activeView) {

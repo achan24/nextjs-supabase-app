@@ -5,16 +5,19 @@ import { ServiceWorkerRegistration } from '../components/ServiceWorkerRegistrati
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { TaskTimerProvider } from '@/contexts/TaskTimerContext';
+import { TimelineEngineProvider } from '@/contexts/TimelineEngineContext';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <TaskTimerProvider>
-        <NotificationProvider>
-          <ServiceWorkerRegistration />
-          {children}
-          <Toaster />
-        </NotificationProvider>
+        <TimelineEngineProvider>
+          <NotificationProvider>
+            <ServiceWorkerRegistration />
+            {children}
+            <Toaster />
+          </NotificationProvider>
+        </TimelineEngineProvider>
       </TaskTimerProvider>
     </ThemeProvider>
   );

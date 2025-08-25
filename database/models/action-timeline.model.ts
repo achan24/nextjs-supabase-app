@@ -45,7 +45,10 @@ export const ActionTimelineSchema = z.object({
     })).default([]),
     currentNodeId: z.string().nullable(),
     executionHistory: z.array(z.string()),
-    isRunning: z.boolean()
+    isRunning: z.boolean(),
+    isPaused: z.boolean().optional().default(false),
+    pauseStartTime: z.number().nullable().optional().default(null),
+    totalPauseTime: z.number().optional().default(0)
   }),
   is_public: z.boolean().default(false),
   tags: z.array(z.string()).default([]),

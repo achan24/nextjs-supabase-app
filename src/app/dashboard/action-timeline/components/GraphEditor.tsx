@@ -462,7 +462,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
     <div className="w-full h-full" ref={reactFlowWrapper}>
       {/* Execution Mode Overlay */}
       {timelineEngine.isRunning && (
-        <div className="absolute top-2 left-2 z-50 bg-blue-100 border border-blue-300 rounded px-3 py-1 text-sm text-blue-700 font-medium">
+        <div className="absolute bottom-2 left-2 z-40 bg-blue-100/90 border border-blue-300 rounded px-3 py-1 text-xs sm:text-sm text-blue-700 font-medium shadow">
           ⚡ Timeline Running - Editing Disabled
         </div>
       )}
@@ -486,37 +486,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
       >
                          <Panel position="top-left">
           <div className="flex flex-col gap-2">
-            {/* Session Info Panel - Only show when not running, hidden on mobile */}
-            {timelineEngine.isManualMode && !timelineEngine.isRunning && (
-              <div className="hidden md:block bg-white p-3 rounded-lg shadow-lg border max-w-xs">
-                <div className="text-xs font-medium text-gray-700 mb-2">Session Data:</div>
-                <div className="space-y-1 text-xs text-gray-600">
-                  <div>• Session #{timelineEngine.executionHistory.length}</div>
-                  <div>• Start: {timelineEngine.sessionStartTime ? new Date(timelineEngine.sessionStartTime).toLocaleTimeString() : 'N/A'}</div>
-                  <div>• Current Step: {timelineEngine.currentNodeId ? timelineEngine.getNode(timelineEngine.currentNodeId)?.name : 'N/A'}</div>
-                  <div>• Steps Completed: {timelineEngine.executionHistory.length - 1}</div>
-                  {timelineEngine.sessionStartTime && (
-                    <div>• Session Time: {formatDuration(currentTime - timelineEngine.sessionStartTime)}</div>
-                  )}
-                  {/* Show captured time for completed actions */}
-                  {(() => {
-                    const completedActions = Array.from(timelineEngine.actions.values()).filter(action => 
-                      action.actualDuration !== null && action.actualDuration > 0
-                    );
-                    const totalCaptured = completedActions.reduce((sum, action) => sum + (action.actualDuration || 0), 0);
-                    return totalCaptured > 0 ? (
-                      <div>• Total Time: {formatDuration(totalCaptured)} ({completedActions.length} actions)</div>
-                    ) : null;
-                  })()}
-                  {timelineEngine.timelineComplete && (
-                    <div className="text-orange-600 font-medium">• Timeline Complete - Last task timer running</div>
-                  )}
-                </div>
-                <div className="mt-2 text-xs text-gray-500">
-                  Data saved: timestamps, durations, performance metrics
-                </div>
-              </div>
-            )}
+            {/* Session Info Panel - permanently disabled per user preference */}
 
                         {/* Node Type Selector */}
             <div className="flex gap-1 bg-white p-1 rounded-lg shadow-lg border">
@@ -678,7 +648,26 @@ const GraphEditor: React.FC<GraphEditorProps> = ({ timelineEngine, onTimelineUpd
                  </Button>
                ) : timelineEngine.isManualMode ? (
                  <>
-                   {!timelineEngine.timelineComplete && (
+                   {timelineEngine.isPaused ? (
+                     <Button
+                       onClick={handleResume}
+                       className="text-sm px-3 py-2 h-10 bg-green-600 hover:bg-green-700 touch-manipulation"
+                       size="sm"
+                       title="Resume"
+                     >
+                       ▶️ Resume
+                     </Button>
+                   ) : (
+                     <Button
+                       onClick={handlePause}
+                       className="text-sm px-3 py-2 h-10 bg-yellow-600 hover:bg-yellow-700 touch-manipulation"
+                       size="sm"
+                       title="Pause"
+                     >
+                       ⏸️ Pause
+                     </Button>
+                   )}
+                   {!timelineEngine.timelineComplete && !timelineEngine.isPaused && (
                      <Button
                        onClick={handleNextStep}
                        className="text-sm px-3 py-2 h-10 bg-blue-600 hover:bg-blue-700 touch-manipulation"

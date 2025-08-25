@@ -33,7 +33,7 @@ const NodeEditModal: React.FC<NodeEditModalProps> = ({ node, onSave, onCancel })
     if (node) {
       setFormData({
         name: node.name || '',
-        description: node.description || '',
+        description: (node.type === 'action' || node.type === 'decision') ? (node as Action | DecisionPoint).description || '' : '',
         duration: node.type === 'action' ? formatDuration((node as Action).duration) : '',
         options: node.type === 'decision' ? [...(node as DecisionPoint).options] : [],
         content: (node as TimelineNote).type === 'note' ? ((node as TimelineNote).content || '') : ''

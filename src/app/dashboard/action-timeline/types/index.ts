@@ -172,6 +172,9 @@ export class TimelineEngine {
   sessionStartTime: number | null;
   sessionEndTime: number | null;
   timelineComplete: boolean; // Track if timeline is complete but session still running
+  isPaused: boolean; // Track if timeline is paused
+  pauseStartTime: number | null; // When pause started
+  totalPauseTime: number; // Total time spent paused
   listeners: Set<() => void>;
   private progressInterval: NodeJS.Timeout | null = null;
 
@@ -186,6 +189,9 @@ export class TimelineEngine {
     this.sessionStartTime = null;
     this.sessionEndTime = null;
     this.timelineComplete = false;
+    this.isPaused = false;
+    this.pauseStartTime = null;
+    this.totalPauseTime = 0;
     this.listeners = new Set();
   }
 
@@ -324,6 +330,8 @@ export class TimelineEngine {
       currentNode.pause();
     }
     this.isRunning = false;
+    this.isPaused = true;
+    this.pauseStartTime = Date.now();
     this.notifyListeners();
   }
 
@@ -333,6 +341,11 @@ export class TimelineEngine {
       currentNode.start(); // Restart the action
     }
     this.isRunning = true;
+    this.isPaused = false;
+    if (this.pauseStartTime) {
+      this.totalPauseTime += Date.now() - this.pauseStartTime;
+      this.pauseStartTime = null;
+    }
     this.executeCurrentNode();
   }
 
@@ -344,6 +357,8 @@ export class TimelineEngine {
     }
     
     this.isRunning = false;
+    this.isPaused = false;
+    this.pauseStartTime = null;
     this.currentNodeId = null;
     this.notifyListeners();
   }
@@ -492,6 +507,9 @@ export class TimelineEngine {
     this.sessionEndTime = null;
     this.isManualMode = false;
     this.timelineComplete = false;
+    this.isPaused = false;
+    this.pauseStartTime = null;
+    this.totalPauseTime = 0;
     
     // Reset all nodes and clear their execution history
     this.actions.forEach(action => {
@@ -532,7 +550,10 @@ export class TimelineEngine {
       notes: Array.from(this.notes.values()),
       currentNodeId: this.currentNodeId,
       executionHistory: this.executionHistory,
-      isRunning: this.isRunning
+      isRunning: this.isRunning,
+      isPaused: this.isPaused,
+      pauseStartTime: this.pauseStartTime,
+      totalPauseTime: this.totalPauseTime
     };
   }
 
@@ -564,6 +585,9 @@ export class TimelineEngine {
     this.currentNodeId = data.currentNodeId;
     this.executionHistory = data.executionHistory || [];
     this.isRunning = data.isRunning || false;
+    this.isPaused = data.isPaused || false;
+    this.pauseStartTime = data.pauseStartTime || null;
+    this.totalPauseTime = data.totalPauseTime || 0;
     
     this.notifyListeners();
   }
